@@ -33,6 +33,38 @@ x-backend-env: &backend-env
   DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG:-acme}
   PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:?PLATFORM_PUBLIC_URL is required}
   COURSE_TEMPLATE_DIST: ${COURSE_TEMPLATE_DIST:-/app/course_template_dist}
+  COURSE_APP_TEMPLATE: ${COURSE_APP_TEMPLATE:-/app/course_app_template}
+  COURSE_BUILD_ENABLED: "${COURSE_BUILD_ENABLED:-true}"
+  COURSE_BUILD_TIMEOUT: "${COURSE_BUILD_TIMEOUT:-600}"
+  COURSE_BUILD_USE_DEVIN: "${COURSE_BUILD_USE_DEVIN:-false}"
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
+  GEMINI_TTS_MODEL: ${GEMINI_TTS_MODEL:-gemini-2.5-flash-preview-tts}
+  GEMINI_TTS_VOICE: ${GEMINI_TTS_VOICE:-Kore}
+  CALA_API_KEY: ${CALA_API_KEY:-}
+  CALA_MCP_URL: ${CALA_MCP_URL:-}
+  CALA_TIMEOUT: "${CALA_TIMEOUT:-30}"
+  PIXVERSE_API_KEY: ${PIXVERSE_API_KEY:-}
+  PIXVERSE_API_BASE_URL: ${PIXVERSE_API_BASE_URL:-https://app-api.pixverse.ai}
+  PIXVERSE_TIMEOUT: "${PIXVERSE_TIMEOUT:-300}"
+  ASSET_IMAGE_PROVIDER: ${ASSET_IMAGE_PROVIDER:-auto}
+  ASSET_VIDEO_PROVIDER: ${ASSET_VIDEO_PROVIDER:-auto}
+  ASSET_AUDIO_PROVIDER: ${ASSET_AUDIO_PROVIDER:-auto}
+
+x-backend-build: &backend-build
+  context: ${PROJECT_ROOT:-..}
+  dockerfile: backend/Dockerfile
+  target: production
+
+x-frontend-build: &frontend-build
+  context: ${PROJECT_ROOT:-..}/frontend
+  target: production
+  args:
+    VITE_API_URL: ${VITE_API_URL:-/api/v1}
+    VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-/auth}
+    VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-app}
+    VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-app-frontend}
 
 services:
   postgres:
@@ -44,7 +76,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       KEYCLOAK_DB: ${KEYCLOAK_DB:?KEYCLOAK_DB is required}
     volumes:
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ${PROJECT_ROOT:-..}/postgres/init:/docker-entrypoint-initdb.d:ro
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?POSTGRES_USER is required} -d ${POSTGRES_DB:?POSTGRES_DB is required}"]
@@ -127,8 +159,8 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
       PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:?PLATFORM_PUBLIC_URL is required}
     volumes:
-      - ./keycloak/realm-app.json:/opt/keycloak/data/import/realm-app.json:ro
-      - ./keycloak/themes/coursive:/opt/keycloak/themes/coursive:ro
+      - ${PROJECT_ROOT:-..}/keycloak/realm-app.json:/opt/keycloak/data/import/realm-app.json:ro
+      - ${PROJECT_ROOT:-..}/keycloak/themes/coursive:/opt/keycloak/themes/coursive:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,7 +183,8 @@ services:
       - traefik
 
   backend:
-    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    image: ${BACKEND_IMAGE:-coursive-backend}:${IMAGE_TAG:-local}
+    build: *backend-build
     restart: unless-stopped
     environment:
       <<: *backend-env
@@ -179,7 +212,7 @@ services:
       - traefik
 
   worker:
-    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    image: ${BACKEND_IMAGE:-coursive-backend}:${IMAGE_TAG:-local}
     restart: unless-stopped
     command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings"]
     entrypoint: []
@@ -194,7 +227,8 @@ services:
         condition: service_healthy
 
   frontend:
-    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    image: ${FRONTEND_IMAGE:-coursive-frontend}:${IMAGE_TAG:-local}
+    build: *frontend-build
     restart: unless-stopped
     labels:
       - "traefik.enable=true"

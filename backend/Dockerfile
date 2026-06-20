@@ -4,7 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_SYSTEM_PYTHON=1
 
-RUN pip install uv
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
 WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock* ./
@@ -21,12 +24,19 @@ RUN npm ci
 COPY courses-template/ ./
 RUN npm run build
 
+FROM node:22-slim AS course-app-template
+WORKDIR /course_app_template
+COPY course-app-template/package*.json ./
+RUN npm ci
+COPY course-app-template/ ./
+
 # ── Development ───────────────────────────────────────────────────────────────
 FROM base AS development
 
 RUN uv sync --frozen
 COPY backend/ .
 COPY --from=course-build /tpl/dist /app/course_template_dist
+COPY --from=course-app-template /course_app_template /app/course_app_template
 
 ENTRYPOINT ["sh", "/app/entrypoint.sh"]
 CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -36,6 +46,7 @@ FROM base AS production
 
 COPY backend/ .
 COPY --from=course-build /tpl/dist /app/course_template_dist
+COPY --from=course-app-template /course_app_template /app/course_app_template
 
 ENTRYPOINT ["sh", "/app/entrypoint.sh"]
 CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
