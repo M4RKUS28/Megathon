@@ -1,0 +1,493 @@
+{
+  "title": "Data Privacy & Security Fundamentals",
+  "description": "A three-chapter interactive course teaching employees the essentials of data privacy regulations, threat awareness, and secure day-to-day workflows.",
+  "companyName": "Acme Corp",
+  "primaryColor": "#1A73E8",
+  "language": "en",
+  "passing_pct": 80,
+  "style_guide": {
+    "font_heading": "Inter",
+    "font_body": "Source Sans Pro",
+    "logo_url": "/resources/images/brand-logo",
+    "tone": "professional yet approachable",
+    "illustration_style": "flat vector, isometric accents, brand-blue palette"
+  },
+  "chapters": [
+    {
+      "id": "ch1-understanding-data-privacy",
+      "title": "Understanding Data Privacy",
+      "objective": "Explain the core principles of data privacy (GDPR, CCPA) and identify the types of personal data your organisation handles.",
+      "pages": [
+        {
+          "id": "ch1-p1",
+          "title": "Why Data Privacy Matters",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Why Data Privacy Matters"
+            },
+            {
+              "type": "image",
+              "asset": "/resources/images/ch1-hero",
+              "text": "Illustration of a shield protecting personal data icons (name, email, location)"
+            },
+            {
+              "type": "paragraph",
+              "text": "Every day Acme Corp processes thousands of records containing personal information. A single breach can cost millions in fines, erode customer trust, and trigger regulatory investigations. This chapter explains the legal landscape and your role in keeping data safe."
+            },
+            {
+              "type": "dialogue",
+              "data": {
+                "turns": [
+                  { "speaker": "Compliance Officer", "text": "Did you know that under GDPR a fine can reach 4% of global annual revenue?" },
+                  { "speaker": "New Hire", "text": "That sounds enormous. How do we avoid that?" },
+                  { "speaker": "Compliance Officer", "text": "By understanding what personal data is, where it lives, and who can access it. That is exactly what this course covers." }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch1-p2",
+          "title": "Data Classification & Lifecycle",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "How Data Flows Through the Organisation"
+            },
+            {
+              "type": "timeline",
+              "data": {
+                "orientation": "horizontal",
+                "steps": [
+                  { "label": "Collection", "description": "Data enters via web forms, APIs, or manual entry. Consent must be recorded at this stage." },
+                  { "label": "Processing", "description": "Systems transform, enrich, or aggregate data. Access is restricted by role-based controls." },
+                  { "label": "Storage", "description": "Encrypted at rest in approved data centres. Retention limits are enforced automatically." },
+                  { "label": "Sharing", "description": "Shared only under a Data Processing Agreement (DPA). Cross-border transfers require Standard Contractual Clauses." },
+                  { "label": "Deletion", "description": "Automated purge after the retention window. A certificate of destruction is logged for audit." }
+                ]
+              }
+            },
+            {
+              "type": "callout",
+              "text": "Remember: data you cannot classify, you cannot protect. Always tag new datasets with a classification level before processing."
+            }
+          ]
+        },
+        {
+          "id": "ch1-p3",
+          "title": "Regulatory Landscape at a Glance",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Key Regulations Compared"
+            },
+            {
+              "type": "chart",
+              "asset": "/resources/charts/ch1-regulations",
+              "data": {
+                "chartType": "bar",
+                "title": "Maximum Fine as % of Revenue by Regulation",
+                "labels": ["GDPR", "CCPA", "LGPD", "POPIA", "PIPL"],
+                "datasets": [
+                  {
+                    "label": "Max fine (% global revenue)",
+                    "data": [4.0, 2.5, 2.0, 1.0, 5.0],
+                    "backgroundColor": ["#1A73E8", "#34A853", "#FBBC05", "#EA4335", "#5F6368"]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "accordion",
+              "data": {
+                "panels": [
+                  { "header": "GDPR (EU)", "body": "Applies to any organisation processing EU residents' data. Key rights: access, erasure, portability. Requires a Data Protection Officer (DPO) in many cases." },
+                  { "header": "CCPA (California)", "body": "Grants California consumers the right to know, delete, and opt-out of sale of their personal information. Enforced by the California AG." },
+                  { "header": "LGPD (Brazil)", "body": "Closely modelled on GDPR. Introduces 10 legal bases for processing and mandates a DPO equivalent (Encarregado)." }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "passing_pct": 80,
+        "retryable": true,
+        "questions": [
+          {
+            "question": "What is the maximum GDPR fine as a percentage of global annual revenue?",
+            "options": ["1%", "2%", "4%", "10%"],
+            "answerIndex": 2,
+            "explanation": "Under GDPR Art. 83(5), fines can reach up to 4% of worldwide annual turnover."
+          },
+          {
+            "question": "At which stage of the data lifecycle must consent be recorded?",
+            "options": ["Storage", "Deletion", "Collection", "Sharing"],
+            "answerIndex": 2,
+            "explanation": "Consent must be obtained and recorded at the point of data collection."
+          },
+          {
+            "question": "What does DPA stand for in a data-sharing context?",
+            "options": ["Data Privacy Act", "Data Processing Agreement", "Digital Protection Authority", "Data Policy Addendum"],
+            "answerIndex": 1,
+            "explanation": "A Data Processing Agreement governs the terms under which personal data is shared with a third-party processor."
+          },
+          {
+            "question": "Which regulation grants consumers an explicit right to opt-out of the sale of personal information?",
+            "options": ["GDPR", "CCPA", "LGPD", "POPIA"],
+            "answerIndex": 1,
+            "explanation": "The CCPA specifically provides a 'Do Not Sell My Personal Information' right."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ch2-threat-awareness",
+      "title": "Threat Awareness & Prevention",
+      "objective": "Recognise common attack vectors (phishing, social engineering, malware) and apply preventive measures in daily work.",
+      "pages": [
+        {
+          "id": "ch2-p1",
+          "title": "The Anatomy of a Phishing Attack",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Phishing: the #1 Attack Vector"
+            },
+            {
+              "type": "image",
+              "asset": "/resources/images/ch2-phishing",
+              "text": "Annotated screenshot of a phishing email highlighting red flags (spoofed sender, urgency language, suspicious link)"
+            },
+            {
+              "type": "hotspot",
+              "asset": "/resources/images/ch2-hotspot-email",
+              "data": {
+                "image_alt": "A realistic phishing email annotated with interactive hotspots",
+                "regions": [
+                  { "id": "hs1", "x_pct": 12, "y_pct": 8, "radius_pct": 4, "label": "Spoofed sender", "detail": "The display name says 'IT Support' but the actual address is it-supp0rt@malicio.us. Always check the full address." },
+                  { "id": "hs2", "x_pct": 50, "y_pct": 35, "radius_pct": 5, "label": "Urgency language", "detail": "'Your account will be locked in 2 hours' is a pressure tactic. Legitimate IT notices give at least 7 days." },
+                  { "id": "hs3", "x_pct": 65, "y_pct": 62, "radius_pct": 4, "label": "Suspicious link", "detail": "Hover to see the real URL: http://acme-hr.fakesite.ru/login. The domain does not match acme-corp.com." },
+                  { "id": "hs4", "x_pct": 80, "y_pct": 88, "radius_pct": 4, "label": "Generic greeting", "detail": "'Dear Employee' instead of your real name is a strong indicator of a mass-phishing campaign." }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch2-p2",
+          "title": "Social Engineering Tactics",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Beyond Email: Social Engineering"
+            },
+            {
+              "type": "paragraph",
+              "text": "Attackers do not always use email. They may call, visit in person, or use messaging apps. The goal is always the same: trick you into revealing credentials or granting access."
+            },
+            {
+              "type": "flashcards",
+              "data": {
+                "cards": [
+                  { "front": "Pretexting", "back": "The attacker fabricates a scenario (e.g. 'I'm from the auditing firm') to gain trust and extract information." },
+                  { "front": "Tailgating", "back": "Following an authorised person through a secure door without badging in. Always challenge unknown visitors." },
+                  { "front": "Baiting", "back": "Leaving an infected USB stick in a common area hoping someone plugs it in. Never use unknown removable media." },
+                  { "front": "Quid pro quo", "back": "Offering something (free software, tech support) in exchange for login credentials or remote access." }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch2-p3",
+          "title": "Respond to a Threat — Scenario",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Interactive Scenario: Suspicious Email"
+            },
+            {
+              "type": "scenario",
+              "data": {
+                "prompt": "You receive an email from 'ceo@acme-c0rp.com' asking you to urgently wire $15,000 to a new vendor. What do you do?",
+                "branches": [
+                  {
+                    "choice": "Wire the money immediately — the CEO must need it urgently.",
+                    "outcome": "incorrect",
+                    "feedback": "Never act on financial requests received by email alone. This is a classic CEO-fraud / Business Email Compromise (BEC) attack. The spoofed domain 'acme-c0rp.com' (with a zero) is a red flag."
+                  },
+                  {
+                    "choice": "Reply to the email asking for confirmation.",
+                    "outcome": "partial",
+                    "feedback": "Good instinct to verify, but replying goes back to the attacker. Instead, contact the CEO through a known, independent channel (phone, Slack, in person)."
+                  },
+                  {
+                    "choice": "Verify via a separate channel (call the CEO directly) and report the email to security@acme-corp.com.",
+                    "outcome": "correct",
+                    "feedback": "Excellent! Out-of-band verification defeats BEC attacks. Reporting the email lets the security team block the sender and warn others."
+                  },
+                  {
+                    "choice": "Delete the email and ignore it.",
+                    "outcome": "partial",
+                    "feedback": "Deleting protects you, but other colleagues may also receive the same email. Always report suspicious emails so the security team can act."
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch2-p4",
+          "title": "Threat Statistics & Trends",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Attack Trends Over the Last Four Years"
+            },
+            {
+              "type": "chart",
+              "asset": "/resources/charts/ch2-trends",
+              "data": {
+                "chartType": "line",
+                "title": "Reported Security Incidents at Acme Corp (2022-2025)",
+                "labels": ["2022", "2023", "2024", "2025"],
+                "datasets": [
+                  { "label": "Phishing", "data": [120, 95, 78, 42], "borderColor": "#EA4335" },
+                  { "label": "Malware", "data": [40, 35, 28, 15], "borderColor": "#FBBC05" },
+                  { "label": "Social Engineering", "data": [25, 30, 22, 12], "borderColor": "#34A853" }
+                ]
+              }
+            },
+            {
+              "type": "callout",
+              "text": "Phishing incidents dropped 65% after mandatory awareness training was introduced in 2023. Your participation in this course contributes directly to this trend."
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "passing_pct": 80,
+        "retryable": true,
+        "questions": [
+          {
+            "question": "What is the FIRST thing you should do when you receive a suspicious financial request by email?",
+            "options": ["Wire the money to avoid delays", "Reply to the sender to confirm", "Verify via an independent channel and report to security", "Forward it to a colleague for a second opinion"],
+            "answerIndex": 2,
+            "explanation": "Always verify financial requests through a separate, trusted channel (phone, in person) and report the email to the security team."
+          },
+          {
+            "question": "Which social engineering tactic involves following someone through a secure door?",
+            "options": ["Pretexting", "Tailgating", "Baiting", "Phishing"],
+            "answerIndex": 1,
+            "explanation": "Tailgating (or piggybacking) is the act of following an authorised person through a controlled access point."
+          },
+          {
+            "question": "What red flag indicates a spoofed email domain?",
+            "options": ["Email is sent during business hours", "The domain contains character substitutions (e.g. '0' for 'o')", "The email has a company logo", "The email is written in English"],
+            "answerIndex": 1,
+            "explanation": "Attackers register look-alike domains with subtle character substitutions. Always inspect the full sender address."
+          }
+        ]
+      }
+    },
+    {
+      "id": "ch3-secure-workflows",
+      "title": "Secure Workflows in Practice",
+      "objective": "Apply secure-by-default habits to password management, file sharing, remote access, and incident reporting.",
+      "pages": [
+        {
+          "id": "ch3-p1",
+          "title": "Password & Access Hygiene",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Building a Fortress: Passwords & MFA"
+            },
+            {
+              "type": "image",
+              "asset": "/resources/images/ch3-passwords",
+              "text": "Infographic comparing weak vs strong passwords with entropy scores"
+            },
+            {
+              "type": "dragdrop",
+              "data": {
+                "prompt": "Drag each practice to the correct category: SECURE or INSECURE.",
+                "mode": "sort",
+                "buckets": ["Secure", "Insecure"],
+                "items": [
+                  { "text": "Use a unique 16+ character passphrase per service", "correct_bucket": "Secure" },
+                  { "text": "Reuse your email password for the company VPN", "correct_bucket": "Insecure" },
+                  { "text": "Enable hardware-key MFA on all critical accounts", "correct_bucket": "Secure" },
+                  { "text": "Write passwords on a sticky note under your keyboard", "correct_bucket": "Insecure" },
+                  { "text": "Store credentials in an approved password manager", "correct_bucket": "Secure" },
+                  { "text": "Share your login via unencrypted email", "correct_bucket": "Insecure" }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ch3-p2",
+          "title": "Secure File Sharing & Remote Access",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Sharing Files Without Leaking Data"
+            },
+            {
+              "type": "timeline",
+              "data": {
+                "orientation": "vertical",
+                "steps": [
+                  { "label": "1. Classify", "description": "Determine the sensitivity of the document (Public, Internal, Confidential, Restricted)." },
+                  { "label": "2. Choose channel", "description": "Use the approved platform for the classification level (e.g. SharePoint for Confidential, encrypted transfer for Restricted)." },
+                  { "label": "3. Set permissions", "description": "Grant least-privilege access. Use time-limited links where possible." },
+                  { "label": "4. Audit", "description": "Verify the access log within 24 hours. Revoke access once the recipient confirms receipt." }
+                ]
+              }
+            },
+            {
+              "type": "video",
+              "asset": "/resources/videos/ch3-remote-vpn",
+              "text": "60-second screencast showing how to connect to the corporate VPN and verify the encrypted tunnel."
+            }
+          ]
+        },
+        {
+          "id": "ch3-p3",
+          "title": "Incident Reporting Workflow",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "What To Do When Something Goes Wrong"
+            },
+            {
+              "type": "paragraph",
+              "text": "Every employee is the first line of defence. Reporting an incident quickly reduces its blast radius and helps the security team contain it."
+            },
+            {
+              "type": "hotspot",
+              "asset": "/resources/images/ch3-hotspot-dashboard",
+              "data": {
+                "image_alt": "Screenshot of the Acme Corp incident-reporting portal with annotated regions",
+                "regions": [
+                  { "id": "ir1", "x_pct": 15, "y_pct": 20, "radius_pct": 5, "label": "Severity selector", "detail": "Choose P1 (data breach confirmed) through P4 (informational). The SLA clock starts when you submit." },
+                  { "id": "ir2", "x_pct": 50, "y_pct": 45, "radius_pct": 6, "label": "Affected systems", "detail": "Tag every system involved. This auto-notifies the owning team and triggers the relevant runbook." },
+                  { "id": "ir3", "x_pct": 75, "y_pct": 70, "radius_pct": 5, "label": "Evidence upload", "detail": "Attach screenshots, email headers, or log snippets. Do NOT paste credentials or PII into this field." }
+                ]
+              }
+            },
+            {
+              "type": "accordion",
+              "data": {
+                "panels": [
+                  { "header": "P1 — Confirmed Breach", "body": "Notify security@acme-corp.com AND your manager immediately. Do not power off affected systems — forensic evidence may be lost." },
+                  { "header": "P2 — Suspected Breach", "body": "Submit the incident form within 1 hour. Isolate the affected device from the network if safe to do so." },
+                  { "header": "P3 — Policy Violation", "body": "Submit within 24 hours. Include the policy reference and any corrective action already taken." },
+                  { "header": "P4 — Informational", "body": "Log for awareness. No SLA, but review by the security team within 5 business days." }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "passing_pct": 80,
+        "retryable": true,
+        "questions": [
+          {
+            "question": "Which of the following is a SECURE password practice?",
+            "options": ["Reusing passwords across services", "Writing passwords on paper", "Using a unique 16+ character passphrase per service", "Sharing credentials via unencrypted email"],
+            "answerIndex": 2,
+            "explanation": "Long, unique passphrases stored in an approved password manager provide the strongest protection."
+          },
+          {
+            "question": "What is the FIRST step before sharing a file externally?",
+            "options": ["Email the file as an attachment", "Classify its sensitivity level", "Post it on the public wiki", "Print and courier it"],
+            "answerIndex": 1,
+            "explanation": "Classification determines which channel and access controls are appropriate for the document."
+          },
+          {
+            "question": "When should a P1 incident be reported?",
+            "options": ["Within 5 business days", "Within 24 hours", "Immediately", "At the next team meeting"],
+            "answerIndex": 2,
+            "explanation": "A confirmed breach (P1) requires immediate notification to security and management."
+          },
+          {
+            "question": "What should you NOT do when a system is suspected of being compromised?",
+            "options": ["Isolate it from the network", "Report the incident", "Power off the machine immediately", "Preserve forensic evidence"],
+            "answerIndex": 2,
+            "explanation": "Powering off can destroy volatile forensic evidence (RAM, running processes). Isolate the network connection instead."
+          }
+        ]
+      }
+    }
+  ],
+  "asset_manifest": [
+    {
+      "template_link": "/resources/images/brand-logo",
+      "type": "image",
+      "dimensions": "1:1",
+      "description": "Acme Corp company logo in SVG format, primary blue (#1A73E8) on transparent background.",
+      "purpose": "Branding — displayed in course header and certificate"
+    },
+    {
+      "template_link": "/resources/images/ch1-hero",
+      "type": "image",
+      "dimensions": "16:9",
+      "description": "Flat-vector illustration: a translucent shield icon overlaying personal-data symbols (name badge, email envelope, GPS pin) in brand-blue tones.",
+      "purpose": "Chapter 1 hero image — sets the data-privacy context"
+    },
+    {
+      "template_link": "/resources/charts/ch1-regulations",
+      "type": "diagram",
+      "dimensions": "16:9",
+      "description": "Bar chart comparing maximum fine as percentage of revenue for GDPR, CCPA, LGPD, POPIA, and PIPL. Each bar uses a distinct color from the brand palette.",
+      "purpose": "Chapter 1 — regulatory comparison visualisation"
+    },
+    {
+      "template_link": "/resources/images/ch2-phishing",
+      "type": "image",
+      "dimensions": "16:9",
+      "description": "Annotated screenshot of a realistic phishing email. Red-flag areas (sender, subject, link, greeting) are circled in brand-red (#EA4335).",
+      "purpose": "Chapter 2 — phishing email illustration"
+    },
+    {
+      "template_link": "/resources/images/ch2-hotspot-email",
+      "type": "image",
+      "dimensions": "4:3",
+      "description": "Clean render of a phishing email used as the base layer for the interactive hotspot overlay. No annotations baked in — hotspot regions are rendered by the component.",
+      "purpose": "Chapter 2 — hotspot base image (phishing email)"
+    },
+    {
+      "template_link": "/resources/charts/ch2-trends",
+      "type": "diagram",
+      "dimensions": "16:9",
+      "description": "Line chart: three series (Phishing, Malware, Social Engineering) from 2022 to 2025 showing a declining trend. Brand palette line colors.",
+      "purpose": "Chapter 2 — attack-trend visualisation"
+    },
+    {
+      "template_link": "/resources/images/ch3-passwords",
+      "type": "image",
+      "dimensions": "16:9",
+      "description": "Infographic split vertically: left half shows weak password examples (short, dictionary words) with low entropy; right half shows strong passphrases with high entropy and a green checkmark.",
+      "purpose": "Chapter 3 — password hygiene visual"
+    },
+    {
+      "template_link": "/resources/videos/ch3-remote-vpn",
+      "type": "video",
+      "dimensions": "16:9",
+      "description": "60-second screencast: connecting to the Acme Corp VPN client, authenticating with MFA, and verifying the encrypted tunnel icon in the system tray.",
+      "purpose": "Chapter 3 — VPN tutorial video"
+    },
+    {
+      "template_link": "/resources/images/ch3-hotspot-dashboard",
+      "type": "image",
+      "dimensions": "16:9",
+      "description": "Screenshot of the Acme Corp incident-reporting web portal (clean, no annotations). Shows the severity dropdown, affected-systems multi-select, and evidence-upload area.",
+      "purpose": "Chapter 3 — hotspot base image (incident portal)"
+    }
+  ]
+}
