@@ -28,6 +28,7 @@ from src.db.models.course import (
     EditRequest,
 )
 from src.services.generation.builder import publish_built_course
+from src.services.generation.spec_validator import validate_spec
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +199,29 @@ async def process_spec_job(job_id: str) -> None:
             course.spec = spec
             course.asset_manifest = {"assets": spec.get("asset_manifest", [])}
             course.status = COURSE_SPEC_READY
+
+            # ── Spec quality gate (soft) ──────────────────────────────────
+            validation = validate_spec(spec)
+
+            logger.info(
+                "spec validation for course %s: %s (metrics: %s)",
+                course.id,
+                "PASSED" if validation.passed else (
+                    f"FAILED ({len(validation.issues)} issues)"
+                ),
+                validation.metrics,
+            )
+            if not validation.passed:
+                for issue in validation.issues:
+                    logger.warning("  spec issue: %s", issue)
+
             job.status = JOB_SUCCEEDED
             job.result = {
                 "chapters": len(lastenheft.chapters),
                 "assets": len(lastenheft.asset_manifest),
+                "spec_metrics": validation.metrics,
+                "validation_passed": validation.passed,
+                "validation_issues": validation.issues if not validation.passed else [],
             }
 
             build_job = await _create_followup_job(db, course, JOB_BUILD)
