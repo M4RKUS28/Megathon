@@ -1,7 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
+  Building2,
   FolderClosed,
   LayoutDashboard,
+  Palette,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,10 +21,14 @@ interface NavItem {
 }
 
 const ALL: AppRole[] = ["admin", "course_creator", "user"];
+const STAFF: AppRole[] = ["admin", "course_creator"];
 
 // Nav grows as each phase lands its pages.
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
+  { to: "/people", label: "People", icon: Users, roles: STAFF },
+  { to: "/branding", label: "Branding", icon: Palette, roles: ["admin"] },
+  { to: "/companies", label: "Companies", icon: Building2, roles: ["admin"] },
   { to: "/files", label: "Files", icon: FolderClosed, roles: ALL },
 ];
 

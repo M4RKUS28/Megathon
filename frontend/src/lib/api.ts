@@ -76,6 +76,51 @@ export const brandingApi = {
     api.put<Branding>("/branding", body),
 };
 
+// ── People / Org ───────────────────────────────────────────────────────────
+
+export interface Department {
+  id: string;
+  name: string;
+  parent_id: string | null;
+}
+
+export interface Person {
+  id: string;
+  email: string;
+  display_name: string;
+  role: AppRole;
+  department_id: string | null;
+  manager_id: string | null;
+}
+
+export const peopleApi = {
+  list: () => api.get<Person[]>("/people"),
+  update: (id: string, body: Partial<Pick<Person, "role" | "department_id" | "manager_id">>) =>
+    api.patch<Person>(`/people/${id}`, body),
+};
+
+export const departmentApi = {
+  list: () => api.get<Department[]>("/departments"),
+  create: (body: { name: string; parent_id?: string | null }) =>
+    api.post<Department>("/departments", body),
+  remove: (id: string) => api.delete(`/departments/${id}`),
+};
+
+// ── Companies (tenant management) ──────────────────────────────────────────
+
+export interface CompanyRecord {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  created_at: string;
+}
+
+export const companyApi = {
+  list: () => api.get<CompanyRecord[]>("/companies"),
+  create: (body: { name: string; slug: string }) => api.post<CompanyRecord>("/companies", body),
+};
+
 // ── File endpoints ─────────────────────────────────────────────────────────
 
 export interface FileRecord {
