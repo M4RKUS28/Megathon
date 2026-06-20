@@ -102,6 +102,34 @@
         color: #dc2626;
         font-weight: 600;
       }
+      .selable {
+        border-radius: 10px;
+        transition: outline-color 0.12s;
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+      }
+      body.sel-on .selable {
+        cursor: pointer;
+      }
+      body.sel-on .selable:hover {
+        outline-color: var(--brand);
+        background: rgba(81, 69, 229, 0.05);
+      }
+      .selable.picked {
+        outline-color: var(--brand);
+        background: rgba(81, 69, 229, 0.08);
+      }
+      .sel-banner {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--brand);
+        color: #fff;
+        font-size: 13px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        margin-bottom: 14px;
+      }
     </style>
   </head>
   <body>
@@ -116,8 +144,18 @@
       const passed = new Set();
       let am = {};
       let cur = {}; // quiz answers for the current chapter
+      let selectMode = false; // "Edit with Devin" element-selection mode
+      let picked = null; // selector string of the currently picked block
       function resolve(l) {
         return l ? am[l] || l : "";
+      }
+      function blockText(b) {
+        if (b.text) return b.text;
+        if (b.items) return b.items.join(", ");
+        if (b.data && b.data.turns)
+          return b.data.turns.map((t) => t.speaker + ": " + t.text).join(" / ");
+        if (b.data && b.data.title) return b.data.title;
+        return b.type || "";
       }
       function block(b) {
         if (b.type === "heading") return "<h3>" + (b.text || "") + "</h3>";
@@ -152,7 +190,10 @@
         const pages = c.pages || [];
         const onQuiz = p >= pages.length;
         const last = course.chapters.length - 1;
-        let h =
+        let h = selectMode
+          ? '<div class="sel-banner">Select an element to edit — click any block below.</div>'
+          : "";
+        h +=
           '<div class="card"><div class="eyebrow">Chapter ' +
           (i + 1) +
           " of " +
@@ -170,7 +211,24 @@
             pages.length +
             (pg.title ? " — " + pg.title : "") +
             "</div>";
-          (pg.blocks || []).forEach((b) => (h += block(b)));
+          (pg.blocks || []).forEach((b, bi) => {
+            const selector = i + "." + p + "." + bi;
+            const cls = "selable" + (picked === selector ? " picked" : "");
+            h +=
+              '<div class="' +
+              cls +
+              '" data-sel="' +
+              selector +
+              '" onclick="pick(' +
+              i +
+              "," +
+              p +
+              "," +
+              bi +
+              ')">' +
+              block(b) +
+              "</div>";
+          });
           h += '</div><div class="card nav-row">';
           h +=
             '<button class="nav ghost" ' +
@@ -248,6 +306,35 @@
         cur = {};
         render();
       }
+      function pick(ci, pi, bi) {
+        if (!selectMode) return;
+        const chapter = course.chapters[ci];
+        const b = ((chapter.pages || [])[pi] || { blocks: [] }).blocks[bi];
+        if (!b) return;
+        picked = ci + "." + pi + "." + bi;
+        selectMode = false;
+        document.body.classList.remove("sel-on");
+        parent.postMessage(
+          {
+            type: "coursive:element-selected",
+            blockId: picked,
+            text: blockText(b),
+            blockType: b.type,
+          },
+          "*",
+        );
+        render();
+      }
+      window.addEventListener("message", (e) => {
+        const d = e.data;
+        if (!d || typeof d !== "object") return;
+        if (d.type === "coursive:select-mode") {
+          selectMode = !!d.enabled;
+          document.body.classList.toggle("sel-on", selectMode);
+          if (selectMode) picked = null;
+          render();
+        }
+      });
       fetch("./asset_map.json")
         .then((r) => (r.ok ? r.json() : {}))
         .then((m) => {

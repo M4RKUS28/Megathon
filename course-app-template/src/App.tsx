@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import type { AssetMap, Course } from "./types";
+import type { AssetMap, Block, Course } from "./types";
 import { BlockView } from "./blocks";
 import { QuizView } from "./quiz";
 import { announceReady, postProgress } from "./progress";
+
+function blockText(b: Block): string {
+  if (b.text) return b.text;
+  if (b.items) return b.items.join(", ");
+  const turns = b.data?.turns as { speaker?: string; text?: string }[] | undefined;
+  if (turns) return turns.map((t) => `${t.speaker}: ${t.text}`).join(" / ");
+  const title = b.data?.title as string | undefined;
+  if (title) return title;
+  return b.type;
+}
 
 export function App() {
   const [course, setCourse] = useState<Course | null>(null);
@@ -15,6 +25,20 @@ export function App() {
   const [passed, setPassed] = useState<Set<number>>(new Set());
   const [scores, setScores] = useState<Record<number, number>>({});
   const [attempts, setAttempts] = useState(0);
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const d = e.data;
+      if (d && typeof d === "object" && d.type === "coursive:select-mode") {
+        setSelectMode(!!d.enabled);
+        if (d.enabled) setPicked(null);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -86,6 +110,21 @@ export function App() {
       setCurrent(current - 1);
       setPageIdx(0);
     }
+  };
+
+  const pickBlock = (selector: string, b: Block) => {
+    if (!selectMode) return;
+    setPicked(selector);
+    setSelectMode(false);
+    window.parent.postMessage(
+      {
+        type: "coursive:element-selected",
+        blockId: selector,
+        text: blockText(b),
+        blockType: b.type,
+      },
+      "*",
+    );
   };
 
   const onPass = (scorePct: number, n: number) => {
@@ -196,13 +235,30 @@ export function App() {
               </p>
             </div>
 
+            {selectMode ? (
+              <div className="sticky top-0 z-10 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm text-white">
+                Select an element to edit — click any block below.
+              </div>
+            ) : null}
+
             {onQuiz ? (
               <QuizView quiz={chapter.quiz} onPass={onPass} />
             ) : (
               <section className="space-y-4">
-                {(page?.blocks ?? []).map((b, i) => (
-                  <BlockView key={i} block={b} resolve={resolve} />
-                ))}
+                {(page?.blocks ?? []).map((b, i) => {
+                  const selector = `${current}.${pageIdx}.${i}`;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => pickBlock(selector, b)}
+                      className={`rounded-xl outline-2 outline-offset-2 transition ${
+                        selectMode ? "cursor-pointer hover:outline hover:outline-[var(--brand)]" : ""
+                      } ${picked === selector ? "outline outline-[var(--brand)] bg-[var(--brand)]/5" : ""}`}
+                    >
+                      <BlockView block={b} resolve={resolve} />
+                    </div>
+                  );
+                })}
               </section>
             )}
 
