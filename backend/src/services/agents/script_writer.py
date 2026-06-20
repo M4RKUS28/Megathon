@@ -127,7 +127,25 @@ short, poorly designed chapters, so always err on the side of MORE and RICHER co
   Only use charts when the data is REAL and meaningful, or the plan marks the chapter
   as `chart_appropriate=true`.
 
+## Minigames
+
+Minigames (gamify practice — include at least ONE `minigame` per chapter, ideally on the
+"Apply it"/practice or "Recap" pages):
+- A `minigame` block turns practice into play: the renderer scores the learner and gives
+  instant feedback. Choose the `data.game` kind that best fits the content (you may also invent
+  your own kind — then put everything the implementer needs into `data`):
+    quiz   -> {"game": "quiz", "prompt": "..", "questions": [
+                {"question": "..", "options": ["..", ".."], "answerIndex": 0, "explanation": ".."}]}
+    order  -> {"game": "order", "prompt": "..", "steps": ["first", "second", "third"]}
+               (list the steps in the CORRECT order; the game shuffles them for the learner)
+    sort   -> {"game": "sort", "prompt": "..", "categories": ["A", "B"],
+                "items": [{"text": "..", "category": "A"}]}
+    memory -> {"game": "memory", "prompt": "..", "pairs": [{"a": "term", "b": "definition"}]}
+- Make minigames meaningful — test real understanding, not trivia — and keep them short
+  (3-6 questions/items/steps/pairs). Prefer a different game kind from the chapter-end quiz.
+
 ## Resource (asset) rules
+
 
 - For every visual/media block set `asset` to a UNIQUE template link like
   "/resources/images/01", "/resources/videos/02", "/resources/audio/03". Do NOT invent URLs.
@@ -140,8 +158,15 @@ short, poorly designed chapters, so always err on the side of MORE and RICHER co
 
 - Add an `audio` block to EVERY content page. Set its `text` to the FULL, natural spoken
   narration of that page — a friendly, plain-language read-aloud of everything on the page.
-  Write it as spoken sentences (no markdown, no bullet symbols), typically 80-200 words.
+  This `text` is used directly as the text-to-speech script and is available to the
+  learner through a transcript/info button, so write it as spoken sentences (no markdown,
+  no bullet symbols), typically 80-200 words.
   Give each audio block a UNIQUE `asset` link like "/resources/audio/NN".
+- Do NOT put essential teaching content only into audio narration. Every concrete method,
+  step, option, example or checklist item mentioned by an audio block must also be present
+  in visible page blocks (`paragraph`, `list`, interactions or structured `data`). For example,
+  a heading like "Git Installation Methods" must be followed by visible methods, not just an
+  audio summary that names them.
 - EXCEPTION: a page built primarily around a `conversation` block does NOT need a separate
   page-level `audio` block — each conversation turn is already narrated via its own `audio`
   link, so a page narration would double up. Skip it there.

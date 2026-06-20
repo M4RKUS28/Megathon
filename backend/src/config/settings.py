@@ -56,6 +56,8 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("DEVIN_API_KEY", "DEVIN")
     )
     devin_api_base_url: str = "https://api.devin.ai/v3"
+    # Public web app base used to build human-facing session links shown in the UI.
+    devin_app_base_url: str = "https://app.devin.ai"
     devin_org_id: str = ""
     devin_snapshot_id: str = ""
     devin_playbook_id: str = ""

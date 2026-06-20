@@ -15,7 +15,7 @@ from src.services.agents.cala import (
 )
 from src.services.agents.knowledge import KnowledgeResult
 from src.services.agents.schemas import AssetSpec
-from src.services.generation.devin_codegen import _validate_files, generate_course_app
+from src.services.generation.devin_codegen import _build_prompt, _validate_files, generate_course_app
 from src.services.generation.providers.composite import CompositeAssetProvider
 from src.services.generation.providers.gemini_media import (
     GeminiTTSProvider,
@@ -156,6 +156,13 @@ def test_validate_files_rejects_path_traversal():
         {"files": [{"path": "package.json", "content": "{}"}, {"path": "../evil", "content": "x"}]}
     )
     assert out == {"package.json": "{}"}
+
+
+def test_devin_prompt_requires_chapter_subagents():
+    prompt = _build_prompt({"title": "t", "chapters": [{"title": "c"}]}, {})
+    assert "Mandatory subagent workflow" in prompt
+    assert "use a separate subagent for EVERY chapter" in prompt
+    assert "Do not skip subagents for short or simple chapters" in prompt
 
 
 async def test_generate_course_app_disabled_returns_none():

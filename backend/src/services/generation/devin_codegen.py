@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from src.config.settings import settings
@@ -85,9 +86,18 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "render it faithfully but design it well. You may split, merge, enrich or add "
         "sections and interactions, and invent presentations for custom/unknown block "
         "types, as long as no content is lost. Never produce thin or short chapters.\n"
+        "- Mandatory subagent workflow: use a separate subagent for EVERY chapter. Each "
+        "chapter subagent must plan and implement its chapter's screens, interactions, "
+        "quiz, media usage and accessibility details, then integrate that chapter into "
+        "the final shared app. Do not skip subagents for short or simple chapters.\n"
         "- Audio narration: most pages include an `audio` block. Render it as a clear, "
         "accessible 'Listen to this page' player (labelled, with play/pause) — its audio "
-        "is the spoken version of the page. Make it easy to find but not distracting.\n"
+        "is the spoken version of the page. Every audio block with `text` must also expose "
+        "that spoken text through a small transcript/info button that opens a readable pop-up "
+        "or panel. Make it easy to find but not distracting.\n"
+        "- Never hide essential learning content in audio-only narration. If the spec has a "
+        "heading, method name, process step or concrete example in `text`, `items` or `data`, "
+        "render it visibly somewhere on the page, even if the audio transcript repeats it.\n"
         "- Conversation blocks (`type: \"conversation\"`, used heavily for behavioural / "
         "soft-skill topics): render an immersive two-character scene — one persona on the "
         "LEFT, one on the RIGHT, each shown as a friendly cartoon-style avatar. `data."
@@ -118,6 +128,14 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "- Make the course FUN — use gamification elements like score tracking, completion "
         "celebrations (confetti, star ratings), and varied mini-games where pedagogically "
         "appropriate. Reward correct answers with satisfying animations.\n\n"
+        "- Minigames (`type: \"minigame\"`): build them as polished, animated, *scored* games "
+        "with instant feedback — not static quizzes. `data.game` is the kind: `quiz` (game-show "
+        "multiple-choice with a score + explanations), `order` (drag/reorder shuffled steps into "
+        "the correct sequence), `sort` (drag items into the correct category buckets), `memory` "
+        "(flip-card matching pairs); the kind's config lives in `data`. Use real drag-and-drop, "
+        "a visible score, celebratory micro-animations on success (confetti / a check popping "
+        "in) and a replay button; invent richer games for custom kinds. Make them fun.\n"
+
         "- A chapter-end quiz is mandatory; require >=80% to unlock the next chapter, "
         "and allow retry below 80%.\n"
         "- Reference assets STRICTLY by their template_link (e.g. "
@@ -159,9 +177,16 @@ def _validate_files(output: dict) -> dict[str, str] | None:
 
 
 async def generate_course_app(
-    spec: dict, asset_map: dict
+    spec: dict,
+    asset_map: dict,
+    on_session: Callable[[str], Awaitable[None]] | None = None,
 ) -> tuple[str | None, dict[str, str] | None]:
-    """Return (devin_session_id, file map) or (None, None) to use the template."""
+    """Return (devin_session_id, file map) or (None, None) to use the template.
+
+    `on_session` is awaited with the session id the moment the Devin session is
+    created (before its long build wait), so the pipeline can persist the id and
+    surface a live link to the session in the UI.
+    """
     if not settings.course_build_use_devin:
         return None, None
     client = DevinClient()
@@ -175,6 +200,7 @@ async def generate_course_app(
             structured_output_schema=COURSE_APP_SCHEMA,
             title=f"Course app: {spec.get('title', 'course')}",
             tags=["coursive", "course-app"],
+            on_created=on_session,
         )
     except DevinError as exc:
         logger.warning("Devin course-app generation failed (%s); using template", exc)

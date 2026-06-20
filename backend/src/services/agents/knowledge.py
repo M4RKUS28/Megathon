@@ -111,9 +111,9 @@ class CompanyKnowledge:
                 f"procedure, required approvals, and responsible roles.",
                 f"Pre-conditions: ensure access permissions are granted and "
                 f"prerequisite training on {query} fundamentals is completed.",
-                f"Key steps: (1) preparation and checklist review, "
-                f"(2) execution following the documented procedure, "
-                f"(3) verification and sign-off by the designated reviewer.",
+                "Key steps: (1) preparation and checklist review, "
+                "(2) execution following the documented procedure, "
+                "(3) verification and sign-off by the designated reviewer.",
                 f"Exception handling: deviations from the {query} SOP must be "
                 f"documented and escalated to the team lead within 24 hours.",
                 f"Review cycle: the {query} SOP is reviewed quarterly and "
@@ -153,9 +153,9 @@ class CompanyKnowledge:
                 f"engaged in activities related to {query}.",
                 f"Key provisions: mandatory orientation, periodic refresher "
                 f"training, and documented acknowledgement of the {query} policy.",
-                f"Enforcement: violations are addressed through the standard "
-                f"disciplinary process; repeated breaches may affect performance "
-                f"reviews.",
+                "Enforcement: violations are addressed through the standard "
+                "disciplinary process; repeated breaches may affect performance "
+                "reviews.",
             ],
         )
 
@@ -184,12 +184,12 @@ class CompanyKnowledge:
             [
                 f"PDF handbook: '{co} Guide to {query}' — comprehensive "
                 f"reference covering principles, procedures, and examples.",
-                f"Chapter outline: (1) Introduction & scope, (2) Core concepts, "
-                f"(3) Detailed procedures, (4) Case studies, (5) Assessment.",
+                "Chapter outline: (1) Introduction & scope, (2) Core concepts, "
+                "(3) Detailed procedures, (4) Case studies, (5) Assessment.",
                 f"Appendices include: glossary of terms related to {query}, "
                 f"quick-reference checklists, and role-responsibility matrices.",
-                f"Version history indicates the document is reviewed annually; "
-                f"the latest revision incorporates feedback from the last audit cycle.",
+                "Version history indicates the document is reviewed annually; "
+                "the latest revision incorporates feedback from the last audit cycle.",
             ],
         )
 

@@ -205,6 +205,7 @@ export interface CourseDetail extends CourseSummary {
   course_url: string | null;
   iframe_url: string | null;
   devin_session_id: string | null;
+  devin_session_url: string | null;
 }
 
 export interface GenerationJobRecord {
@@ -213,6 +214,7 @@ export interface GenerationJobRecord {
   status: string;
   error: string | null;
   devin_session_id: string | null;
+  devin_session_url: string | null;
   result: Record<string, unknown> | null;
   created_at: string;
 }

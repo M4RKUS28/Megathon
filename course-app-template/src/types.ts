@@ -23,6 +23,38 @@ export interface ConversationTurn {
   audio?: string; // per-bubble TTS asset link
 }
 
+// `minigame` block payload (data). `game` selects the kind; remaining fields are
+// the per-kind config. Unknown kinds degrade gracefully in the renderer.
+export type MinigameKind = "quiz" | "order" | "sort" | "memory" | string;
+
+export interface MinigameQuestion {
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explanation?: string;
+}
+
+export interface MinigameSortItem {
+  text: string;
+  category: string;
+}
+
+export interface MinigamePair {
+  a: string;
+  b: string;
+}
+
+export interface MinigameData {
+  game: MinigameKind;
+  title?: string;
+  prompt?: string;
+  questions?: MinigameQuestion[];
+  steps?: string[];
+  categories?: string[];
+  items?: MinigameSortItem[];
+  pairs?: MinigamePair[];
+}
+
 export interface Page {
   id: string;
   title?: string;

@@ -847,6 +847,7 @@ def _chapter_pages(
     return pages, assets
 
 
+
 def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str) -> Lastenheft:
     chapters: list[SpecChapter] = []
     manifest: list[AssetSpec] = []

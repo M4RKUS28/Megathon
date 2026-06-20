@@ -282,8 +282,16 @@ async def process_build_job(job_id: str) -> None:
             # (optional; falls back to the template build inside the builder).
             from src.services.generation.devin_codegen import generate_course_app
 
+            async def _on_devin_session(session_id: str) -> None:
+                # Persist + commit the moment the session exists so the UI can
+                # show a live link to it while Devin is still building.
+                course.devin_session_id = session_id
+                job.devin_session_id = session_id
+                await db.commit()
+                logger.info("devin session %s started for course %s", session_id, course.id)
+
             devin_session_id, source_files = await generate_course_app(
-                course.spec, asset_map
+                course.spec, asset_map, on_session=_on_devin_session
             )
 
             # Phase 3 + 4 — build per-course app and host it
@@ -298,6 +306,7 @@ async def process_build_job(job_id: str) -> None:
 
             if devin_session_id:
                 job.devin_session_id = devin_session_id
+                course.devin_session_id = devin_session_id
             course.asset_map = asset_map
             course.dist_object_prefix = hosting["prefix"]
             course.course_url = hosting["course_url"]

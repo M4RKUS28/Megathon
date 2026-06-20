@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+﻿import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
@@ -17,6 +17,10 @@ import type {
   ConversationTurn,
   FillInBlankData,
   MatchingGameData,
+  MinigameData,
+  MinigamePair,
+  MinigameQuestion,
+  MinigameSortItem,
   Persona,
   SortingChallengeData,
   WordCloudData,
@@ -48,7 +52,7 @@ function MediaImage({ src, alt }: { src?: string; alt?: string }) {
   );
 }
 
-// ── Conversation (avatars left/right, click-through bubbles, per-bubble TTS) ──
+// â”€â”€ Conversation (avatars left/right, click-through bubbles, per-bubble TTS) â”€â”€
 
 // Local "cartoon avatar library": a parametric flat-illustration person, drawn
 // deterministically from a seed string so each persona keeps the same face. A
@@ -278,7 +282,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
                   }`}
                 >
                   {p?.name}
-                  {p?.role ? <span className="font-normal opacity-70">· {p.role}</span> : null}
+                  {p?.role ? <span className="font-normal opacity-70">Â· {p.role}</span> : null}
                 </div>
                 <div>{t.text}</div>
                 {t.audio ? (
@@ -289,7 +293,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
                       mine ? "text-white/85" : "text-[var(--brand)]"
                     }`}
                   >
-                    <span aria-hidden="true">🔊</span> Replay
+                    <span aria-hidden="true">ðŸ”Š</span> Replay
                   </button>
                 ) : null}
               </div>
@@ -308,7 +312,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
             onClick={() => setShown(1)}
             className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
           >
-            ↻ Replay conversation
+            â†» Replay conversation
           </button>
         ) : (
           <button
@@ -316,12 +320,363 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
             onClick={advance}
             className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white"
           >
-            Next ▶
+            Next â–¶
           </button>
         )}
       </div>
     </div>
   );
+}
+
+function shuffle<T>(items: T[]): T[] {
+  return [...items]
+    .map((value) => ({ value, order: Math.random() }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ value }) => value);
+}
+
+function GameShell({
+  title,
+  prompt,
+  score,
+  total,
+  onReset,
+  children,
+}: {
+  title: string;
+  prompt?: string;
+  score: number;
+  total: number;
+  onReset: () => void;
+  children: ReactNode;
+}) {
+  const pct = total ? Math.round((score / total) * 100) : 0;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+      <div className="border-b border-black/5 bg-[var(--brand)]/5 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">
+              Minigame
+            </div>
+            <h4 className="mt-0.5 text-base font-bold text-gray-900">{title}</h4>
+            {prompt ? <p className="mt-1 text-sm text-gray-600">{prompt}</p> : null}
+          </div>
+          <div className="rounded-xl border border-black/5 bg-white px-3 py-2 text-right shadow-sm">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Score
+            </div>
+            <div className="text-lg font-bold text-[var(--brand)]">
+              {score}/{total}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10">
+          <motion.div
+            animate={{ width: `${pct}%` }}
+            className="h-full rounded-full bg-[var(--brand)]"
+          />
+        </div>
+      </div>
+      <div className="p-4">{children}</div>
+      <div className="flex justify-end border-t border-black/5 bg-gray-50 px-4 py-3">
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium"
+        >
+          Replay
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuizMinigame({ data }: { data: MinigameData }) {
+  const questions = data.questions ?? [];
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const score = questions.reduce(
+    (sum, q, i) => sum + (answers[i] === q.answerIndex ? 1 : 0),
+    0,
+  );
+
+  return (
+    <GameShell
+      title={data.title ?? "Quick challenge"}
+      prompt={data.prompt}
+      score={score}
+      total={questions.length}
+      onReset={() => setAnswers({})}
+    >
+      <div className="space-y-4">
+        {questions.map((q: MinigameQuestion, qi) => {
+          const picked = answers[qi];
+          const answered = picked !== undefined;
+          return (
+            <div key={qi} className="rounded-xl border border-black/5 bg-gray-50 p-3">
+              <div className="text-sm font-semibold text-gray-900">{q.question}</div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {q.options.map((option, oi) => {
+                  const correct = oi === q.answerIndex;
+                  const active = picked === oi;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setAnswers((s) => ({ ...s, [qi]: oi }))}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                        answered && correct
+                          ? "border-emerald-500 bg-emerald-50"
+                          : active
+                            ? "border-red-400 bg-red-50"
+                            : "border-black/10 bg-white hover:border-[var(--brand)]"
+                      }`}
+                    >
+                      <span className="mr-2 font-bold">
+                        {answered && correct ? "OK" : answered && active ? "X" : ""}
+                      </span>
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+              {answered && q.explanation ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 rounded-lg bg-white p-2 text-xs text-gray-600"
+                >
+                  {q.explanation}
+                </motion.div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </GameShell>
+  );
+}
+
+function OrderMinigame({ data }: { data: MinigameData }) {
+  const steps = data.steps ?? [];
+  const [order, setOrder] = useState<string[]>(() => shuffle(steps));
+  const score = order.reduce((sum, step, i) => sum + (step === steps[i] ? 1 : 0), 0);
+
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= order.length) return;
+    setOrder((current) => {
+      const next = [...current];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  return (
+    <GameShell
+      title={data.title ?? "Put it in order"}
+      prompt={data.prompt}
+      score={score}
+      total={steps.length}
+      onReset={() => setOrder(shuffle(steps))}
+    >
+      <div className="space-y-2">
+        {order.map((step, i) => {
+          const correct = step === steps[i];
+          return (
+            <motion.div
+              layout
+              key={step}
+              className={`flex items-center gap-2 rounded-xl border p-2 ${
+                correct ? "border-emerald-500 bg-emerald-50" : "border-black/10 bg-gray-50"
+              }`}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold">
+                {i + 1}
+              </div>
+              <div className="flex-1 text-sm">{step}</div>
+              <button
+                type="button"
+                onClick={() => move(i, i - 1)}
+                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                onClick={() => move(i, i + 1)}
+                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+              >
+                Down
+              </button>
+            </motion.div>
+          );
+        })}
+      </div>
+    </GameShell>
+  );
+}
+
+function SortMinigame({ data }: { data: MinigameData }) {
+  const items = data.items ?? [];
+  const categories =
+    data.categories && data.categories.length
+      ? data.categories
+      : Array.from(new Set(items.map((item) => item.category)));
+  const [picks, setPicks] = useState<Record<number, string>>({});
+  const score = items.reduce((sum, item, i) => sum + (picks[i] === item.category ? 1 : 0), 0);
+
+  return (
+    <GameShell
+      title={data.title ?? "Sort the cards"}
+      prompt={data.prompt}
+      score={score}
+      total={items.length}
+      onReset={() => setPicks({})}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map((item: MinigameSortItem, i) => {
+          const picked = picks[i];
+          const correct = picked === item.category;
+          return (
+            <div
+              key={`${item.text}-${i}`}
+              className={`rounded-xl border p-3 ${
+                picked
+                  ? correct
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-red-400 bg-red-50"
+                  : "border-black/10 bg-gray-50"
+              }`}
+            >
+              <div className="text-sm font-medium">{item.text}</div>
+              <select
+                value={picked ?? ""}
+                onChange={(e) => setPicks((s) => ({ ...s, [i]: e.target.value }))}
+                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-sm"
+              >
+                <option value="">Choose category</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+    </GameShell>
+  );
+}
+
+type MemoryCard = {
+  id: string;
+  pair: number;
+  text: string;
+};
+
+function MemoryMinigame({ data }: { data: MinigameData }) {
+  const pairs = data.pairs ?? [];
+  const [cards, setCards] = useState<MemoryCard[]>(() =>
+    shuffle(
+      pairs.flatMap((pair: MinigamePair, i) => [
+        { id: `${i}-a`, pair: i, text: pair.a },
+        { id: `${i}-b`, pair: i, text: pair.b },
+      ]),
+    ),
+  );
+  const [open, setOpen] = useState<string[]>([]);
+  const [matched, setMatched] = useState<Record<number, boolean>>({});
+  const score = Object.values(matched).filter(Boolean).length;
+
+  const reset = () => {
+    setCards(
+      shuffle(
+        pairs.flatMap((pair: MinigamePair, i) => [
+          { id: `${i}-a`, pair: i, text: pair.a },
+          { id: `${i}-b`, pair: i, text: pair.b },
+        ]),
+      ),
+    );
+    setOpen([]);
+    setMatched({});
+  };
+
+  const flip = (card: MemoryCard) => {
+    if (matched[card.pair] || open.includes(card.id) || open.length >= 2) return;
+    const nextOpen = [...open, card.id];
+    setOpen(nextOpen);
+    if (nextOpen.length === 2) {
+      const first = cards.find((c) => c.id === nextOpen[0]);
+      if (first?.pair === card.pair) {
+        setMatched((s) => ({ ...s, [card.pair]: true }));
+        setOpen([]);
+      } else {
+        window.setTimeout(() => setOpen([]), 800);
+      }
+    }
+  };
+
+  return (
+    <GameShell
+      title={data.title ?? "Memory match"}
+      prompt={data.prompt}
+      score={score}
+      total={pairs.length}
+      onReset={reset}
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {cards.map((card) => {
+          const visible = matched[card.pair] || open.includes(card.id);
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => flip(card)}
+              className={`min-h-[82px] rounded-xl border p-3 text-sm font-medium transition ${
+                matched[card.pair]
+                  ? "border-emerald-500 bg-emerald-50"
+                  : visible
+                    ? "border-[var(--brand)] bg-[var(--brand)]/5"
+                    : "border-black/10 bg-gray-100"
+              }`}
+            >
+              {visible ? card.text : "?"}
+            </button>
+          );
+        })}
+      </div>
+    </GameShell>
+  );
+}
+
+function Minigame({ data }: { data?: Record<string, unknown> }) {
+  const game = (data ?? {}) as unknown as MinigameData;
+  switch (game.game) {
+    case "quiz":
+      return <QuizMinigame data={game} />;
+    case "order":
+      return <OrderMinigame data={game} />;
+    case "sort":
+      return <SortMinigame data={game} />;
+    case "memory":
+      return <MemoryMinigame data={game} />;
+    default:
+      return (
+        <GameShell
+          title={game.title ?? "Practice challenge"}
+          prompt={game.prompt ?? "This minigame type is not supported by the fallback renderer yet."}
+          score={0}
+          total={0}
+          onReset={() => {}}
+        >
+          <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+            Custom game: {game.game || "unknown"}
+          </div>
+        </GameShell>
+      );
+  }
 }
 
 function Flashcards({ data }: { data?: Record<string, unknown> }) {
@@ -472,7 +827,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                       : "border-black/10"
                 }`}
               >
-                <option value="">Select…</option>
+                <option value="">Selectâ€¦</option>
                 {rights.map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -485,6 +840,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                 </span>
               )}
             </motion.div>
+
           );
         })}
       </div>
@@ -582,7 +938,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
             className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
           >
             {it.title}
-            <span>{open === i ? "−" : "+"}</span>
+            <span>{open === i ? "âˆ’" : "+"}</span>
           </button>
           {open === i ? <div className="px-4 pb-4 text-sm text-gray-600">{it.body}</div> : null}
         </div>
@@ -1100,6 +1456,108 @@ function ChartBlock({ data }: { data?: Record<string, unknown> }) {
   );
 }
 
+function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
+  const src = resolve(block.asset);
+  const [open, setOpen] = useState(false);
+  if (!src) return null;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
+          <span aria-hidden="true">AUDIO</span>
+          Listen to this page
+        </div>
+        {block.text ? (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-black/10 bg-gray-50 text-xs font-bold text-gray-700"
+            aria-label="Show spoken text"
+            title="Show spoken text"
+          >
+            i
+          </button>
+        ) : null}
+      </div>
+      <audio controls className="w-full" src={src} />
+      {open && block.text ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Spoken text"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h4 className="text-base font-bold text-gray-900">Spoken text</h4>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg border border-black/10 px-2 py-1 text-xs font-medium"
+              >
+                Close
+              </button>
+            </div>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+              {block.text}
+            </p>
+          </motion.div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function labelize(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function StructuredValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return <span>{String(value)}</span>;
+  }
+  if (Array.isArray(value)) {
+    return (
+      <ul className="list-disc space-y-1 pl-5">
+        {value.map((item, i) => (
+          <li key={i}>
+            <StructuredValue value={item} />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (typeof value === "object") {
+    return (
+      <div className="space-y-2">
+        {Object.entries(value as Record<string, unknown>).map(([key, item]) => (
+          <div key={key}>
+            <span className="font-semibold text-gray-800">{labelize(key)}: </span>
+            <StructuredValue value={item} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function StructuredData({ data }: { data?: Record<string, unknown> }) {
+  if (!data || !Object.keys(data).length) return null;
+  return (
+    <div className="rounded-xl border border-black/5 bg-gray-50 p-3 text-sm leading-relaxed text-gray-700">
+      <StructuredValue value={data} />
+    </div>
+  );
+}
+
 export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }) {
   switch (block.type) {
     case "heading":
@@ -1131,21 +1589,13 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       ) : null;
     }
     case "audio": {
-      const src = resolve(block.asset);
-      if (!src) return null;
-      return (
-        <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
-            <span aria-hidden="true">🔊</span>
-            Listen to this page
-          </div>
-          <audio controls className="w-full" src={src} />
-        </div>
-      );
+      return <AudioBlock block={block} resolve={resolve} />;
     }
     case "conversation":
     case "dialogue":
       return <Conversation data={block.data} resolve={resolve} />;
+    case "minigame":
+      return <Minigame data={block.data} />;
     case "flashcards":
       return <Flashcards data={block.data} />;
     case "dragdrop":
@@ -1171,10 +1621,10 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     default: {
       // Unknown / custom block type. The design is intentionally free, so rather
       // than dropping the block, surface whatever content it carries (text, list
-      // items and any referenced image). This is the fallback renderer used when
+      // items, data and any referenced image). This is the fallback renderer used when
       // the implementation agent isn't building a bespoke app.
       const img = resolve(block.asset);
-      if (!block.text && !(block.items && block.items.length) && !img) return null;
+      if (!block.text && !(block.items && block.items.length) && !block.data && !img) return null;
       return (
         <div className="space-y-2">
           {block.text ? (
@@ -1187,6 +1637,7 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
               ))}
             </ul>
           ) : null}
+          <StructuredData data={block.data} />
           {img ? <MediaImage src={img} alt={block.text} /> : null}
         </div>
       );
