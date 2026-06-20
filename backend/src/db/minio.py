@@ -1,3 +1,4 @@
+import io
 from datetime import timedelta
 from functools import lru_cache
 
@@ -86,3 +87,41 @@ def object_exists(object_name: str, bucket: str | None = None) -> bool:
         return True
     except Exception:
         return False
+
+
+def public_object_url(object_name: str, bucket: str | None = None) -> str:
+    """Browser-reachable URL for a public-read object (no signature).
+
+    Used to embed generated courses via iframe — the `courses` bucket is
+    configured public-read at init time.
+    """
+    b = bucket or settings.minio_bucket
+    return f"{settings.minio_public_url.rstrip('/')}/{b}/{object_name.lstrip('/')}"
+
+
+def put_file(
+    local_path: str,
+    object_name: str,
+    bucket: str | None = None,
+    content_type: str = "application/octet-stream",
+) -> None:
+    client = get_minio_client()
+    client.fput_object(
+        bucket or settings.minio_bucket, object_name, local_path, content_type=content_type
+    )
+
+
+def put_bytes(
+    data: bytes,
+    object_name: str,
+    bucket: str | None = None,
+    content_type: str = "application/octet-stream",
+) -> None:
+    client = get_minio_client()
+    client.put_object(
+        bucket or settings.minio_bucket,
+        object_name,
+        io.BytesIO(data),
+        length=len(data),
+        content_type=content_type,
+    )

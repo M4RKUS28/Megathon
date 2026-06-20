@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     minio_root_user: str = "minioadmin"
     minio_root_password: str = "changeme"
     minio_bucket: str = "uploads"
+    courses_bucket: str = "courses"
     minio_presigned_expiry: int = 3600
     minio_secure: bool = False
     # Browser-reachable base URL for presigned URLs (proxied to MinIO by nginx
@@ -36,6 +37,25 @@ class Settings(BaseSettings):
     secret_key: str = "changeme"
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost", "http://localhost:5173"]
+
+    # Redis / Queue
+    redis_url: str = "redis://redis:6379/0"
+
+    # Devin API (course generation pipeline) — v3 org-scoped API
+    devin_api_key: str = ""
+    devin_api_base_url: str = "https://api.devin.ai/v3"
+    devin_org_id: str = ""
+    devin_snapshot_id: str = ""
+    devin_playbook_id: str = ""
+    devin_max_acu_limit: int = 20
+
+    # Platform / multi-tenant
+    demo_company_slug: str = "acme"
+    platform_public_url: str = "http://localhost"
+
+    # Course hosting: path to the prebuilt Vite course-template dist/ that the
+    # worker publishes per course. Built into the image; overridable locally.
+    course_template_dist: str = "/app/course_template_dist"
 
     @computed_field
     @property

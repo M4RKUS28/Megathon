@@ -10,10 +10,12 @@
   "accessTokenLifespan": 300,
   "roles": {
     "realm": [
-      { "name": "user", "description": "Regular user" },
+      { "name": "user", "description": "Regular user (employee / learner)" },
+      { "name": "course_creator", "description": "Creates, manages and assigns courses (HR / dept lead)" },
       { "name": "admin", "description": "Administrator" }
     ]
   },
+  "defaultRoles": ["user"],
   "clients": [
     {
       "clientId": "app-frontend",
@@ -47,6 +49,19 @@
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "company-slug",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "company_slug",
+            "claim.name": "company_slug",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
         }
       ]
     }
@@ -59,11 +74,54 @@
       "email": "demo@example.com",
       "firstName": "Demo",
       "lastName": "User",
+      "attributes": { "company_slug": ["acme"] },
       "requiredActions": [],
       "credentials": [
         { "type": "password", "value": "demo", "temporary": false }
       ],
       "realmRoles": ["user", "admin"]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@acme.test",
+      "firstName": "Ada",
+      "lastName": "Admin",
+      "attributes": { "company_slug": ["acme"] },
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "admin", "temporary": false }
+      ],
+      "realmRoles": ["user", "admin"]
+    },
+    {
+      "username": "creator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "creator@acme.test",
+      "firstName": "Carla",
+      "lastName": "Creator",
+      "attributes": { "company_slug": ["acme"] },
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "creator", "temporary": false }
+      ],
+      "realmRoles": ["user", "course_creator"]
+    },
+    {
+      "username": "employee",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "employee@acme.test",
+      "firstName": "Erik",
+      "lastName": "Employee",
+      "attributes": { "company_slug": ["acme"] },
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "employee", "temporary": false }
+      ],
+      "realmRoles": ["user"]
     }
   ]
 }

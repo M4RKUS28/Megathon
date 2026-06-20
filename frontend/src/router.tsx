@@ -1,16 +1,29 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleRoute } from "@/components/RoleRoute";
 import { LandingPage } from "@/pages/Landing";
+import { AboutPage } from "@/pages/About";
 import { SignInPage } from "@/pages/SignIn";
 import { SignUpPage } from "@/pages/SignUp";
 import { DashboardPage } from "@/pages/Dashboard";
 import { FileManagerPage } from "@/pages/FileManager";
+import { BrandingPage } from "@/pages/Branding";
+import { PeoplePage } from "@/pages/People";
+import { CompaniesPage } from "@/pages/Companies";
+import { CoursesPage } from "@/pages/Courses";
+import { CourseDetailPage } from "@/pages/CourseDetail";
+import { MyLearningPage } from "@/pages/MyLearning";
+import { CoursePlayerPage } from "@/pages/CoursePlayer";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <LandingPage />,
+  },
+  {
+    path: "/about",
+    element: <AboutPage />,
   },
   {
     path: "/signin",
@@ -28,16 +41,47 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "dashboard", element: <DashboardPage /> },
+      {
+        path: "courses",
+        element: (
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <CoursesPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "courses/:id",
+        element: (
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <CourseDetailPage />
+          </RoleRoute>
+        ),
+      },
+      { path: "learn", element: <MyLearningPage /> },
+      { path: "learn/:id", element: <CoursePlayerPage /> },
       { path: "files", element: <FileManagerPage /> },
       {
-        path: "admin",
+        path: "people",
         element: (
-          <ProtectedRoute requiredRole="admin">
-            <div>
-              <h1 className="text-2xl font-bold">Admin Panel</h1>
-              <p className="text-muted-foreground">Admin-only area.</p>
-            </div>
-          </ProtectedRoute>
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <PeoplePage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "branding",
+        element: (
+          <RoleRoute roles={["admin"]}>
+            <BrandingPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "companies",
+        element: (
+          <RoleRoute roles={["admin"]}>
+            <CompaniesPage />
+          </RoleRoute>
         ),
       },
     ],
