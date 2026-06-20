@@ -31,8 +31,9 @@ from src.db.crud.course import (
     list_courses,
     list_jobs_for_course,
 )
-from src.db.crud.enrollment import list_enrollments_for_course
-from src.db.crud.user import list_company_users
+from src.db.crud.department import get_department
+from src.db.crud.enrollment import get_or_create_enrollment, list_enrollments_for_course
+from src.db.crud.user import get_user, list_company_users
 from src.db.database import get_db
 from src.db.models.course import (
     COURSE_AUTHORING,
@@ -54,6 +55,29 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 StaffDep = Annotated[User, Depends(require_app_role(ROLE_ADMIN, ROLE_COURSE_CREATOR))]
+
+
+async def _assignment_users(
+    db: AsyncSession,
+    company_id: uuid.UUID,
+    assignment: CourseAssignment,
+    users: list[User] | None = None,
+) -> list[User]:
+    if users is None:
+        users = list(await list_company_users(db, company_id))
+    by_id = {u.id: u for u in users}
+    assigned: dict[str, User] = {}
+    if assignment.assignee_user_id:
+        user = by_id.get(assignment.assignee_user_id)
+        if user is None:
+            user = await get_user(db, assignment.assignee_user_id)
+        if user is not None and user.company_id == company_id:
+            assigned[user.id] = user
+    if assignment.assignee_department_id:
+        for user in users:
+            if user.department_id == assignment.assignee_department_id:
+                assigned[user.id] = user
+    return list(assigned.values())
 
 
 def _host_url(course: Course) -> str | None:
@@ -90,7 +114,7 @@ def _summary(course: Course) -> CourseSummary:
 
 
 @router.get("", response_model=list[CourseSummary])
-async def get_courses(company: CompanyDep, db: DbDep) -> list[CourseSummary]:
+async def get_courses(company: CompanyDep, db: DbDep, _: StaffDep) -> list[CourseSummary]:
     courses = await list_courses(db, company.id)
     return [_summary(c) for c in courses]
 
@@ -123,7 +147,9 @@ async def post_course(
 
 
 @router.get("/{course_id}", response_model=CourseDetail)
-async def get_course_detail(course_id: uuid.UUID, company: CompanyDep, db: DbDep) -> CourseDetail:
+async def get_course_detail(
+    course_id: uuid.UUID, company: CompanyDep, db: DbDep, _: StaffDep
+) -> CourseDetail:
     course = await get_course(db, company.id, course_id)
     if course is None:
         raise NotFoundError("Course")
@@ -401,6 +427,22 @@ async def post_assignment(
         raise NotFoundError("Course")
     if body.user_id is None and body.department_id is None:
         raise AppError(422, "Provide a user_id or department_id")
+    if body.user_id is not None and body.department_id is not None:
+        raise AppError(422, "Provide either user_id or department_id, not both")
+
+    target_users: list[User] = []
+    if body.user_id is not None:
+        target = await get_user(db, body.user_id)
+        if target is None or target.company_id != company.id:
+            raise NotFoundError("User")
+        target_users.append(target)
+    if body.department_id is not None:
+        dept = await get_department(db, company.id, body.department_id)
+        if dept is None:
+            raise NotFoundError("Department")
+        company_users = await list_company_users(db, company.id)
+        target_users = [u for u in company_users if u.department_id == body.department_id]
+
     assignment = await create_assignment(
         db,
         course.id,
@@ -411,6 +453,8 @@ async def post_assignment(
         mandatory=body.mandatory,
         due_date=body.due_date,
     )
+    for target in target_users:
+        await get_or_create_enrollment(db, course.id, company.id, target.id)
     await db.commit()
     await db.refresh(assignment)
     return AssignmentResponse(
@@ -455,9 +499,14 @@ async def course_report(
     enrollments = {
         e.user_id: e for e in await list_enrollments_for_course(db, course.id)
     }
-    users = await list_company_users(db, company.id)
+    users = list(await list_company_users(db, company.id))
+    assignments = await list_assignments_for_course(db, course.id)
+    assigned_users: dict[str, User] = {}
+    for assignment in assignments:
+        for assigned in await _assignment_users(db, company.id, assignment, users):
+            assigned_users[assigned.id] = assigned
     rows: list[CourseReportRow] = []
-    for u in users:
+    for u in assigned_users.values():
         e = enrollments.get(u.id)
         rows.append(
             CourseReportRow(

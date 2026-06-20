@@ -18,7 +18,7 @@ from src.db.crud.company import (
 from src.db.crud.user import create_user, get_user, update_user
 from src.db.database import AsyncSessionLocal
 from src.db.models.company import Company
-from src.db.models.org import ROLE_COURSE_CREATOR, ROLE_USER, Department
+from src.db.models.org import ROLE_ADMIN, ROLE_COURSE_CREATOR, ROLE_USER, Department
 from src.services.keycloak_admin import ensure_user
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,39 @@ DEMO_MEMBER = {
     "display_name": "Demo Mock User",
     "app_role": ROLE_USER,
 }
+
+TEST_USERS = [
+    {
+        "username": "admin@acme.test",
+        "email": "admin@acme.test",
+        "first_name": "Ada",
+        "last_name": "Admin",
+        "password": "admin2026",
+        "realm_roles": [ROLE_USER, ROLE_ADMIN],
+        "display_name": "Ada Admin",
+        "app_role": ROLE_ADMIN,
+    },
+    {
+        "username": "creator@acme.test",
+        "email": "creator@acme.test",
+        "first_name": "Carla",
+        "last_name": "Creator",
+        "password": "creator2026",
+        "realm_roles": [ROLE_USER, ROLE_COURSE_CREATOR],
+        "display_name": "Carla Creator",
+        "app_role": ROLE_COURSE_CREATOR,
+    },
+    {
+        "username": "employee@acme.test",
+        "email": "employee@acme.test",
+        "first_name": "Erik",
+        "last_name": "Employee",
+        "password": "employee2026",
+        "realm_roles": [ROLE_USER],
+        "display_name": "Erik Employee",
+        "app_role": ROLE_USER,
+    },
+]
 
 
 async def seed_demo_data() -> None:
@@ -124,12 +157,14 @@ async def _ensure_app_user(
     # Keep role/department/manager in sync on every boot (idempotent). The role
     # is re-derived from the token on login; we set it so the people list is
     # correct even before the user's first sign-in.
+    user.email = spec["email"]
+    user.display_name = spec["display_name"]
+    user.department_id = department_id
+    user.manager_id = manager_id
     await update_user(
         db,
         user,
         role=spec["app_role"],
-        department_id=department_id,
-        manager_id=manager_id,
     )
 
 
@@ -155,31 +190,39 @@ async def _seed_demo_org_users() -> None:
         ).scalar_one_or_none()
         dept_id = dept.id if dept else None
 
-        lead_sub = await ensure_user(
-            username=DEMO_LEAD["username"],
-            email=DEMO_LEAD["email"],
-            first_name=DEMO_LEAD["first_name"],
-            last_name=DEMO_LEAD["last_name"],
-            password=DEMO_LEAD["password"],
-            realm_roles=DEMO_LEAD["realm_roles"],
-        )
-        member_sub = await ensure_user(
-            username=DEMO_MEMBER["username"],
-            email=DEMO_MEMBER["email"],
-            first_name=DEMO_MEMBER["first_name"],
-            last_name=DEMO_MEMBER["last_name"],
-            password=DEMO_MEMBER["password"],
-            realm_roles=DEMO_MEMBER["realm_roles"],
-        )
-        if lead_sub is None or member_sub is None:
+        specs = [DEMO_LEAD, DEMO_MEMBER, *TEST_USERS]
+        subs: dict[str, str] = {}
+        for spec in specs:
+            sub = await ensure_user(
+                username=spec["username"],
+                email=spec["email"],
+                first_name=spec["first_name"],
+                last_name=spec["last_name"],
+                password=spec["password"],
+                realm_roles=spec["realm_roles"],
+                company_slug=settings.demo_company_slug,
+            )
+            if sub is not None:
+                subs[spec["username"]] = sub
+        if not subs:
             return  # admin provisioning unavailable
 
-        await _ensure_app_user(
-            db, sub=lead_sub, company=company, spec=DEMO_LEAD,
-            department_id=dept_id, manager_id=None,
-        )
-        await _ensure_app_user(
-            db, sub=member_sub, company=company, spec=DEMO_MEMBER,
-            department_id=dept_id, manager_id=lead_sub,
-        )
+        for spec in specs:
+            sub = subs.get(spec["username"])
+            if sub is None:
+                continue
+            manager_id = None
+            if spec["username"] == DEMO_MEMBER["username"]:
+                manager_id = subs.get(DEMO_LEAD["username"])
+            elif spec["username"] == "employee@acme.test":
+                manager_id = subs.get("creator@acme.test")
+            department_id = None if spec["app_role"] == ROLE_ADMIN else dept_id
+            await _ensure_app_user(
+                db,
+                sub=sub,
+                company=company,
+                spec=spec,
+                department_id=department_id,
+                manager_id=manager_id,
+            )
         await db.commit()

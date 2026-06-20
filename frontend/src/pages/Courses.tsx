@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, Plus, Sparkles } from "lucide-react";
 import { useCourses, useCreateCourse } from "@/hooks/useCourses";
 import { StatusBadge } from "@/components/StatusBadge";
+import { apiErrorMessage } from "@/lib/api";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -16,6 +17,9 @@ export function CoursesPage() {
   const [goals, setGoals] = useState("");
   const [audience, setAudience] = useState("new employees");
   const [topics, setTopics] = useState("");
+  const createError = create.isError
+    ? apiErrorMessage(create.error, "Course creation failed")
+    : null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +97,7 @@ export function CoursesPage() {
               onChange={(e) => setTopics(e.target.value)}
             />
           </label>
+          {createError ? <p className="text-sm text-red-600">{createError}</p> : null}
           <button
             type="submit"
             disabled={create.isPending}

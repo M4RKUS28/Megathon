@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends, HTTPException, status
@@ -19,6 +19,16 @@ def _get_jwks() -> dict:
     return resp.json()
 
 
+def _client_matches(payload: dict[str, Any]) -> bool:
+    client_id = settings.keycloak_client_id
+    audience = payload.get("aud")
+    if isinstance(audience, str) and audience == client_id:
+        return True
+    if isinstance(audience, list) and client_id in audience:
+        return True
+    return payload.get("azp") == client_id
+
+
 def _decode_token(token: str) -> dict:
     """Validate and decode a Keycloak JWT using public JWKS keys."""
     try:
@@ -27,14 +37,24 @@ def _decode_token(token: str) -> dict:
             token,
             jwks,
             algorithms=["RS256"],
-            audience=settings.keycloak_client_id,
-            options={"verify_at_hash": False},
+            options={"verify_at_hash": False, "verify_aud": False},
         )
+        if not _client_matches(payload):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token was not issued for this client",
+            )
         return payload
     except ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     except JWTError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    except httpx.HTTPError:
+        _get_jwks.cache_clear()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication provider unavailable",
+        )
 
 
 class TokenData:

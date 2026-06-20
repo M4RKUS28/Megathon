@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Keycloak
     keycloak_host: str = "keycloak"
     keycloak_port: int = 8080
+    keycloak_relative_path: str = Field(
+        default="",
+        validation_alias=AliasChoices("KEYCLOAK_RELATIVE_PATH", "KC_HTTP_RELATIVE_PATH"),
+    )
     keycloak_realm: str = "app"
     keycloak_client_id: str = "app-frontend"
     keycloak_client_secret: str = "changeme"
@@ -117,7 +121,11 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def keycloak_url(self) -> str:
-        return f"http://{self.keycloak_host}:{self.keycloak_port}"
+        base = f"http://{self.keycloak_host}:{self.keycloak_port}"
+        path = self.keycloak_relative_path.strip()
+        if not path or path == "/":
+            return base
+        return f"{base}/{path.strip('/')}"
 
     @computed_field
     @property

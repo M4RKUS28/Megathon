@@ -17,8 +17,13 @@ export function useLearningCourse(id: string | undefined) {
 }
 
 export function useReportProgress(id: string) {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ProgressUpdate) => learningApi.progress(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["learning"] });
+      qc.invalidateQueries({ queryKey: ["learning", id] });
+    },
   });
 }
 
@@ -35,7 +40,10 @@ export function useCreateAssignment(courseId: string) {
   return useMutation({
     mutationFn: (body: { user_id?: string; department_id?: string; mandatory?: boolean }) =>
       assignmentsApi.create(courseId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["assignments", courseId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["assignments", courseId] });
+      qc.invalidateQueries({ queryKey: ["report", courseId] });
+    },
   });
 }
 
@@ -43,7 +51,10 @@ export function useRemoveAssignment(courseId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => assignmentsApi.remove(courseId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["assignments", courseId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["assignments", courseId] });
+      qc.invalidateQueries({ queryKey: ["report", courseId] });
+    },
   });
 }
 

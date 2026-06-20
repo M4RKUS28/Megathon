@@ -21,6 +21,17 @@ api.interceptors.response.use(
   },
 );
 
+export function apiErrorMessage(error: unknown, fallback = "Request failed"): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((item) => item?.msg ?? String(item)).join(", ");
+    return error.message || fallback;
+  }
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 // Bare axios for unauthenticated calls (e.g. public branding before login).
 export const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "/api/v1",

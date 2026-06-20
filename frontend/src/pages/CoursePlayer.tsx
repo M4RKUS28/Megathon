@@ -41,7 +41,12 @@ export function CoursePlayerPage() {
           status: d.status,
           progress_pct: d.progress_pct,
           current_chapter: d.current_chapter,
+          current_page: d.current_page,
           score: d.score,
+          time_spent_seconds: d.time_spent_seconds,
+          quiz_attempts: d.quiz_attempts,
+          drop_off_point: d.drop_off_point,
+          engagement_score: d.engagement_score,
         });
       }
     }

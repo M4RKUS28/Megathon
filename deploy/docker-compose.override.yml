@@ -39,6 +39,7 @@ services:
     environment:
       LOG_LEVEL: DEBUG
       RELOAD: "true"
+      KEYCLOAK_RELATIVE_PATH: /
     ports:
       - "8000:8000"
 
@@ -53,6 +54,7 @@ services:
       - ./backend/src:/app/src:rw
     environment:
       LOG_LEVEL: DEBUG
+      KEYCLOAK_RELATIVE_PATH: /
 
   frontend:
     build:
