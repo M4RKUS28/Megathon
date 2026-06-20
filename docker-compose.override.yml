@@ -1,0 +1,60 @@
+# Dev overrides — hot reload, exposed ports, debug mode
+services:
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  minio:
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI
+
+  keycloak:
+    command: start-dev --import-realm
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
+      KC_PROXY: none
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-app.json:/opt/keycloak/data/import/realm-app.json:ro
+    ports:
+      - "8080:8080"
+
+  backend:
+    build:
+      context: ./backend
+      target: development
+    volumes:
+      - ./backend/src:/app/src:rw
+      - ./backend/alembic:/app/alembic:rw
+    environment:
+      LOG_LEVEL: DEBUG
+      RELOAD: "true"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    volumes:
+      - ./frontend/src:/app/src:rw
+      - ./frontend/public:/app/public:rw
+      # avoid overwriting node_modules inside container
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: /api/v1
+      VITE_KEYCLOAK_URL: http://localhost:8080
+      VITE_KEYCLOAK_REALM: app
+      VITE_KEYCLOAK_CLIENT_ID: app-frontend
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/dev.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"

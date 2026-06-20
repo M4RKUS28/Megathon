@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "cala": {
+      "url": "https://api.cala.ai/mcp/",
+      "transport": "http",
+      "headers": {
+        "X-API-KEY": "${env:CALA_API_KEY}"
+      }
+    }
+  },
+  "permissions": {
+    "allow": [
+      "mcp__cala__*"
+    ]
+  }
+}
