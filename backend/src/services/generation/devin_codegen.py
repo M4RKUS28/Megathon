@@ -20,6 +20,7 @@ from typing import Any
 
 from src.config.settings import settings
 from src.services.devin.client import DevinClient, DevinError
+from src.services.generation.contract import COURSE_APP_CONTRACT  # noqa: F401 (re-exported)
 
 logger = logging.getLogger(__name__)
 
