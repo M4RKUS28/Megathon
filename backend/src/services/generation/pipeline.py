@@ -140,9 +140,9 @@ async def process_edit_job(job_id: str) -> None:
         result = await db.execute(select(EditRequest).where(EditRequest.id == uuid.UUID(edit_id)))
         edit = result.scalar_one_or_none()
         course = await get_course_by_id(db, job.course_id)
-        if edit is None or course is None or course.concept is None:
+        if edit is None or course is None or (course.spec is None and course.concept is None):
             job.status = JOB_FAILED
-            job.error = "edit request / course / concept missing"
+            job.error = "edit request / course / spec missing"
             await db.commit()
             return
 
@@ -151,17 +151,43 @@ async def process_edit_job(job_id: str) -> None:
         edit.status = "running"
         await db.commit()
 
+        company = await get_company(db, course.company_id)
+        slug = company.slug if company else "tenant"
+        target_text = payload.get("target_text")
+
         try:
+            if course.spec is not None:
+                # Phase-2-aware edit: rewrite the selected block (or the spec) and
+                # re-render a real preview reusing the course's existing assets.
+                from src.services.agents.editor import generate_edited_spec
+
+                new_spec = await generate_edited_spec(
+                    course.spec, edit.prompt, edit.target_selector, target_text
+                )
+                preview = publish_built_course(
+                    slug,
+                    f"{course.id}/preview/{edit.id}",
+                    course.version,
+                    new_spec,
+                    course.asset_map or {},
+                )
+                edit.preview_object_prefix = preview["prefix"]
+                edit.status = "preview_ready"
+                job.status = JOB_SUCCEEDED
+                job.result = {
+                    "spec": new_spec,
+                    "preview_index_url": preview["course_url"],
+                }
+                await db.commit()
+                return
+
+            # Legacy concept-based edit path.
             session_id, new_concept = await generate_edited_concept(
-                course.concept, edit.prompt, payload.get("target_text")
+                course.concept, edit.prompt, target_text
             )
-            company = await get_company(db, course.company_id)
-            slug = company.slug if company else "tenant"
-            # Publish the proposed version under a per-edit preview path.
             preview_prefix = publish_course(
                 slug, f"{course.id}/preview/{edit.id}", course.version, new_concept
             )
-
             edit.devin_session_id = session_id
             edit.preview_object_prefix = preview_prefix
             edit.status = "preview_ready"
@@ -307,8 +333,13 @@ async def process_build_job(job_id: str) -> None:
             prefix = course_prefix(slug, str(course.id), course.version)
             manifest = (course.asset_manifest or {}).get("assets", [])
 
-            # Phase 2.5 process A — resource fetch -> asset_map.json
-            asset_map = fetch_assets(manifest, prefix, primary)
+            # Phase 2.5 process A — resource fetch -> asset_map.json. After an
+            # accepted edit we reuse the already-fetched assets (no re-generation).
+            reuse = bool((job.payload or {}).get("reuse_assets")) and bool(course.asset_map)
+            if reuse:
+                asset_map = course.asset_map or {}
+            else:
+                asset_map = fetch_assets(manifest, prefix, primary)
             publish_asset_map(prefix, asset_map)
 
             # Phase 2.5 process B / Phase 3 — Devin authors the per-course app

@@ -36,6 +36,7 @@ from src.db.crud.user import list_company_users
 from src.db.database import get_db
 from src.db.models.course import (
     COURSE_AUTHORING,
+    COURSE_BUILDING,
     COURSE_PLAN_REVIEW,
     COURSE_PLANNING,
     JOB_PLAN,
@@ -236,8 +237,8 @@ async def create_edit(
     course = await get_course(db, company.id, course_id)
     if course is None:
         raise NotFoundError("Course")
-    if course.concept is None:
-        raise AppError(409, "Course has no concept to edit yet")
+    if course.spec is None and course.concept is None:
+        raise AppError(409, "Course has nothing to edit yet")
 
     edit = EditRequest(
         course_id=course.id,
@@ -311,18 +312,35 @@ async def accept_edit(
         .order_by(GenerationJob.created_at.desc())
     )
     edit_job = result.scalars().first()
-    if edit_job is None or not edit_job.result or "concept" not in edit_job.result:
-        raise AppError(409, "No previewed concept to accept")
+    if edit_job is None or not edit_job.result:
+        raise AppError(409, "No previewed version to accept")
 
-    course.concept = edit_job.result["concept"]
-    course.version += 1
     edit.status = "accepted"
-    job = await create_job(db, course.id, company.id, "generate")
-    await db.commit()
-    await db.refresh(job)
+    course.version += 1
 
-    pool = await get_pool()
-    await pool.enqueue_job("run_generate_job", str(job.id))
+    if "spec" in edit_job.result:
+        # Phase-2 course: promote the edited spec and rebuild, reusing the
+        # already-fetched assets (no re-generation), then re-host the new version.
+        course.spec = edit_job.result["spec"]
+        course.status = COURSE_BUILDING
+        job = await create_job(
+            db, course.id, company.id, "build", payload={"reuse_assets": True}
+        )
+        await db.commit()
+        await db.refresh(job)
+        pool = await get_pool()
+        await pool.enqueue_job("run_build_job", str(job.id))
+    elif "concept" in edit_job.result:
+        # Legacy concept course.
+        course.concept = edit_job.result["concept"]
+        job = await create_job(db, course.id, company.id, "generate")
+        await db.commit()
+        await db.refresh(job)
+        pool = await get_pool()
+        await pool.enqueue_job("run_generate_job", str(job.id))
+    else:
+        raise AppError(409, "No previewed version to accept")
+
     return JobResponse(
         id=job.id,
         type=job.type,

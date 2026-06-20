@@ -1,5 +1,6 @@
 """Offline-pipeline unit tests (no DB / no network / no LLM key required)."""
 
+from src.services.agents.editor import generate_edited_spec
 from src.services.agents.fallback import fallback_lastenheft, fallback_plan
 from src.services.agents.planner import generate_plan
 from src.services.agents.schemas import CoursePlan, Lastenheft
@@ -90,6 +91,42 @@ def test_static_fallback_html_renders():
     assert "#abcdef" in html
     assert "__COURSE_DATA__" not in html
     assert spec["title"] in html
+
+
+def test_static_fallback_supports_edit_selection_handshake():
+    plan = fallback_plan(BRIEF, "Acme")
+    spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
+    spec.pop("asset_manifest", None)
+    html = _static_fallback_html(spec)
+    # The renderer must implement the "Edit with Devin" element-selection protocol.
+    assert "coursive:select-mode" in html
+    assert "coursive:element-selected" in html
+
+
+async def test_edit_block_only_changes_selected_block_offline():
+    plan = fallback_plan(BRIEF, "Acme")
+    spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
+    before = spec["chapters"][0]["pages"][0]["blocks"][0]
+    new_spec = await generate_edited_spec(
+        spec, "make it friendlier", "0.0.0", before.get("text")
+    )
+    # Same shape, only the targeted block changed.
+    assert len(new_spec["chapters"]) == len(spec["chapters"])
+    after = new_spec["chapters"][0]["pages"][0]["blocks"][0]
+    assert after != before
+    # An untouched block is preserved.
+    assert (
+        new_spec["chapters"][-1]["pages"][-1]["blocks"][-1]
+        == spec["chapters"][-1]["pages"][-1]["blocks"][-1]
+    )
+
+
+async def test_edit_without_selector_applies_spec_level_change_offline():
+    plan = fallback_plan(BRIEF, "Acme")
+    spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
+    new_spec = await generate_edited_spec(spec, "add a safety reminder", None, None)
+    assert Lastenheft(**new_spec).chapters
+    assert new_spec != spec
 
 
 def test_scorm_manifest_valid():
