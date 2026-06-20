@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Plus, Sparkles } from "lucide-react";
 import { useCourses, useCreateCourse } from "@/hooks/useCourses";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -11,7 +11,9 @@ export function CoursesPage() {
   const { data: courses } = useCourses();
   const create = useCreateCourse();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  // Opening from the dashboard CTA (/courses?new=1) jumps straight into the form.
+  const [searchParams] = useSearchParams();
+  const [open, setOpen] = useState(() => searchParams.get("new") !== null);
   const [title, setTitle] = useState("");
   const [goals, setGoals] = useState("");
   const [audience, setAudience] = useState("new employees");

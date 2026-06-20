@@ -5,6 +5,7 @@ state, and persists results.
 """
 
 import logging
+import re
 import uuid
 
 from sqlalchemy import select
@@ -37,6 +38,27 @@ from src.services.generation.concept import generate_concept, generate_edited_co
 
 logger = logging.getLogger(__name__)
 
+_HSL_TRIPLE = re.compile(
+    r"^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$"
+)
+
+
+def _css_color(value: str | None) -> str:
+    """Normalize a brand color into a valid standalone CSS color.
+
+    Branding stores the primary color as a Tailwind HSL triple (e.g.
+    ``"262 83% 58%"``) so the main app can use it as ``hsl(var(--primary))``.
+    Per-course artifacts instead use the color directly as ``var(--brand)``,
+    where a bare triple is invalid CSS and renders transparent (invisible
+    buttons). Wrap bare triples in ``hsl()``; leave hex/rgb/named colors as-is.
+    """
+    v = (value or "").strip()
+    if not v:
+        return "#5145E5"
+    if _HSL_TRIPLE.match(v):
+        return f"hsl({v})"
+    return v
+
 
 async def _branding(db, company_id: uuid.UUID) -> tuple[str, str, dict]:
     company = await get_company(db, company_id)
@@ -45,7 +67,7 @@ async def _branding(db, company_id: uuid.UUID) -> tuple[str, str, dict]:
         select(CompanyBranding).where(CompanyBranding.company_id == company_id)
     )
     branding = result.scalar_one_or_none()
-    primary = (branding.primary_color if branding else None) or "#5145E5"
+    primary = _css_color(branding.primary_color if branding else None)
     style_guide = (branding.style_guide if branding else {}) or {}
     return company_name, primary, style_guide
 

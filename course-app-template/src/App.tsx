@@ -5,6 +5,17 @@ import { BlockView } from "./blocks";
 import { QuizView } from "./quiz";
 import { announceReady, postProgress } from "./progress";
 
+// Branding is sometimes stored as a bare Tailwind HSL triple ("262 83% 58%"),
+// which is not a valid CSS color on its own. Used directly as `var(--brand)` it
+// renders transparent (e.g. invisible buttons), so wrap bare triples in hsl().
+function normalizeBrand(value: string): string {
+  const v = value.trim();
+  if (/^\d{1,3}(\.\d+)?\s+\d{1,3}(\.\d+)?%\s+\d{1,3}(\.\d+)?%$/.test(v)) {
+    return `hsl(${v})`;
+  }
+  return v;
+}
+
 function blockText(b: Block): string {
   if (b.text) return b.text;
   if (b.items) return b.items.join(", ");
@@ -53,7 +64,8 @@ export function App() {
       .then(([c, m]: [Course, AssetMap]) => {
         setCourse(c);
         setAssetMap(m ?? {});
-        if (c.primaryColor) document.documentElement.style.setProperty("--brand", c.primaryColor);
+        if (c.primaryColor)
+          document.documentElement.style.setProperty("--brand", normalizeBrand(c.primaryColor));
         document.title = c.title;
       })
       .catch((e) => setError(String(e)));
@@ -283,7 +295,7 @@ export function App() {
                   onClick={() => setPageIdx(pageIdx + 1)}
                   className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white"
                 >
-                  {pageIdx === pages.length - 1 ? "Go to knowledge check" : "Continue"}
+                  {pageIdx === pages.length - 1 ? "Go to knowledge check" : "Next"}
                 </button>
               )}
             </div>
