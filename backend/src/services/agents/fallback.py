@@ -76,6 +76,13 @@ def _chapter_pages(
     intro_audio = f"/resources/audio/{idx:02d}-p1"
     concepts_audio = f"/resources/audio/{idx:02d}-p2"
     practice_audio = f"/resources/audio/{idx:02d}-p3"
+    convo_turns = [
+        ("mentor", "Mentor", f"Welcome! Let's cover {title_lc} together."),
+        ("you", "You", "Great — where do I start?"),
+        ("mentor", "Mentor", "We'll go page by page: the key concepts first, then practice."),
+        ("you", "You", "Sounds good. I'm ready when you are."),
+    ]
+    convo_audio = [f"/resources/audio/{idx:02d}-c{n}" for n in range(1, len(convo_turns) + 1)]
     intro_narration = (
         f"Welcome to {chapter_title}. In this chapter you will learn what {title_lc} "
         f"means at {company} and why it matters for your day-to-day work. We will go "
@@ -136,6 +143,16 @@ def _chapter_pages(
             description=practice_narration,
             purpose="Spoken narration for the apply-it page",
         ),
+        *(
+            AssetSpec(
+                template_link=link,
+                type="audio",
+                description=text,
+                purpose="Conversation line narration",
+                voice="Puck" if pid == "you" else None,
+            )
+            for (pid, _name, text), link in zip(convo_turns, convo_audio)
+        ),
     ]
     intro_page = Page(
         id=f"{ch_id}-p1",
@@ -150,16 +167,28 @@ def _chapter_pages(
                 ),
             ),
             Block(
-                type="dialogue",
+                type="conversation",
                 data={
-                    "turns": [
-                        {"speaker": "Mentor", "text": f"Welcome! Let's cover {title_lc}."},
-                        {"speaker": "You", "text": "Great — where do I start?"},
+                    "personas": [
                         {
-                            "speaker": "Mentor",
-                            "text": "We'll go page by page: concepts first, then practice.",
+                            "id": "mentor",
+                            "name": "Mentor",
+                            "role": "Your guide",
+                            "side": "left",
+                            "avatar": "f-3",
                         },
-                    ]
+                        {
+                            "id": "you",
+                            "name": "You",
+                            "role": "New colleague",
+                            "side": "right",
+                            "avatar": "m-4",
+                        },
+                    ],
+                    "turns": [
+                        {"persona": pid, "text": text, "audio": link}
+                        for (pid, _name, text), link in zip(convo_turns, convo_audio)
+                    ],
                 },
             ),
             Block(type="audio", asset=intro_audio, text=intro_narration),

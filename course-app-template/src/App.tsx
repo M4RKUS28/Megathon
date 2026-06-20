@@ -19,8 +19,8 @@ function normalizeBrand(value: string): string {
 function blockText(b: Block): string {
   if (b.text) return b.text;
   if (b.items) return b.items.join(", ");
-  const turns = b.data?.turns as { speaker?: string; text?: string }[] | undefined;
-  if (turns) return turns.map((t) => `${t.speaker}: ${t.text}`).join(" / ");
+  const turns = b.data?.turns as { speaker?: string; persona?: string; text?: string }[] | undefined;
+  if (turns) return turns.map((t) => t.text ?? t.speaker ?? t.persona ?? "").join(" / ");
   const title = b.data?.title as string | undefined;
   if (title) return title;
   return b.type;
