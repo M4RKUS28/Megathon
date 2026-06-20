@@ -4,6 +4,7 @@ Each entrypoint opens its own DB session (worker process), advances job/course
 state, and persists results.
 """
 
+import asyncio
 import logging
 import re
 import uuid
@@ -355,22 +356,25 @@ async def process_build_job(job_id: str) -> None:
             prefix = course_prefix(slug, str(course.id), course.version)
             manifest = (course.asset_manifest or {}).get("assets", [])
 
-            # Phase 2.5 process A — resource fetch -> asset_map.json. After an
-            # accepted edit we reuse the already-fetched assets (no re-generation).
+            from src.services.generation.devin_codegen import generate_course_app
+
+            # Phase 2.5 process A (asset fetch) and process B / Phase 3 (Devin
+            # authoring the per-course app) are independent: the app resolves
+            # assets at runtime via asset_map.json (baked in at hosting below),
+            # so it never needs the real URLs to build. Run them concurrently
+            # instead of fetching every image before code-gen even starts.
             reuse = bool((job.payload or {}).get("reuse_assets")) and bool(course.asset_map)
             if reuse:
                 asset_map = course.asset_map or {}
+                devin_session_id, source_files = await generate_course_app(
+                    course.spec, asset_map
+                )
             else:
-                asset_map = fetch_assets(manifest, prefix, primary)
+                asset_map, (devin_session_id, source_files) = await asyncio.gather(
+                    fetch_assets(manifest, prefix, primary),
+                    generate_course_app(course.spec, {}),
+                )
             publish_asset_map(prefix, asset_map)
-
-            # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
-            # (optional; falls back to the template build inside the builder).
-            from src.services.generation.devin_codegen import generate_course_app
-
-            devin_session_id, source_files = await generate_course_app(
-                course.spec, asset_map
-            )
 
             # Phase 3 + 4 — build per-course app and host it
             hosting = publish_built_course(

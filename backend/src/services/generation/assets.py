@@ -12,6 +12,7 @@ a real provider to fetch/generate true assets.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -69,13 +70,20 @@ class PlaceholderAssetProvider(AssetProvider):
         return svg.encode("utf-8"), "svg", "image/svg+xml"
 
 
-def fetch_assets(
+async def fetch_assets(
     manifest: list[dict] | list[AssetSpec],
     course_prefix: str,
     primary_color: str = "#5145E5",
     provider: AssetProvider | None = None,
+    concurrency: int = 8,
 ) -> dict[str, str]:
-    """Produce + upload every manifest asset; return template_link -> storage_url."""
+    """Produce + upload every manifest asset; return template_link -> storage_url.
+
+    Assets are produced and uploaded concurrently (each provider call and MinIO
+    upload runs in a worker thread, so the blocking image/audio generation no
+    longer serializes). ``concurrency`` caps in-flight provider calls so we don't
+    hammer the media APIs. A single failing asset never fails the batch.
+    """
     if provider is None:
         from .providers import build_asset_provider
 
@@ -83,17 +91,28 @@ def fetch_assets(
     specs = [a if isinstance(a, AssetSpec) else AssetSpec(**a) for a in manifest]
     ensure_bucket_exists(settings.courses_bucket)
 
-    asset_map: dict[str, str] = {}
-    for spec in specs:
-        try:
-            content, ext, ctype = provider.produce(spec, primary_color)
-        except Exception as exc:  # noqa: BLE001 — one bad asset must not fail the batch
-            logger.warning("asset %s failed: %s", spec.template_link, exc)
-            continue
-        rel = spec.template_link.lstrip("/")
-        object_name = f"{course_prefix}/{rel}.{ext}"
-        put_bytes(content, object_name, settings.courses_bucket, ctype)
-        asset_map[spec.template_link] = public_object_url(object_name, settings.courses_bucket)
+    sem = asyncio.Semaphore(max(1, concurrency))
+
+    async def _produce_one(spec: AssetSpec) -> tuple[str, str] | None:
+        async with sem:
+            try:
+                content, ext, ctype = await asyncio.to_thread(
+                    provider.produce, spec, primary_color
+                )
+            except Exception as exc:  # noqa: BLE001 — one bad asset must not fail the batch
+                logger.warning("asset %s failed: %s", spec.template_link, exc)
+                return None
+            rel = spec.template_link.lstrip("/")
+            object_name = f"{course_prefix}/{rel}.{ext}"
+            await asyncio.to_thread(
+                put_bytes, content, object_name, settings.courses_bucket, ctype
+            )
+            return spec.template_link, public_object_url(
+                object_name, settings.courses_bucket
+            )
+
+    results = await asyncio.gather(*(_produce_one(spec) for spec in specs))
+    asset_map: dict[str, str] = {link: url for link, url in (r for r in results if r)}
 
     logger.info("asset pipeline mapped %d/%d assets", len(asset_map), len(specs))
     return asset_map

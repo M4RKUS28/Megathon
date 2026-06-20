@@ -104,7 +104,7 @@ def _stub_public_url(obj_name, _bucket):
     return f"https://cdn.example.com/{obj_name}"
 
 
-def test_fetch_assets_maps_template_links(monkeypatch):
+async def test_fetch_assets_maps_template_links(monkeypatch):
     monkeypatch.setattr("src.services.generation.assets.put_bytes", _stub_put_bytes)
     monkeypatch.setattr(
         "src.services.generation.assets.ensure_bucket_exists", _stub_ensure_bucket
@@ -132,7 +132,7 @@ def test_fetch_assets_maps_template_links(monkeypatch):
         ),
     ]
     provider = PlaceholderAssetProvider()
-    result = fetch_assets(specs, "acme/course1/v1", "#123", provider=provider)
+    result = await fetch_assets(specs, "acme/course1/v1", "#123", provider=provider)
 
     assert "/resources/images/01" in result
     assert "/resources/images/02" in result
@@ -140,7 +140,7 @@ def test_fetch_assets_maps_template_links(monkeypatch):
         assert url.startswith("https://cdn.example.com/")
 
 
-def test_fetch_assets_skips_failed_assets(monkeypatch):
+async def test_fetch_assets_skips_failed_assets(monkeypatch):
     monkeypatch.setattr("src.services.generation.assets.put_bytes", _stub_put_bytes)
     monkeypatch.setattr(
         "src.services.generation.assets.ensure_bucket_exists", _stub_ensure_bucket
@@ -163,7 +163,7 @@ def test_fetch_assets_skips_failed_assets(monkeypatch):
         AssetSpec(template_link="/resources/images/ok", type="image", description="ok"),
         AssetSpec(template_link="/resources/images/fail", type="image", description="bad"),
     ]
-    result = fetch_assets(specs, "pfx", "#000", provider=FailingProvider())
+    result = await fetch_assets(specs, "pfx", "#000", provider=FailingProvider())
 
     assert "/resources/images/ok" in result
     assert "/resources/images/fail" not in result

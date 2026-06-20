@@ -49,9 +49,17 @@ The spec describes *behaviour and intent* — NOT a rigid renderer schema. Be sp
 that Devin can implement each interaction without follow-up questions.
 
 ## ANTI-BORING MANDATE
-Avoid generic text-heavy lessons. Prefer visual explanations, interaction, scenarios,
-simulations, charts, diagrams, and concrete examples. Every topic must be supported by media
-or interaction — never plain text walls. Make it engaging, specific, and real-world.
+Write substantive, in-depth lessons that are STILL engaging. Every page must teach with rich,
+specific explanatory prose AND be supported by media or interaction — never thin filler, but
+also never a single undifferentiated wall of text. Use concrete examples, real data, scenarios,
+charts, and diagrams to carry the depth. Make it specific and real-world.
+
+## PROSE DEPTH (required)
+Every content page must contain AT LEAST 500 words of explanatory prose, split across MULTIPLE
+`paragraph` blocks (typically 2–4 paragraphs of ~150–250 words each) — never one giant block.
+Break the prose up with `heading`/`callout`/`list` blocks and interactions so it reads as a
+well-structured lesson, not a wall of text. The 500-word minimum is the body copy a learner
+reads on that page; interactions, quizzes, and asset briefs do NOT count toward it.
 
 Chapter-level fields (populate for EVERY chapter):
   - `learning_points`: concrete things the learner will know/be able to do after this chapter.
@@ -86,9 +94,11 @@ For EACH page provide ALL of these fields:
    explanation. Wrong: orange highlight + hint. After 2 wrong: show answer.").
 9. **success_criterion** — Observable condition proving this page works (e.g. "learner reorders
    all 5 steps correctly; chart renders with live data; scenario reaches at least one ending").
-10. **blocks** — 2–4 implementation-ready blocks. Types: heading, paragraph, list, callout,
+10. **blocks** — implementation-ready blocks. Types: heading, paragraph, list, callout,
     image, video, audio, dialogue, chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
-    accordion, scenario. For every visual/media block set `asset` to a UNIQUE template link
+    accordion, scenario. Each page needs MULTIPLE `paragraph` blocks carrying ≥500 words of
+    prose total (see PROSE DEPTH), interleaved with at least one heading and at least one
+    interaction/media block. For every visual/media block set `asset` to a UNIQUE template link
     ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions precisely
     in the `data` field so Devin can implement without questions.
 11. **asset_needs** — List every asset this page needs. Each entry: template_link, type
@@ -164,8 +174,9 @@ def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
         f"- objective: {chapter.objective}\n"
         f"- key points: {kp}\n\n"
         f"Produce 3-5 content pages (each with blocks and asset_needs) and a quiz "
-        f"with 3-5 questions for chapter [{chapter.id}]. Keep id='{chapter.id}' and "
-        f"title='{chapter.title}'.\n\n"
+        f"with 3-5 questions for chapter [{chapter.id}]. Every page must carry at least "
+        f"500 words of explanatory prose split across multiple paragraph blocks (never one "
+        f"giant block). Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
         f"{_CHAPTER_PARSER.get_format_instructions()}"
     )
 
