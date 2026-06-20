@@ -73,7 +73,9 @@ def test_validate_files_rejects_path_traversal():
     output = {
         "files": [
             {"path": "../../../etc/passwd", "content": "evil"},
-            {"path": "package.json", "content": "{}"},
+            {"path": "package.json", "content": '{"scripts":{"build":"vite build"}}'},
+            {"path": "index.html", "content": "<html></html>"},
+            {"path": "src/main.tsx", "content": "import React from 'react';"},
         ]
     }
     result = _validate_files(output)

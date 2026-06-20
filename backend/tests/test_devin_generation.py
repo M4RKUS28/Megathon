@@ -52,9 +52,9 @@ GOOD_DEVIN_OUTPUT = {
 
 
 async def test_disabled_flag_returns_none():
-    """course_build_use_devin=False (default) → (None, None)."""
+    """course_build_mode=template → (None, None)."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = False
+        mock_settings.course_build_mode = "template"
         sid, files = await generate_course_app(SAMPLE_SPEC, SAMPLE_ASSET_MAP)
     assert sid is None
     assert files is None
@@ -63,7 +63,8 @@ async def test_disabled_flag_returns_none():
 async def test_enabled_but_no_api_key_returns_none():
     """Flag on but DEVIN_API_KEY empty → (None, None)."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
         ) as MockClient:
@@ -77,7 +78,8 @@ async def test_enabled_but_no_api_key_returns_none():
 async def test_enabled_but_no_org_id_returns_none():
     """Flag on, API key set, but org_id empty → client.enabled is False."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
         ) as MockClient:
@@ -94,10 +96,13 @@ async def test_enabled_but_no_org_id_returns_none():
 async def test_devin_configured_returns_session_and_files():
     """Happy path: Devin returns well-formed structured output."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
-        ) as MockClient:
+        ) as MockClient, patch(
+            "src.services.generation.devin_codegen.try_build_from_sources"
+        ):
             instance = MockClient.return_value
             instance.enabled = True
             instance.run = AsyncMock(return_value=("sess-123", GOOD_DEVIN_OUTPUT))
@@ -112,18 +117,22 @@ async def test_devin_configured_returns_session_and_files():
 async def test_devin_run_receives_correct_arguments():
     """Verify the prompt/schema/title/tags forwarded to client.run()."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
-        ) as MockClient:
+        ) as MockClient, patch(
+            "src.services.generation.devin_codegen.try_build_from_sources"
+        ):
             instance = MockClient.return_value
             instance.enabled = True
             instance.run = AsyncMock(return_value=("sess-1", GOOD_DEVIN_OUTPUT))
             await generate_course_app(
                 {"title": "Safety 101", "chapters": []}, {}
             )
-            instance.run.assert_called_once()
-            _args, kwargs = instance.run.call_args
+            # First call is the generation call
+            first_call = instance.run.call_args_list[0]
+            _args, kwargs = first_call
             prompt = _args[0]
             assert "Safety 101" in prompt
             assert kwargs["tags"] == ["coursive", "course-app"]
@@ -158,7 +167,8 @@ async def test_devin_run_receives_correct_arguments():
 async def test_malformed_output_falls_back(bad_output, desc):
     """Various malformed outputs all result in files=None (fallback)."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
         ) as MockClient:
@@ -174,7 +184,8 @@ async def test_malformed_output_falls_back(bad_output, desc):
 async def test_devin_error_returns_none():
     """DevinError during client.run → (None, None), not an exception."""
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
         ) as MockClient:
@@ -199,18 +210,24 @@ async def test_devin_error_returns_none():
     ],
 )
 def test_validate_files_rejects_traversal_and_empty(unsafe_path):
-    """Paths with traversal or empty → skipped; package.json survives."""
+    """Paths with traversal or empty → skipped; valid files survive."""
     out = _validate_files(
         {
             "files": [
-                {"path": "package.json", "content": "{}"},
+                {"path": "package.json", "content": '{"scripts":{"build":"vite build"}}'},
+                {"path": "index.html", "content": "<html></html>"},
+                {"path": "src/main.tsx", "content": "import React from 'react';"},
                 {"path": unsafe_path, "content": "evil"},
             ]
         }
     )
     assert out is not None
     assert "package.json" in out
-    assert len(out) == 1
+    # unsafe path should be filtered out — check it is NOT in the result
+    for key in out:
+        assert ".." not in key.split("/")
+    # Only valid files should remain
+    assert len(out) == 3  # package.json, index.html, src/main.tsx
 
 
 def test_validate_files_leading_slash_normalised():
@@ -218,7 +235,8 @@ def test_validate_files_leading_slash_normalised():
     out = _validate_files(
         {
             "files": [
-                {"path": "package.json", "content": "{}"},
+                {"path": "package.json", "content": '{"scripts":{"build":"vite build"}}'},
+                {"path": "index.html", "content": "<html></html>"},
                 {"path": "/src/app.tsx", "content": "ok"},
             ]
         }
@@ -239,7 +257,8 @@ async def test_generate_rejects_output_missing_package_json():
     """End-to-end: Devin returns files without package.json → files is None."""
     bad = {"files": [{"path": "src/main.tsx", "content": "x"}]}
     with patch("src.services.generation.devin_codegen.settings") as mock_settings:
-        mock_settings.course_build_use_devin = True
+        mock_settings.course_build_mode = "devin"
+        mock_settings.course_build_repair_max_retries = 2
         with patch(
             "src.services.generation.devin_codegen.DevinClient"
         ) as MockClient:

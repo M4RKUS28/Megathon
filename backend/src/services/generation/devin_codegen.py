@@ -362,8 +362,11 @@ def _validate_files(output: dict) -> dict[str, str] | None:
         if not isinstance(path, str) or not isinstance(content, str):
             continue
 
-        # Normalise: strip leading "./" and "/".
-        norm = path.lstrip("./")
+        # Normalise: strip leading "./" prefix and leading slashes.
+        norm = path
+        while norm.startswith("./"):
+            norm = norm[2:]
+        norm = norm.lstrip("/")
         if not norm:
             logger.warning("skipping empty generated path")
             continue

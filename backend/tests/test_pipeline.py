@@ -96,7 +96,7 @@ def test_fallback_lastenheft_populates_new_schema_fields():
 
         # Page-level
         for page in ch.pages:
-            assert page.content_goal
+            assert page.content_goals
             assert page.learner_action
             assert page.ui_treatment
             assert page.estimated_minutes > 0
@@ -290,7 +290,7 @@ def test_old_shape_spec_still_validates():
     lh = Lastenheft(**old_spec)
     assert lh.chapters[0].learning_points == []
     assert lh.chapters[0].estimated_minutes == 0
-    assert lh.chapters[0].pages[0].content_goal == ""
+    assert lh.chapters[0].pages[0].content_goals == []
     assert lh.chapters[0].pages[0].blocks[0].interaction_goal == ""
     assert lh.chapters[0].quiz.assessment_id == ""
     assert lh.style_guide.tone == ""
@@ -326,7 +326,7 @@ def test_new_shape_spec_validates():
                     Page(
                         id="p1",
                         title="Setup",
-                        content_goal="Walk through env setup",
+                        content_goals=["Walk through env setup"],
                         learner_action="Follow along in terminal",
                         ui_treatment="split-screen: instructions left, terminal right",
                         estimated_minutes=5,
