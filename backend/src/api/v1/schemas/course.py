@@ -31,7 +31,20 @@ class CourseSummary(BaseModel):
 
 class CourseDetail(CourseSummary):
     concept: dict | None = None
+    plan: dict | None = None
+    spec: dict | None = None
+    asset_manifest: dict | None = None
+    asset_map: dict | None = None
+    course_url: str | None = None
+    iframe_url: str | None = None
     devin_session_id: str | None = None
+
+
+class PlanApproval(BaseModel):
+    """Approval-gate payload. An optionally edited plan replaces the generated
+    one before the script writer (Phase 2) proceeds."""
+
+    plan: dict | None = None
 
 
 class JobResponse(BaseModel):
@@ -70,11 +83,25 @@ class EnrollmentResponse(BaseModel):
     completed_at: datetime | None = None
 
 
+class EnrollmentResponseFull(EnrollmentResponse):
+    current_page: int | None = None
+    time_spent_seconds: int = 0
+    quiz_attempts: int = 0
+    engagement_score: int = 0
+    certified: bool = False
+    certificate_id: str | None = None
+
+
 class ProgressUpdate(BaseModel):
     status: str | None = None
     progress_pct: int | None = None
     current_chapter: int | None = None
+    current_page: int | None = None
     score: int | None = None
+    time_spent_seconds: int | None = None
+    quiz_attempts: int | None = None
+    drop_off_point: str | None = None
+    engagement_score: int | None = None
 
 
 class LearningCourse(CourseSummary):
@@ -109,4 +136,8 @@ class CourseReportRow(BaseModel):
     status: str
     progress_pct: int
     score: int | None = None
+    time_spent_seconds: int = 0
+    quiz_attempts: int = 0
+    engagement_score: int = 0
+    certified: bool = False
     completed_at: datetime | None = None

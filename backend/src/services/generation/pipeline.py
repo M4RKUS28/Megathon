@@ -15,17 +15,27 @@ from src.db.crud.course import get_course_by_id, get_job
 from src.db.database import AsyncSessionLocal
 from src.db.models.company import CompanyBranding
 from src.db.models.course import (
+    COURSE_AUTHORING,
+    COURSE_BUILDING,
     COURSE_CONCEPT_READY,
     COURSE_FAILED,
     COURSE_GENERATING,
+    COURSE_PLAN_REVIEW,
     COURSE_READY,
+    COURSE_SPEC_READY,
+    JOB_BUILD,
     JOB_FAILED,
     JOB_RUNNING,
     JOB_SUCCEEDED,
     EditRequest,
     GenerationJob,
 )
-from src.services.generation.builder import course_prefix, index_url, publish_course
+from src.services.generation.builder import (
+    course_prefix,
+    index_url,
+    publish_built_course,
+    publish_course,
+)
 from src.services.generation.concept import generate_concept, generate_edited_concept
 from src.services.generation.media import generate_media_for_concept
 
@@ -210,3 +220,183 @@ async def process_edit_job(job_id: str) -> None:
             job.error = str(exc)
             edit.status = "failed"
             await db.commit()
+
+
+# ── 5-phase pipeline ─────────────────────────────────────────────────────────
+
+
+async def process_plan_job(job_id: str) -> None:
+    """Phase 1 — run the planner agent; pause at the approval gate."""
+    from src.services.agents.planner import generate_plan
+
+    async with AsyncSessionLocal() as db:
+        job = await get_job(db, uuid.UUID(job_id))
+        if job is None:
+            logger.error("plan job %s not found", job_id)
+            return
+        course = await get_course_by_id(db, job.course_id)
+        if course is None:
+            job.status = JOB_FAILED
+            job.error = "course not found"
+            await db.commit()
+            return
+
+        job.status = JOB_RUNNING
+        job.attempts += 1
+        await db.commit()
+
+        try:
+            snapshot = course.style_guide_snapshot or {}
+            brief = snapshot.get("brief", {"title": course.title})
+            company_name, _primary, _style = await _branding(db, course.company_id)
+
+            plan = await generate_plan(brief, company_name)
+            course.plan = plan.model_dump()
+            course.status = COURSE_PLAN_REVIEW  # approval gate
+            job.status = JOB_SUCCEEDED
+            job.result = {"chapters": len(plan.chapters)}
+            await db.commit()
+            logger.info("plan ready for course %s (awaiting approval)", course.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("plan job %s failed", job_id)
+            job.status = JOB_FAILED
+            job.error = str(exc)
+            course.status = COURSE_FAILED
+            await db.commit()
+
+
+async def process_spec_job(job_id: str) -> None:
+    """Phase 2 — script writer produces the Lastenheft + asset manifest, then
+    automatically enqueues the build job (Phase 2.5/3/4)."""
+    from src.services.agents.schemas import CoursePlan
+    from src.services.agents.script_writer import generate_lastenheft
+    from src.services.queue.pool import get_pool
+
+    async with AsyncSessionLocal() as db:
+        job = await get_job(db, uuid.UUID(job_id))
+        if job is None:
+            logger.error("spec job %s not found", job_id)
+            return
+        course = await get_course_by_id(db, job.course_id)
+        if course is None or course.plan is None:
+            job.status = JOB_FAILED
+            job.error = "course or approved plan missing"
+            await db.commit()
+            return
+
+        job.status = JOB_RUNNING
+        job.attempts += 1
+        course.status = COURSE_AUTHORING
+        await db.commit()
+
+        try:
+            company_name, primary, _style = await _branding(db, course.company_id)
+            plan = CoursePlan(**course.plan)
+            lastenheft = await generate_lastenheft(plan, company_name, primary)
+
+            spec = lastenheft.model_dump()
+            course.spec = spec
+            course.asset_manifest = {"assets": spec.get("asset_manifest", [])}
+            course.status = COURSE_SPEC_READY
+            job.status = JOB_SUCCEEDED
+            job.result = {
+                "chapters": len(lastenheft.chapters),
+                "assets": len(lastenheft.asset_manifest),
+            }
+
+            build_job = await _create_followup_job(db, course, JOB_BUILD)
+            await db.commit()
+
+            pool = await get_pool()
+            await pool.enqueue_job("run_build_job", str(build_job.id))
+            logger.info("spec ready for course %s; build enqueued", course.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("spec job %s failed", job_id)
+            job.status = JOB_FAILED
+            job.error = str(exc)
+            course.status = COURSE_FAILED
+            await db.commit()
+
+
+async def process_build_job(job_id: str) -> None:
+    """Phase 2.5 (assets) + Phase 3 (implementation) + Phase 4 (hosting)."""
+    from src.services.generation.assets import fetch_assets, publish_asset_map
+
+    async with AsyncSessionLocal() as db:
+        job = await get_job(db, uuid.UUID(job_id))
+        if job is None:
+            logger.error("build job %s not found", job_id)
+            return
+        course = await get_course_by_id(db, job.course_id)
+        if course is None or course.spec is None:
+            job.status = JOB_FAILED
+            job.error = "course or spec missing"
+            await db.commit()
+            return
+
+        job.status = JOB_RUNNING
+        job.attempts += 1
+        course.status = COURSE_BUILDING
+        await db.commit()
+
+        try:
+            company = await get_company(db, course.company_id)
+            slug = company.slug if company else "tenant"
+            _name, primary, _style = await _branding(db, course.company_id)
+
+            from src.services.generation.builder import course_prefix
+
+            prefix = course_prefix(slug, str(course.id), course.version)
+            manifest = (course.asset_manifest or {}).get("assets", [])
+
+            # Phase 2.5 process A — resource fetch -> asset_map.json
+            asset_map = fetch_assets(manifest, prefix, primary)
+            publish_asset_map(prefix, asset_map)
+
+            # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
+            # (optional; falls back to the template build inside the builder).
+            from src.services.generation.devin_codegen import generate_course_app
+
+            devin_session_id, source_files = await generate_course_app(
+                course.spec, asset_map
+            )
+
+            # Phase 3 + 4 — build per-course app and host it
+            hosting = publish_built_course(
+                slug,
+                str(course.id),
+                course.version,
+                course.spec,
+                asset_map,
+                source_files=source_files,
+            )
+
+            if devin_session_id:
+                job.devin_session_id = devin_session_id
+            course.asset_map = asset_map
+            course.dist_object_prefix = hosting["prefix"]
+            course.course_url = hosting["course_url"]
+            course.iframe_url = hosting["iframe_url"]
+            course.status = COURSE_READY
+            job.status = JOB_SUCCEEDED
+            job.result = {
+                "assets": len(asset_map),
+                "built": hosting["built"],
+                "course_url": hosting["course_url"],
+                "iframe_url": hosting["iframe_url"],
+            }
+            await db.commit()
+            logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("build job %s failed", job_id)
+            job.status = JOB_FAILED
+            job.error = str(exc)
+            course.status = COURSE_FAILED
+            await db.commit()
+
+
+async def _create_followup_job(db, course, job_type: str):
+    """Create a queued GenerationJob row for the next pipeline phase."""
+    from src.db.crud.course import create_job
+
+    return await create_job(db, course.id, course.company_id, job_type)

@@ -10,7 +10,7 @@ x-backend-env: &backend-env
   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
   MINIO_BUCKET: ${MINIO_BUCKET}
-  COURSES_BUCKET: ${COURSES_BUCKET}
+  COURSES_BUCKET: ${COURSES_BUCKET:-courses}
   MINIO_PRESIGNED_EXPIRY: ${MINIO_PRESIGNED_EXPIRY}
   MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
   KEYCLOAK_HOST: ${KEYCLOAK_HOST}
@@ -44,6 +44,32 @@ x-backend-env: &backend-env
   MEDIA_POLL_TIMEOUT: ${MEDIA_POLL_TIMEOUT:-240}
   DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG}
   PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL}
+  # Google Gemini (agentic pipeline + media generation)
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
+  GEMINI_TTS_MODEL: ${GEMINI_TTS_MODEL:-gemini-2.5-flash-preview-tts}
+  GEMINI_TTS_VOICE: ${GEMINI_TTS_VOICE:-Kore}
+  # Cala MCP (company knowledge)
+  CALA_API_KEY: ${CALA_API_KEY:-${CALA:-}}
+  CALA_MCP_URL: ${CALA_MCP_URL:-}
+  # PixVerse (image/video generation)
+  PIXVERSE_API_KEY: ${PIXVERSE_API_KEY:-${PIX_VERSE:-}}
+  PIXVERSE_API_BASE_URL: ${PIXVERSE_API_BASE_URL:-https://app-api.pixverse.ai}
+  # Asset-pipeline provider selection + Devin code-gen toggle
+  ASSET_IMAGE_PROVIDER: ${ASSET_IMAGE_PROVIDER:-auto}
+  ASSET_VIDEO_PROVIDER: ${ASSET_VIDEO_PROVIDER:-auto}
+  ASSET_AUDIO_PROVIDER: ${ASSET_AUDIO_PROVIDER:-auto}
+  COURSE_BUILD_USE_DEVIN: ${COURSE_BUILD_USE_DEVIN:-false}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  DEVIN_API_KEY: ${DEVIN_API_KEY:-}
+  DEVIN_ORG_ID: ${DEVIN_ORG_ID:-}
+  DEVIN_API_BASE_URL: ${DEVIN_API_BASE_URL:-https://api.devin.ai/v3}
+  DEVIN_SNAPSHOT_ID: ${DEVIN_SNAPSHOT_ID:-}
+  DEVIN_PLAYBOOK_ID: ${DEVIN_PLAYBOOK_ID:-}
+  DEVIN_MAX_ACU_LIMIT: ${DEVIN_MAX_ACU_LIMIT:-20}
+  DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG:-acme}
+  PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://localhost}
 
 services:
 
@@ -92,13 +118,13 @@ services:
         mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
         mc mb --ignore-existing local/${MINIO_BUCKET};
         mc anonymous set none local/${MINIO_BUCKET};
-        mc mb --ignore-existing local/${COURSES_BUCKET};
-        mc anonymous set download local/${COURSES_BUCKET};
+        mc mb --ignore-existing local/${COURSES_BUCKET:-courses};
+        mc anonymous set download local/${COURSES_BUCKET:-courses};
         exit 0;
       "
     environment:
       MINIO_BUCKET: ${MINIO_BUCKET}
-      COURSES_BUCKET: ${COURSES_BUCKET}
+      COURSES_BUCKET: ${COURSES_BUCKET:-courses}
 
   # ── Redis (queue broker for Arq) ──────────────────────────────────────────────
   redis:
@@ -114,18 +140,23 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     restart: unless-stopped
-    command: start
+    command: start --import-realm
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB}
       KC_DB_USERNAME: ${POSTGRES_USER}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KC_HOSTNAME: ${AUTH_DOMAIN}
+      KC_HOSTNAME: ${DOMAIN}
+      KC_HTTP_RELATIVE_PATH: /auth
       KC_PROXY: edge
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://localhost}
+    volumes:
+      - ./keycloak/realm-app.json:/opt/keycloak/data/import/realm-app.json:ro
+      - ./keycloak/themes/coursive:/opt/keycloak/themes/coursive:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -179,6 +210,11 @@ services:
     build:
       context: ./frontend
       target: production
+      args:
+        VITE_API_URL: /api/v1
+        VITE_KEYCLOAK_URL: /auth
+        VITE_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-app}
+        VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-app-frontend}
     restart: unless-stopped
 
   # ── Nginx ─────────────────────────────────────────────────────────────────────
@@ -190,7 +226,11 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+    environment:
+      DOMAIN: ${DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      NGINX_ENVSUBST_FILTER: "^(DOMAIN|AUTH_DOMAIN)$"
     depends_on:
       - frontend
       - backend

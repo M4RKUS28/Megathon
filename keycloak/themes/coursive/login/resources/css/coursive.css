@@ -1,0 +1,186 @@
+:root {
+  --coursive-ink: #0c0e1a;
+  --coursive-paper: #f6f5f1;
+  --coursive-iris: #5145e5;
+  --coursive-signal: #ff5c38;
+  --coursive-mist: #e5e3dc;
+}
+
+body.login-pf {
+  min-height: 100vh;
+  background: var(--coursive-paper);
+  color: var(--coursive-ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.login-pf::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  background:
+    linear-gradient(90deg, var(--coursive-ink) 0 42%, transparent 42%),
+    radial-gradient(circle at 24% 22%, rgba(81, 69, 229, 0.45), transparent 34%),
+    radial-gradient(circle at 18% 76%, rgba(255, 92, 56, 0.32), transparent 30%);
+}
+
+.login-pf-page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.login-pf-page-header {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 32px 24px 0;
+}
+
+#kc-header-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--coursive-paper);
+  font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 0;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#kc-header-wrapper::before {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--coursive-iris);
+  color: #fff;
+  content: "C";
+  font-size: 17px;
+}
+
+#kc-header-wrapper::after {
+  content: "Coursive";
+  font-size: 22px;
+}
+
+.login-pf-page .card-pf {
+  width: min(440px, calc(100vw - 32px));
+  margin: 8vh max(24px, calc((100vw - 1120px) / 2)) 32px auto;
+  padding: 34px;
+  border: 1px solid var(--coursive-mist);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(12, 14, 26, 0.14);
+}
+
+.login-pf-header h1,
+#kc-page-title {
+  color: var(--coursive-ink);
+  font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.pf-c-form__label,
+.pf-c-form__label-text,
+label {
+  color: rgba(12, 14, 26, 0.78);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.pf-c-form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  min-height: 44px;
+  border: 1px solid var(--coursive-mist);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--coursive-ink);
+  font-size: 15px;
+  box-shadow: none;
+}
+
+.pf-c-form-control:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
+  border-color: var(--coursive-iris);
+  box-shadow: 0 0 0 3px rgba(81, 69, 229, 0.14);
+}
+
+.pf-c-button.pf-m-primary,
+#kc-login,
+#kc-register-form input[type="submit"] {
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--coursive-ink);
+  color: var(--coursive-paper);
+  font-weight: 700;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover,
+#kc-register-form input[type="submit"]:hover {
+  background: #191c2e;
+  transform: translateY(-1px);
+}
+
+a {
+  color: var(--coursive-iris);
+  font-weight: 650;
+}
+
+a:hover {
+  color: #3f35c8;
+}
+
+.login-pf-signup {
+  margin-top: 22px;
+  color: rgba(12, 14, 26, 0.62);
+  text-align: center;
+}
+
+.pf-c-alert {
+  border-radius: 8px;
+}
+
+.pf-c-alert.pf-m-danger,
+.alert-error {
+  border-color: rgba(255, 92, 56, 0.35);
+  background: rgba(255, 92, 56, 0.08);
+  color: var(--coursive-ink);
+}
+
+#kc-form-options,
+.login-pf-settings {
+  margin-bottom: 18px;
+}
+
+.pf-c-input-group button,
+.pf-m-control {
+  border-color: var(--coursive-mist);
+  border-radius: 8px;
+}
+
+@media (max-width: 860px) {
+  body.login-pf::before {
+    background:
+      linear-gradient(180deg, var(--coursive-ink) 0 220px, transparent 220px),
+      radial-gradient(circle at 30% 6%, rgba(81, 69, 229, 0.38), transparent 34%);
+  }
+
+  .login-pf-page-header {
+    padding-top: 24px;
+  }
+
+  .login-pf-page .card-pf {
+    margin: 56px auto 24px;
+  }
+}

@@ -125,6 +125,11 @@ export const companyApi = {
 
 export type CourseStatus =
   | "draft"
+  | "planning"
+  | "plan_review"
+  | "authoring"
+  | "spec_ready"
+  | "building"
   | "concept_ready"
   | "generating"
   | "ready"
@@ -172,8 +177,55 @@ export interface CourseConcept {
   chapters: CourseConceptChapter[];
 }
 
+// ── Phase 1 Course Plan ──────────────────────────────────────────────────────
+export interface PlanChapter {
+  id: string;
+  title: string;
+  objective: string;
+  competency: string;
+  estimated_minutes: number;
+  key_points: string[];
+  bloom_level: string;
+}
+
+export interface KnowledgeHit {
+  tool: string;
+  query: string;
+  summary: string;
+}
+
+export interface CoursePlan {
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  audience: string;
+  estimated_minutes: number;
+  objectives: string[];
+  competencies: string[];
+  mandatory_topics: string[];
+  compliance_requirements: string[];
+  knowledge_sources: KnowledgeHit[];
+  chapters: PlanChapter[];
+}
+
+// ── Phase 2 Lastenheft (spec) ───────────────────────────────────────────────
+export interface AssetSpec {
+  template_link: string;
+  type: string;
+  dimensions: string;
+  description: string;
+  purpose: string;
+}
+
 export interface CourseDetail extends CourseSummary {
   concept: CourseConcept | null;
+  plan: CoursePlan | null;
+  spec: Record<string, unknown> | null;
+  asset_manifest: { assets: AssetSpec[] } | null;
+  asset_map: Record<string, string> | null;
+  course_url: string | null;
+  iframe_url: string | null;
   devin_session_id: string | null;
 }
 
@@ -218,6 +270,8 @@ export const coursesApi = {
   create: (body: { title: string; description: string; brief: CourseBriefInput }) =>
     api.post<CourseDetail>("/courses", body),
   generate: (id: string) => api.post<GenerationJobRecord>(`/courses/${id}/generate`),
+  approvePlan: (id: string, plan?: CoursePlan) =>
+    api.post<GenerationJobRecord>(`/courses/${id}/plan/approve`, { plan: plan ?? null }),
   jobs: (id: string) => api.get<GenerationJobRecord[]>(`/courses/${id}/jobs`),
   edits: {
     list: (id: string) => api.get<EditRecord[]>(`/courses/${id}/edits`),
@@ -252,7 +306,12 @@ export interface ProgressUpdate {
   status?: string;
   progress_pct?: number;
   current_chapter?: number;
+  current_page?: number;
   score?: number;
+  time_spent_seconds?: number;
+  quiz_attempts?: number;
+  drop_off_point?: string;
+  engagement_score?: number;
 }
 
 export interface AssignmentRecord {
@@ -271,8 +330,43 @@ export interface CourseReportRow {
   status: string;
   progress_pct: number;
   score: number | null;
+  time_spent_seconds: number;
+  quiz_attempts: number;
+  engagement_score: number;
+  certified: boolean;
   completed_at: string | null;
 }
+
+// ── Phase 5 reporting & standards ───────────────────────────────────────────
+export interface TeamMemberProgress {
+  user_id: string;
+  display_name: string;
+  email: string;
+  assigned: number;
+  completed: number;
+  in_progress: number;
+  not_started: number;
+  avg_score: number | null;
+  compliance_pct: number;
+}
+
+export interface ManagerDashboard {
+  team_size: number;
+  assigned_courses: number;
+  completed_courses: number;
+  open_courses: number;
+  avg_score: number | null;
+  compliance_pct: number;
+  members: TeamMemberProgress[];
+}
+
+export const reportingApi = {
+  managerDashboard: () => api.get<ManagerDashboard>("/reporting/manager/dashboard"),
+  xapi: (courseId: string) =>
+    api.get<Record<string, unknown>[]>(`/reporting/courses/${courseId}/xapi`),
+  scormUrl: (courseId: string, version: "1.2" | "2004" = "1.2") =>
+    `/api/v1/reporting/courses/${courseId}/scorm?version=${version}`,
+};
 
 export const learningApi = {
   list: () => api.get<LearningCourse[]>("/learning/courses"),

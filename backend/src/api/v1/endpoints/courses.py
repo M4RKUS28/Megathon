@@ -15,6 +15,7 @@ from src.api.v1.schemas.course import (
     EditCreate,
     EditResponse,
     JobResponse,
+    PlanApproval,
 )
 from src.core.exceptions import AppError, NotFoundError
 from src.core.tenant import CompanyDep, require_app_role
@@ -33,7 +34,17 @@ from src.db.crud.course import (
 from src.db.crud.enrollment import list_enrollments_for_course
 from src.db.crud.user import list_company_users
 from src.db.database import get_db
-from src.db.models.course import Course, CourseAssignment, EditRequest, GenerationJob
+from src.db.models.course import (
+    COURSE_AUTHORING,
+    COURSE_PLAN_REVIEW,
+    COURSE_PLANNING,
+    JOB_PLAN,
+    JOB_SPEC,
+    Course,
+    CourseAssignment,
+    EditRequest,
+    GenerationJob,
+)
 from src.db.models.org import ROLE_ADMIN, ROLE_COURSE_CREATOR, User
 from src.services.generation.builder import index_url
 from src.services.queue.pool import get_pool
@@ -45,7 +56,23 @@ StaffDep = Annotated[User, Depends(require_app_role(ROLE_ADMIN, ROLE_COURSE_CREA
 
 
 def _host_url(course: Course) -> str | None:
+    if course.course_url:
+        return course.course_url
     return index_url(course.dist_object_prefix) if course.dist_object_prefix else None
+
+
+def _detail(course: Course) -> CourseDetail:
+    return CourseDetail(
+        **_summary(course).model_dump(),
+        concept=course.concept,
+        plan=course.plan,
+        spec=course.spec,
+        asset_manifest=course.asset_manifest,
+        asset_map=course.asset_map,
+        course_url=course.course_url,
+        iframe_url=course.iframe_url,
+        devin_session_id=course.devin_session_id,
+    )
 
 
 def _summary(course: Course) -> CourseSummary:
@@ -82,14 +109,16 @@ async def post_course(
         brief={"title": body.title, **body.brief.model_dump()},
         style_guide_snapshot=style_guide,
     )
-    job = await create_job(db, course.id, company.id, "concept")
+    # Phase 1 — planner agent (pauses at the approval gate).
+    course.status = COURSE_PLANNING
+    job = await create_job(db, course.id, company.id, JOB_PLAN)
     await db.commit()
     await db.refresh(course)
 
     pool = await get_pool()
-    await pool.enqueue_job("run_concept_job", str(job.id))
+    await pool.enqueue_job("run_plan_job", str(job.id))
 
-    return CourseDetail(**_summary(course).model_dump(), concept=None, devin_session_id=None)
+    return _detail(course)
 
 
 @router.get("/{course_id}", response_model=CourseDetail)
@@ -97,10 +126,43 @@ async def get_course_detail(course_id: uuid.UUID, company: CompanyDep, db: DbDep
     course = await get_course(db, company.id, course_id)
     if course is None:
         raise NotFoundError("Course")
-    return CourseDetail(
-        **_summary(course).model_dump(),
-        concept=course.concept,
-        devin_session_id=course.devin_session_id,
+    return _detail(course)
+
+
+@router.post("/{course_id}/plan/approve", response_model=JobResponse, status_code=202)
+async def approve_plan(
+    course_id: uuid.UUID,
+    body: PlanApproval,
+    company: CompanyDep,
+    db: DbDep,
+    _: StaffDep,
+) -> JobResponse:
+    """Approval gate: accept (optionally edited) plan and start the script writer."""
+    course = await get_course(db, company.id, course_id)
+    if course is None:
+        raise NotFoundError("Course")
+    if course.status != COURSE_PLAN_REVIEW:
+        raise AppError(409, "Course is not awaiting plan approval")
+    if body.plan is not None:
+        course.plan = body.plan
+    if not course.plan:
+        raise AppError(409, "No plan to approve")
+
+    course.status = COURSE_AUTHORING
+    job = await create_job(db, course.id, company.id, JOB_SPEC)
+    await db.commit()
+    await db.refresh(job)
+
+    pool = await get_pool()
+    await pool.enqueue_job("run_spec_job", str(job.id))
+    return JobResponse(
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        error=job.error,
+        devin_session_id=job.devin_session_id,
+        result=job.result,
+        created_at=job.created_at,
     )
 
 
@@ -390,6 +452,10 @@ async def course_report(
                 status=e.status if e else "not_started",
                 progress_pct=e.progress_pct if e else 0,
                 score=e.score if e else None,
+                time_spent_seconds=e.time_spent_seconds if e else 0,
+                quiz_attempts=e.quiz_attempts if e else 0,
+                engagement_score=e.engagement_score if e else 0,
+                certified=e.certified if e else False,
                 completed_at=e.completed_at if e else None,
             )
         )
