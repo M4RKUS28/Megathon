@@ -20,6 +20,7 @@ from typing import Any
 
 from src.config.settings import settings
 from src.services.devin.client import DevinClient, DevinError
+from src.services.generation.contract import COURSE_APP_CONTRACT
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,8 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "fly-ins.\n"
         "- Accessibility: ensure strong text/background contrast (WCAG AA); never convey "
         "right/wrong by colour alone — always add an icon (check/cross) too.\n\n"
-        "Requirements:\n"
-        "- Use Vite, React, TypeScript, Tailwind. Add Framer Motion, "
-        "Chart.js/Recharts, React Flow or any other libraries you need.\n"
+        f"{COURSE_APP_CONTRACT}\n\n"
+        "Additional requirements:\n"
         "- Cover ALL the content: every chapter, every page and every block. Treat each "
         "block's `type`/`text`/`items`/`data` as the content brief, not a fixed widget — "
         "render it faithfully but design it well. You may split, merge, enrich or add "
@@ -114,21 +114,10 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "(flip-card matching pairs); the kind's config lives in `data`. Use real drag-and-drop, "
         "a visible score, celebratory micro-animations on success (confetti / a check popping "
         "in) and a replay button; invent richer games for custom kinds. Make them fun.\n"
-        "- A chapter-end quiz is mandatory; require >=80% to unlock the next chapter, "
-        "and allow retry below 80%. Do not render all quiz questions as one long page: "
-        "use question tabs/steps with one active question at a time, numbered tabs for "
-        "navigation, and clear Previous/Next/Submit controls.\n"
-        "- Reference assets STRICTLY by their template_link (e.g. "
-        '<img src="/resources/images/01" />); a build step maps them to real URLs '
-        "via /asset_map.json which is loaded at runtime. Use every provided asset.\n"
-        "- The app must build to static files with `npm run build` (output dir dist/). "
-        "Read /course.json and /asset_map.json from the public/ root at runtime.\n"
         "- Before providing final structured output, run the course locally, click through "
         "every chapter page and each chapter-end quiz tab, verify media/transcript controls "
         "and minigames render, and fix any console/runtime/build errors you find. Include only "
-        "source files after this validation passes.\n"
-        "- Include package.json, vite.config.ts, tsconfig.json, index.html, and all "
-        "src/ files. Do not include node_modules or dist.\n\n"
+        "source files after this validation passes.\n\n"
         "Return ONLY structured output: a `files` array of {path, content} covering "
         "the whole project. Use forward-slash relative paths.\n\n"
         f"=== Lastenheft (course.json) ===\n{json.dumps(course)[:120000]}\n\n"
