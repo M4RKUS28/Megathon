@@ -16,9 +16,12 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+html.login-pf,
 body.login-pf {
   min-height: 100vh;
-  background: var(--coursive-paper);
+  /* Override the parent keycloak theme's low-poly background image. */
+  background: var(--coursive-paper) !important;
+  background-image: none !important;
   color: var(--coursive-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -30,7 +33,8 @@ body.login-pf {
   grid-template-columns: 1.05fr 0.95fr;
   min-height: 100vh;
   padding: 0;
-  background: transparent;
+  /* Opaque paper so the parent theme's body image can't bleed through. */
+  background: var(--coursive-paper);
 }
 
 /* Left pane — the dark hero, echoing the landing page's hero section. */
@@ -92,6 +96,8 @@ body.login-pf {
   font-family: var(--font-display);
   font-size: 0;
   font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 #kc-header-wrapper::before {
@@ -111,6 +117,7 @@ body.login-pf {
   content: "Coursive";
   font-size: 20px;
   letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 /* Right pane — the form card, centered like the landing's bordered cards. */
@@ -187,6 +194,15 @@ textarea:focus {
 input.error {
   border-color: var(--coursive-signal);
   box-shadow: 0 0 0 3px rgba(255, 92, 56, 0.14);
+}
+
+/* Keep autofilled fields white instead of the browser's yellow highlight. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--coursive-ink);
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  caret-color: var(--coursive-ink);
 }
 
 /* Password reveal toggle — keep it tidy inside the field. */
@@ -290,19 +306,27 @@ input[type="checkbox"] {
 }
 
 /* ── Footer / sign-up prompt ─────────────────────────────────────────────── */
-#kc-registration,
+/* The parent keycloak theme renders this as a full-width gray footer that
+   bleeds past the card; flatten it into a clean separator inside the card. */
 #kc-info,
 .login-pf-signup {
-  margin-top: 22px;
-  padding-top: 18px;
+  margin: 22px 0 0;
+  padding: 18px 0 0;
+  border: 0;
   border-top: 1px solid var(--coursive-mist);
+  border-radius: 0;
+  background: transparent;
   color: rgba(12, 14, 26, 0.6);
   font-size: 14px;
   text-align: center;
 }
 
-#kc-info {
-  border-top: 0;
+#kc-info-wrapper,
+#kc-registration {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
 }
 
 /* ── Alerts ──────────────────────────────────────────────────────────────── */
