@@ -1,7 +1,8 @@
-"""Thin async client for the Devin API (https://docs.devin.ai/api-reference).
+"""Thin async client for the Devin v3 API (https://docs.devin.ai/api-reference).
 
-Used by the generation pipeline to create sessions, poll them to completion, and
-read back validated `structured_output`.
+Uses the org-scoped Organization API (`/v3/organizations/{org_id}/sessions`) with a
+service-user key (`cog_` prefix). Creates sessions, polls them to completion, and
+reads back validated `structured_output`.
 """
 
 import asyncio
@@ -13,8 +14,12 @@ from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# status_enum values from GET /v1/sessions/{id}
-_TERMINAL = {"finished", "blocked", "expired"}
+# v3 GET session fields: `status` (new/claimed/running/exit/error/suspended/resuming)
+# and `status_detail` (working/waiting_for_user/finished/...). A session that has
+# produced structured_output and is no longer "working" is treated as done; an
+# error/suspended status (or detail "finished" with no output) is a failure.
+_FAILED_STATUSES = {"error", "suspended"}
+_DONE_DETAILS = {"finished"}
 
 
 class DevinError(RuntimeError):
@@ -26,15 +31,21 @@ class DevinClient:
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        org_id: str | None = None,
         max_acu_limit: int | None = None,
     ) -> None:
         self.api_key = api_key or settings.devin_api_key
         self.base_url = (base_url or settings.devin_api_base_url).rstrip("/")
+        self.org_id = org_id or settings.devin_org_id
         self.max_acu_limit = max_acu_limit or settings.devin_max_acu_limit
 
     @property
     def enabled(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key and self.org_id)
+
+    @property
+    def _sessions_base(self) -> str:
+        return f"{self.base_url}/organizations/{self.org_id}/sessions"
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -55,6 +66,7 @@ class DevinClient:
             body["playbook_id"] = settings.devin_playbook_id
         if structured_output_schema:
             body["structured_output_schema"] = structured_output_schema
+            body["structured_output_required"] = True
         if title:
             body["title"] = title
         if tags:
@@ -64,7 +76,7 @@ class DevinClient:
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"{self.base_url}/sessions", json=body, headers=self._headers()
+                self._sessions_base, json=body, headers=self._headers()
             )
         if resp.status_code >= 400:
             raise DevinError(f"create_session failed [{resp.status_code}]: {resp.text}")
@@ -73,7 +85,7 @@ class DevinClient:
     async def get_session(self, session_id: str) -> dict:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.get(
-                f"{self.base_url}/sessions/{session_id}", headers=self._headers()
+                f"{self._sessions_base}/{session_id}", headers=self._headers()
             )
         if resp.status_code >= 400:
             raise DevinError(f"get_session failed [{resp.status_code}]: {resp.text}")
@@ -82,7 +94,7 @@ class DevinClient:
     async def send_message(self, session_id: str, message: str) -> None:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"{self.base_url}/sessions/{session_id}/message",
+                f"{self._sessions_base}/{session_id}/messages",
                 json={"message": message},
                 headers=self._headers(),
             )
@@ -96,18 +108,23 @@ class DevinClient:
         poll_interval: int = 10,
         timeout_seconds: int = 60 * 30,
     ) -> dict:
-        """Poll a session until it reaches a terminal state; return structured_output."""
+        """Poll a session until the task finishes; return structured_output."""
         waited = 0
         while waited < timeout_seconds:
             session = await self.get_session(session_id)
-            status = session.get("status_enum") or session.get("status")
-            if status in _TERMINAL:
-                if status != "finished":
-                    raise DevinError(f"session {session_id} ended in state '{status}'")
-                output = session.get("structured_output")
-                if output is None:
-                    raise DevinError(f"session {session_id} finished without structured_output")
+            status = session.get("status")
+            detail = session.get("status_detail")
+            output = session.get("structured_output")
+            if status in _FAILED_STATUSES or detail == "error":
+                raise DevinError(
+                    f"session {session_id} ended in state '{status}' ({detail})"
+                )
+            # Done once the agent has stopped working and produced its output.
+            stopped = status == "exit" or (status == "running" and detail != "working")
+            if output is not None and stopped:
                 return output
+            if detail in _DONE_DETAILS or status == "exit":
+                raise DevinError(f"session {session_id} finished without structured_output")
             await asyncio.sleep(poll_interval)
             waited += poll_interval
         raise DevinError(f"session {session_id} timed out after {timeout_seconds}s")

@@ -41,9 +41,10 @@ class Settings(BaseSettings):
     # Redis / Queue
     redis_url: str = "redis://redis:6379/0"
 
-    # Devin API (course generation pipeline)
+    # Devin API (course generation pipeline) — v3 org-scoped API
     devin_api_key: str = ""
-    devin_api_base_url: str = "https://api.devin.ai/v1"
+    devin_api_base_url: str = "https://api.devin.ai/v3"
+    devin_org_id: str = ""
     devin_snapshot_id: str = ""
     devin_playbook_id: str = ""
     devin_max_acu_limit: int = 20
