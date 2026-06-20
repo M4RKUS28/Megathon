@@ -747,10 +747,10 @@ export function CourseDetailPage() {
         <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
         <div className="mt-3 space-y-1.5">
           {jobs?.map((j) => {
+            const result = j.result as Record<string, unknown> | null;
             const builtFlag =
-              j.type === "build" && j.status === "succeeded"
-                ? (j.result as Record<string, unknown> | null)?.built
-                : undefined;
+              j.type === "build" && j.status === "succeeded" ? result?.built : undefined;
+            const steps = (result?.steps as { ts?: string; msg?: string }[] | undefined) ?? [];
             return (
               <div
                 key={j.id}
@@ -786,6 +786,27 @@ export function CourseDetailPage() {
                 ) : null}
                 {j.error ? (
                   <span className="basis-full text-xs text-red-600">{j.error}</span>
+                ) : null}
+                {steps.length > 0 ? (
+                  <ol className="basis-full space-y-0.5 border-l border-border pl-3 pt-1">
+                    {steps.map((s, si) => {
+                      const isLast = si === steps.length - 1;
+                      const running = j.status === "running" && isLast;
+                      return (
+                        <li
+                          key={si}
+                          className="flex items-center gap-2 text-xs text-muted-foreground"
+                        >
+                          {running ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-violet-600" />
+                          ) : (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                          )}
+                          <span className={running ? "text-foreground" : ""}>{s.msg}</span>
+                        </li>
+                      );
+                    })}
+                  </ol>
                 ) : null}
               </div>
             );

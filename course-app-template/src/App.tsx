@@ -4,6 +4,7 @@ import type { AssetMap, Block, Course } from "./types";
 import { BlockView } from "./blocks";
 import { QuizView } from "./quiz";
 import { announceReady, postProgress } from "./progress";
+import { pageComponents } from "./pages/registry";
 
 // Branding is sometimes stored as a bare Tailwind HSL triple ("262 83% 58%"),
 // which is not a valid CSS color on its own. Used directly as `var(--brand)` it
@@ -255,6 +256,15 @@ export function App() {
 
             {onQuiz ? (
               <QuizView quiz={chapter.quiz} onPass={onPass} />
+            ) : page && pageComponents[`${current}.${pageIdx}`] && !selectMode ? (
+              (() => {
+                const PageComp = pageComponents[`${current}.${pageIdx}`];
+                return (
+                  <section className="space-y-4">
+                    <PageComp page={page} resolve={resolve} assetMap={assetMap} />
+                  </section>
+                );
+              })()
             ) : (
               <section className="space-y-4">
                 {(page?.blocks ?? []).map((b, i) => {

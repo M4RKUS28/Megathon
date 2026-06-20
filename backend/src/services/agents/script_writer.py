@@ -16,16 +16,39 @@ Falls back to the deterministic Lastenheft generator when Gemini is unavailable.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import re
 from typing import TypedDict
 
-from pydantic import BaseModel, Field
+from langchain_core.messages import AIMessage
+from langchain_core.output_parsers import PydanticOutputParser
 
 from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
-from .schemas import AssetSpec, CoursePlan, Lastenheft, SpecChapter, StyleGuide
+from .schemas import (
+    AssetSpec,
+    Block,
+    CoursePlan,
+    Lastenheft,
+    Page,
+    PlanChapter,
+    SpecChapter,
+    StyleGuide,
+)
 
 logger = logging.getLogger(__name__)
+
+# Every content page must carry at least this many words of `paragraph` prose.
+# The prompt asks for 750–900; this is the hard floor we deterministically top
+# up to if a page comes back short.
+_PROSE_FLOOR_WORDS = 500
+
+# Gemini's function-calling structured output silently returns empty nested
+# arrays for this deeply nested schema (pages/blocks/asset_needs/quiz come back
+# []). We instead prompt for raw JSON and parse it, which populates reliably.
+_CHAPTER_PARSER = PydanticOutputParser(pydantic_object=SpecChapter)
 
 SCRIPT_SYSTEM = """You are a senior interactive learning designer creating an implementation-
 ready Lastenheft (specification) for a bespoke Vite/React course app. A coding agent (Devin)
@@ -35,9 +58,20 @@ The spec describes *behaviour and intent* — NOT a rigid renderer schema. Be sp
 that Devin can implement each interaction without follow-up questions.
 
 ## ANTI-BORING MANDATE
-Avoid generic text-heavy lessons. Prefer visual explanations, interaction, scenarios,
-simulations, charts, diagrams, and concrete examples. Every topic must be supported by media
-or interaction — never plain text walls. Make it engaging, specific, and real-world.
+Write substantive, in-depth lessons that are STILL engaging. Every page must teach with rich,
+specific explanatory prose AND be supported by media or interaction — never thin filler, but
+also never a single undifferentiated wall of text. Use concrete examples, real data, scenarios,
+charts, and diagrams to carry the depth. Make it specific and real-world.
+
+## PROSE DEPTH (required, non-negotiable)
+Every content page must contain AT LEAST 500 words of explanatory prose — TARGET 750–900 words —
+split across 5–7 separate `paragraph` blocks of roughly 150 words each (never one giant block,
+NEVER fewer than 5 paragraph blocks). Count only the words in `paragraph` blocks: they must sum
+to 500+ on EVERY page, and you should comfortably exceed that. Writing 3–4 short paragraphs is a
+failure; if you are anywhere near the limit, add another full ~150-word paragraph that teaches
+additional detail, a worked example, or an edge case. Break the prose up with
+`heading`/`callout`/`list` blocks and interactions so it reads as a well-structured lesson, not
+a wall of text. Interactions, quizzes, and asset briefs do NOT count toward the word total.
 
 Chapter-level fields (populate for EVERY chapter):
   - `learning_points`: concrete things the learner will know/be able to do after this chapter.
@@ -72,11 +106,13 @@ For EACH page provide ALL of these fields:
    explanation. Wrong: orange highlight + hint. After 2 wrong: show answer.").
 9. **success_criterion** — Observable condition proving this page works (e.g. "learner reorders
    all 5 steps correctly; chart renders with live data; scenario reaches at least one ending").
-10. **blocks** — 2–4 implementation-ready blocks. Types: heading, paragraph, list, callout,
+10. **blocks** — implementation-ready blocks. Types: heading, paragraph, list, callout,
     image, video, audio, dialogue, chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
-    accordion, scenario. For every visual/media block set `asset` to a UNIQUE template link
-    ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions precisely
-    in the `data` field so Devin can implement without questions.
+    accordion, scenario. Each page needs 5–7 `paragraph` blocks carrying 750–900 words of
+    prose total (≥500 hard minimum; see PROSE DEPTH), interleaved with at least one heading and
+    at least one interaction/media block. For every visual/media block set `asset` to a UNIQUE
+    template link ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions
+    precisely in the `data` field so Devin can implement without questions.
 11. **asset_needs** — List every asset this page needs. Each entry: template_link, type
     (image/video/audio/diagram), and a detailed visual/audio brief.
 
@@ -101,10 +137,6 @@ Return structured output: a list of chapters covering EVERY chapter in the plan,
 """
 
 
-class _ChaptersOut(BaseModel):
-    chapters: list[SpecChapter] = Field(default_factory=list)
-
-
 class _State(TypedDict, total=False):
     plan: CoursePlan
     company_name: str
@@ -114,7 +146,8 @@ class _State(TypedDict, total=False):
     lastenheft: Lastenheft
 
 
-def _plan_text(plan: CoursePlan) -> str:
+def _course_context(plan: CoursePlan) -> str:
+    """Course-level context shared with every per-chapter request."""
     lines = [
         f"Title: {plan.title}",
         f"Audience: {plan.audience}",
@@ -132,27 +165,148 @@ def _plan_text(plan: CoursePlan) -> str:
         lines.append(
             "Mandatory topics:\n" + "\n".join(f"- {t}" for t in plan.mandatory_topics)
         )
-    lines.append("Chapters:")
+    lines.append("Full chapter outline (for context only):")
     for c in plan.chapters:
-        kp = "; ".join(c.key_points)
-        lines.append(
-            f"- [{c.id}] {c.title} (Bloom: {c.bloom_level}, ~{c.estimated_minutes} min)\n"
-            f"  Objective: {c.objective}\n"
-            f"  Key points: {kp}"
-        )
+        lines.append(f"- [{c.id}] {c.title}")
     return "\n".join(lines)
+
+
+def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
+    """Prompt for ONE chapter: course context + that chapter's full plan data."""
+    kp = "; ".join(chapter.key_points)
+    return (
+        f"{_course_context(plan)}\n\n"
+        "Design ONLY the following chapter. Return a SINGLE SpecChapter with its "
+        "pages and quiz FULLY populated:\n"
+        f"- id: {chapter.id}\n"
+        f"- title: {chapter.title}\n"
+        f"- competency: {chapter.competency}\n"
+        f"- Bloom level: {chapter.bloom_level}\n"
+        f"- estimated minutes: ~{chapter.estimated_minutes}\n"
+        f"- objective: {chapter.objective}\n"
+        f"- key points: {kp}\n\n"
+        f"Produce 3-5 content pages (each with blocks and asset_needs) and a quiz "
+        f"with 3-5 questions for chapter [{chapter.id}]. Every page MUST carry 750-900 words "
+        f"of explanatory prose (500 absolute minimum) split across 5-7 separate paragraph "
+        f"blocks of ~150 words each — NEVER fewer than 5 paragraphs, never one giant "
+        f"block. Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
+        f"{_CHAPTER_PARSER.get_format_instructions()}"
+    )
+
+
+def _message_text(message: AIMessage) -> str:
+    """Flatten a chat message's content to text.
+
+    Gemini 3 thinking models return ``content`` as a list of parts (text +
+    thought-signature blocks); join only the text parts.
+    """
+    content = message.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    return str(content)
+
+
+def _count_words(text: str | None) -> int:
+    return len(re.findall(r"\b\w+\b", text or ""))
+
+
+def _page_prose_words(page: Page) -> int:
+    """Total words across a page's `paragraph` blocks (the learner-facing body)."""
+    return sum(_count_words(b.text) for b in page.blocks if b.type == "paragraph")
+
+
+def _parse_json_array(text: str) -> list[str]:
+    """Best-effort extraction of a JSON array of strings from a model reply."""
+    raw = text.strip()
+    raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
+    start, end = raw.find("["), raw.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        return []
+    try:
+        data = json.loads(raw[start : end + 1])
+    except json.JSONDecodeError:
+        return []
+    return [p.strip() for p in data if isinstance(p, str) and p.strip()]
+
+
+async def _expand_page_prose(
+    model, plan: CoursePlan, chapter: PlanChapter, page: Page
+) -> None:
+    """Append paragraph blocks until the page clears the prose floor.
+
+    Append-only: never touches existing blocks (so interactions/media stay put),
+    just adds fresh teaching paragraphs at the end. Bounded retries keep a single
+    stubborn page from looping forever.
+    """
+    for _ in range(3):
+        have = _page_prose_words(page)
+        if have >= _PROSE_FLOOR_WORDS:
+            return
+        existing = "\n\n".join(
+            b.text or "" for b in page.blocks if b.type == "paragraph"
+        )
+        needed = _PROSE_FLOOR_WORDS - have + 150
+        user = (
+            f"Course: {plan.title}. Chapter: {chapter.title}. "
+            f"Page: {page.title or page.id}.\n"
+            f"Learning goal: {page.learning_goal}\n\n"
+            f"Existing paragraphs on this page:\n{existing or '(none)'}\n\n"
+            f"Write about {needed} more words of NEW teaching prose for this page as "
+            "2–4 standalone paragraphs (~150 words each). Add fresh detail, a worked "
+            "example, or an edge case — do NOT repeat what's above, and do NOT add "
+            "headings, lists, or interactions. Return ONLY a JSON array of paragraph "
+            "strings."
+        )
+        try:
+            msg = await model.ainvoke([("user", user)])
+            paras = _parse_json_array(_message_text(msg))
+        except Exception as exc:  # noqa: BLE001 — top-up is best-effort
+            logger.warning("prose top-up failed for page %s: %s", page.id, exc)
+            return
+        if not paras:
+            return
+        page.blocks.extend(Block(type="paragraph", text=p) for p in paras)
+
+
+async def _design_one_chapter(
+    model, plan: CoursePlan, chapter: PlanChapter
+) -> SpecChapter:
+    message = await model.ainvoke(
+        [("system", SCRIPT_SYSTEM), ("user", _chapter_text(plan, chapter))]
+    )
+    spec: SpecChapter = _CHAPTER_PARSER.parse(_message_text(message))
+    # Anchor identity to the plan so manifest/ordering stay consistent even if
+    # the model echoes back blank or altered id/title fields.
+    if not spec.id:
+        spec.id = chapter.id
+    if not spec.title:
+        spec.title = chapter.title
+    # Guarantee the prose floor — top up any page the model left short.
+    short = [p for p in spec.pages if _page_prose_words(p) < _PROSE_FLOOR_WORDS]
+    if short:
+        await asyncio.gather(
+            *(_expand_page_prose(model, plan, chapter, p) for p in short)
+        )
+    return spec
 
 
 async def _design_interactions(state: _State) -> _State:
     plan = state["plan"]
-    model = get_chat_model(temperature=0.5).with_structured_output(_ChaptersOut)
-    out: _ChaptersOut = await model.ainvoke(
-        [("system", SCRIPT_SYSTEM), ("user", _plan_text(plan))]
+    if not plan.chapters:
+        raise RuntimeError("course plan has no chapters")
+    model = get_chat_model(temperature=0.5)
+    chapters = await asyncio.gather(
+        *(_design_one_chapter(model, plan, ch) for ch in plan.chapters)
     )
-    chapters = out.chapters or []
     if not chapters:
         raise RuntimeError("script writer produced no chapters")
-    return {"chapters": chapters}
+    return {"chapters": list(chapters)}
 
 
 def _build_manifest(state: _State) -> _State:

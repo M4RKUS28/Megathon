@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     # Max repair iterations when a Devin-generated build fails. Each iteration
     # sends the exact error logs back to a new Devin session for a fix attempt.
     course_build_repair_max_retries: int = 2
+    # Per-page code-gen: author each page's bespoke component in its OWN Devin
+    # session (all in parallel on the fixed template shell) instead of one giant
+    # session for the whole app. Falls back to the single-session path if disabled.
+    course_build_per_page: bool = True
+    # Max concurrent per-page Devin sessions (also caps concurrent media calls).
+    course_build_page_concurrency: int = 6
 
     @field_validator("course_build_mode", mode="before")
     @classmethod
