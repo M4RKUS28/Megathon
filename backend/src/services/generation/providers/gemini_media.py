@@ -132,13 +132,14 @@ class GeminiTTSProvider(AssetProvider):
         key = _gemini_key()
         if not key:
             raise RuntimeError("GEMINI_API_KEY not set")
+        voice = (spec.voice or self.voice).strip()
         body = {
             "contents": [{"parts": [{"text": self._text(spec)}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
                     "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": self.voice}
+                        "prebuiltVoiceConfig": {"voiceName": voice}
                     }
                 },
             },

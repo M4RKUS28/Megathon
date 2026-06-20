@@ -27,6 +27,7 @@ from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
 from .schemas import (
     AssetSpec,
+    Block,
     CoursePlan,
     Lastenheft,
     PlanChapter,
@@ -66,13 +67,42 @@ Content rules:
   "Apply it", "Common pitfalls", "Recap") with a short, descriptive `title`.
 - Give each page as many blocks as the content warrants — do not artificially limit the count.
   Write real, fleshed-out copy in `text`/`items`, not placeholders or one-liners.
-- Use a rich, varied mix of block `type`s. The following are SUGGESTIONS, not a closed list —
-  you may use any of them, combine them, or introduce your own custom types when they express
-  the content better: heading, paragraph, list, callout, image, video, audio, dialogue
-  (speech-bubble conversation), chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
-  accordion, scenario (branching). Favour visualisations and conversations.
+- Use a rich, varied mix of block `type`s, and feel free to be FORMALLY INVENTIVE — the
+  renderer is deliberately open, so different pages should genuinely look different. The
+  following are SUGGESTIONS, not a closed list — you may use any of them, combine them, or
+  introduce your own custom types when they express the content better: heading, paragraph,
+  list, callout, image, video, audio, conversation (two characters talking — see below),
+  chart (Chart.js), flashcards, dragdrop, hotspot, timeline, accordion, scenario (branching).
+  Favour visualisations and character-driven conversations over plain prose.
 - Turn numbers, processes and comparisons into a `chart`, `timeline` or infographic — never
   leave data trapped in prose.
+
+Conversation / character scenes (use these A LOT):
+- For behavioural, soft-skill, communication, compliance, ethics or any "how should I act"
+  topic, teach through a `conversation` block: two people talking, one on the left and one on
+  the right, with speech bubbles the learner clicks through one at a time while each line is
+  read aloud. Concrete dialogue between believable people is far more memorable than rules in
+  a bullet list, so prefer it whenever the content is about behaviour or interaction.
+- `conversation` data shape:
+    "data": {
+      "personas": [
+        {"id": "anna", "name": "Anna", "role": "Team Lead", "side": "left",  "avatar": "f-2"},
+        {"id": "max",  "name": "Max",  "role": "New hire",  "side": "right", "avatar": "m-5"}
+      ],
+      "turns": [
+        {"persona": "anna", "text": "Hi Max, do you have a minute?", "audio": "/resources/audio/NN"},
+        {"persona": "max",  "text": "Sure, what's up?",              "audio": "/resources/audio/NN"}
+      ]
+    }
+  Give exactly two personas (one side="left", one side="right") with realistic name + role.
+  `avatar` is a short STABLE key for the cartoon-avatar library — use "f-1".."f-8" for female-
+  presenting and "m-1".."m-8" for male-presenting characters; reuse the SAME key for a persona
+  every time so the face stays consistent. Write 4-8 natural spoken turns that dramatise the
+  lesson (a realistic situation, a small tension, the right way to handle it). EVERY turn MUST
+  have a UNIQUE `audio` template link like "/resources/audio/NN" — that line is narrated per
+  bubble, so write `text` as natural spoken language.
+- Lean heavily on PEOPLE: use images and conversations featuring real, relatable characters
+  (diverse, everyday colleagues) rather than abstract icons, especially for behavioural topics.
 
 Resource (asset) rules:
 - For every visual/media block set `asset` to a UNIQUE template link like
@@ -88,6 +118,9 @@ Audio narration rule (make the whole course listenable):
   page. This `text` is used directly as the text-to-speech script and is NOT shown on screen,
   so write it as spoken sentences (no markdown, no bullet symbols), typically 60-150 words.
   Give each audio block a UNIQUE `asset` link like "/resources/audio/NN".
+- EXCEPTION: a page built primarily around a `conversation` block does NOT need a separate
+  page-level `audio` block — each conversation turn is already narrated via its own `audio`
+  link, so a page narration would double up. Skip it there.
 
 Validation:
 - Each chapter ends with ONE quiz (shown only after the last page): passing_pct=80,
@@ -263,14 +296,57 @@ async def _design_interactions(state: _State) -> _State:
     return {"chapters": list(chapters)}
 
 
+# Distinct TTS voices for the two sides of a conversation so the speakers sound
+# different. `None` on the left means "use the configured default voice".
+_LEFT_VOICE: str | None = None
+_RIGHT_VOICE: str | None = "Puck"
+
+
+def _conversation_audio_specs(block: Block, chapter_title: str) -> list[AssetSpec]:
+    """One narrated audio asset per conversation/dialogue turn (per-bubble TTS),
+    voiced by the speaking persona's side so left/right sound distinct."""
+    data = block.data or {}
+    side_by_id: dict[str, str] = {}
+    for p in data.get("personas") or []:
+        if isinstance(p, dict) and p.get("id"):
+            side_by_id[str(p["id"])] = str(p.get("side") or "left").lower()
+    specs: list[AssetSpec] = []
+    for turn in data.get("turns") or []:
+        if not isinstance(turn, dict):
+            continue
+        link = turn.get("audio")
+        text = (turn.get("text") or "").strip()
+        if not link or not text:
+            continue
+        pid = str(turn.get("persona") or turn.get("speaker") or "")
+        side = side_by_id.get(pid, "left")
+        specs.append(
+            AssetSpec(
+                template_link=str(link),
+                type="audio",
+                description=text,
+                purpose=f"conversation line in chapter '{chapter_title}'",
+                voice=_RIGHT_VOICE if side == "right" else _LEFT_VOICE,
+            )
+        )
+    return specs
+
+
 def _build_manifest(state: _State) -> _State:
     """Collect every referenced asset into the isolated manifest (dedup by link).
 
     Sources (in priority order):
     1. Per-page `asset_needs` (richest descriptions, preferred).
     2. Block-level `asset` links (fallback for any the LLM missed in asset_needs).
+    Besides direct block `asset` links, this walks conversation/dialogue turns so
+    each speech bubble gets its own narrated audio asset (per-bubble Server-TTS).
     """
     manifest: dict[str, AssetSpec] = {}
+
+    def add(spec: AssetSpec) -> None:
+        if spec.template_link and spec.template_link not in manifest:
+            manifest[spec.template_link] = spec
+
     for ch in state["chapters"]:
         for page in ch.pages:
             # 1. Per-page asset_needs (preferred source)
@@ -286,24 +362,28 @@ def _build_manifest(state: _State) -> _State:
             # 2. Block-level asset links (catch anything not in asset_needs)
             for block in page.blocks:
                 link = block.asset
-                if not link or link in manifest:
-                    continue
-                atype = block.type if block.type in {"image", "video", "audio"} else "image"
-                if block.type == "chart":
-                    atype = "diagram"
-                desc = (block.text or ch.title or "Course asset").strip()
-                manifest[link] = AssetSpec(
-                    template_link=link,
-                    type=atype,
-                    dimensions="16:9",
-                    description=desc,
-                    purpose=f"{block.type} in chapter '{ch.title}'",
-                    alt_text=desc[:120],
-                    usage_context=(
-                        f"{block.type} block on page '{page.title}'"
-                        f" in chapter '{ch.title}'"
-                    ),
-                )
+                if link:
+                    atype = block.type if block.type in {"image", "video", "audio"} else "image"
+                    if block.type == "chart":
+                        atype = "diagram"
+                    desc = (block.text or ch.title or "Course asset").strip()
+                    add(
+                        AssetSpec(
+                            template_link=link,
+                            type=atype,
+                            dimensions="16:9",
+                            description=desc,
+                            purpose=f"{block.type} in chapter '{ch.title}'",
+                            alt_text=desc[:120],
+                            usage_context=(
+                                f"{block.type} block on page '{page.title}'"
+                                f" in chapter '{ch.title}'"
+                            ),
+                        )
+                    )
+                if block.type in {"conversation", "dialogue"}:
+                    for spec in _conversation_audio_specs(block, ch.title):
+                        add(spec)
     return {"asset_manifest": list(manifest.values())}
 
 

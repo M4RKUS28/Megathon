@@ -40,6 +40,10 @@ services:
       LOG_LEVEL: DEBUG
       RELOAD: "true"
       KEYCLOAK_RELATIVE_PATH: /
+      # Bind-mounted source lives on the Windows host (Docker Desktop), where
+      # inotify isn't available — watchfiles (uvicorn --reload) crashes with
+      # "os error 22". Force polling so hot reload works on any filesystem.
+      WATCHFILES_FORCE_POLLING: "true"
     ports:
       - "8000:8000"
 
@@ -55,6 +59,9 @@ services:
     environment:
       LOG_LEVEL: DEBUG
       KEYCLOAK_RELATIVE_PATH: /
+      # See backend service: inotify is unavailable on the Windows host mount,
+      # so arq's --watch (watchfiles) needs polling to avoid "os error 22".
+      WATCHFILES_FORCE_POLLING: "true"
 
   frontend:
     build:

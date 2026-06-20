@@ -87,6 +87,13 @@ def _chapter_pages(
     intro_audio = f"/resources/audio/{idx:02d}-p1"
     concepts_audio = f"/resources/audio/{idx:02d}-p2"
     practice_audio = f"/resources/audio/{idx:02d}-p3"
+    convo_turns = [
+        ("mentor", "Mentor", f"Welcome! Let's cover {title_lc} together."),
+        ("you", "You", "Great — where do I start?"),
+        ("mentor", "Mentor", "We'll go page by page: the key concepts first, then practice."),
+        ("you", "You", "Sounds good. I'm ready when you are."),
+    ]
+    convo_audio = [f"/resources/audio/{idx:02d}-c{n}" for n in range(1, len(convo_turns) + 1)]
     intro_narration = (
         f"Welcome to {chapter_title}. In this chapter you will learn what {title_lc} "
         f"means at {company} and why it matters for your day-to-day work. We will go "
@@ -160,6 +167,16 @@ def _chapter_pages(
             alt_text=f"Audio narration for Apply it page in {chapter_title}",
             usage_context=f"audio block on Apply it page in chapter '{chapter_title}'",
         ),
+        *(
+            AssetSpec(
+                template_link=link,
+                type="audio",
+                description=text,
+                purpose="Conversation line narration",
+                voice="Puck" if pid == "you" else None,
+            )
+            for (pid, _name, text), link in zip(convo_turns, convo_audio)
+        ),
     ]
 
     intro_page = Page(
@@ -215,24 +232,30 @@ def _chapter_pages(
                 ),
             ),
             Block(
-                type="dialogue",
+                type="conversation",
                 interaction_goal="Build rapport and preview the learning journey",
                 suggested_interaction="Animated speech bubbles appearing sequentially",
                 data={
+                    "personas": [
+                        {
+                            "id": "mentor",
+                            "name": "Mentor",
+                            "role": "Your guide",
+                            "side": "left",
+                            "avatar": "f-3",
+                        },
+                        {
+                            "id": "you",
+                            "name": "You",
+                            "role": "New colleague",
+                            "side": "right",
+                            "avatar": "m-4",
+                        },
+                    ],
                     "turns": [
-                        {
-                            "speaker": "Mentor",
-                            "text": f"Welcome! Let's cover {title_lc}.",
-                        },
-                        {"speaker": "You", "text": "Great \u2014 where do I start?"},
-                        {
-                            "speaker": "Mentor",
-                            "text": (
-                                "We'll go page by page: concepts first, "
-                                "then practice."
-                            ),
-                        },
-                    ]
+                        {"persona": pid, "text": text, "audio": link}
+                        for (pid, _name, text), link in zip(convo_turns, convo_audio)
+                    ],
                 },
             ),
             Block(type="audio", asset=intro_audio, text=intro_narration),
