@@ -92,6 +92,7 @@ def _chapter_pages(
             description=hero_desc,
             purpose="Chapter intro / context image",
             alt_text=f"Hero image for {chapter_title}",
+            usage_context=f"image block on Introduction page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=apply_link,
@@ -100,6 +101,16 @@ def _chapter_pages(
             description=apply_desc,
             purpose="Applied example image",
             alt_text=f"Applying {title_lc} in practice",
+            usage_context=f"image block on Apply it page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=chart_link,
+            type="diagram",
+            dimensions="4:3",
+            description=f"Bar chart showing key metrics for {chapter_title} (Q1-Q4 adoption).",
+            purpose="Data visualisation for chapter metrics",
+            alt_text=f"{chapter_title} key metrics chart",
+            usage_context=f"chart block on Apply it page in chapter '{chapter_title}'",
         ),
     ]
 

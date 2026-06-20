@@ -183,12 +183,18 @@ def _build_manifest(state: _State) -> _State:
                 atype = block.type if block.type in {"image", "video", "audio"} else "image"
                 if block.type == "chart":
                     atype = "diagram"
+                desc = (block.text or ch.title or "Course asset").strip()
                 manifest[link] = AssetSpec(
                     template_link=link,
                     type=atype,
                     dimensions="16:9",
-                    description=(block.text or ch.title or "Course asset").strip(),
+                    description=desc,
                     purpose=f"{block.type} in chapter '{ch.title}'",
+                    alt_text=desc[:120],
+                    usage_context=(
+                        f"{block.type} block on page '{page.title}'"
+                        f" in chapter '{ch.title}'"
+                    ),
                 )
     return {"asset_manifest": list(manifest.values())}
 

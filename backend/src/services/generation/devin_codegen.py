@@ -277,11 +277,14 @@ Each element is `{ "path": "<relative-path>", "content": "<file-content>" }`.
 def _build_prompt(spec: dict, asset_map: dict) -> str:
     """Assemble the full prompt: master instructions + serialised Lastenheft."""
     course = {k: v for k, v in spec.items() if k != "asset_manifest"}
+    manifest = spec.get("asset_manifest", [])
     return (
         f"{_MASTER_PROMPT}\n"
         "---\n\n"
         f"# Lastenheft (course.json)\n\n"
         f"```json\n{json.dumps(course, ensure_ascii=False)[:120_000]}\n```\n\n"
+        f"# Asset manifest\n\n"
+        f"```json\n{json.dumps(manifest, ensure_ascii=False)[:30_000]}\n```\n\n"
         f"# Asset map (asset_map.json)\n\n"
         f"```json\n{json.dumps(asset_map, ensure_ascii=False)[:20_000]}\n```\n"
     )
