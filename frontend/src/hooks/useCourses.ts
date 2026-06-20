@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { coursesApi, type CourseBriefInput } from "@/lib/api";
+import { coursesApi, reportingApi, type CourseBriefInput, type CoursePlan } from "@/lib/api";
 
 export function useCourses() {
   return useQuery({
@@ -43,6 +43,24 @@ export function useGenerateCourse(id: string) {
       qc.invalidateQueries({ queryKey: ["course", id] });
       qc.invalidateQueries({ queryKey: ["course-jobs", id] });
     },
+  });
+}
+
+export function useApprovePlan(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plan?: CoursePlan) => coursesApi.approvePlan(id, plan),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["course", id] });
+      qc.invalidateQueries({ queryKey: ["course-jobs", id] });
+    },
+  });
+}
+
+export function useManagerDashboard() {
+  return useQuery({
+    queryKey: ["manager-dashboard"],
+    queryFn: async () => (await reportingApi.managerDashboard()).data,
   });
 }
 

@@ -1,8 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Check, Loader2, MousePointerClick, Sparkles, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  MousePointerClick,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   useAcceptEdit,
+  useApprovePlan,
   useCourse,
   useCourseEdits,
   useCourseJobs,
@@ -12,7 +24,7 @@ import {
 } from "@/hooks/useCourses";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
-import type { CourseConceptChapter } from "@/lib/api";
+import type { CourseConceptChapter, CoursePlan, PlanChapter } from "@/lib/api";
 
 function ConceptPreview({ chapters }: { chapters: CourseConceptChapter[] }) {
   return (
@@ -37,13 +49,236 @@ function ConceptPreview({ chapters }: { chapters: CourseConceptChapter[] }) {
   );
 }
 
+let _cid = 0;
+function newChapterId() {
+  _cid += 1;
+  return `ch_new_${Date.now()}_${_cid}`;
+}
+
+function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) {
+  const approve = useApprovePlan(courseId);
+  const [draft, setDraft] = useState<CoursePlan>(() => structuredClone(plan));
+
+  const totalMinutes = useMemo(
+    () => draft.chapters.reduce((s, c) => s + (c.estimated_minutes || 0), 0),
+    [draft.chapters],
+  );
+
+  const patchChapter = (i: number, patch: Partial<PlanChapter>) =>
+    setDraft((d) => ({
+      ...d,
+      chapters: d.chapters.map((c, j) => (j === i ? { ...c, ...patch } : c)),
+    }));
+
+  const move = (i: number, dir: -1 | 1) =>
+    setDraft((d) => {
+      const next = [...d.chapters];
+      const j = i + dir;
+      if (j < 0 || j >= next.length) return d;
+      [next[i], next[j]] = [next[j], next[i]];
+      return { ...d, chapters: next };
+    });
+
+  const remove = (i: number) =>
+    setDraft((d) => ({ ...d, chapters: d.chapters.filter((_, j) => j !== i) }));
+
+  const add = () =>
+    setDraft((d) => ({
+      ...d,
+      chapters: [
+        ...d.chapters,
+        {
+          id: newChapterId(),
+          title: "New chapter",
+          objective: "",
+          competency: "",
+          estimated_minutes: 15,
+          key_points: [],
+          bloom_level: "understand",
+        },
+      ],
+    }));
+
+  return (
+    <section className="space-y-5">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p className="font-semibold">Approval required</p>
+        <p className="mt-1">
+          Review the course plan below. Add, remove, reorder chapters or edit objectives and
+          duration. Generation continues only after you approve.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="text-sm font-semibold">Learning objectives</h3>
+          <textarea
+            className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            rows={4}
+            value={draft.objectives.join("\n")}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                objectives: e.target.value.split("\n").filter((l) => l.trim()),
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold">Estimated duration</h3>
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="number"
+                min={0}
+                className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 outline-none focus:border-primary"
+                value={draft.estimated_minutes}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, estimated_minutes: Number(e.target.value) || 0 }))
+                }
+              />
+              <span className="text-muted-foreground">min · chapters total {totalMinutes} min</span>
+            </div>
+          </div>
+          {draft.compliance_requirements.length ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h3 className="text-sm font-semibold">Compliance requirements</h3>
+              <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">
+                {draft.compliance_requirements.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Chapters ({draft.chapters.length})</h3>
+          <button
+            onClick={add}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-secondary"
+          >
+            <Plus className="h-4 w-4" /> Add chapter
+          </button>
+        </div>
+        <ol className="space-y-3">
+          {draft.chapters.map((ch, i) => (
+            <li key={ch.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start gap-3">
+                <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {i + 1}
+                </span>
+                <div className="flex-1 space-y-2">
+                  <input
+                    className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+                    value={ch.title}
+                    onChange={(e) => patchChapter(i, { title: e.target.value })}
+                  />
+                  <textarea
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                    rows={2}
+                    placeholder="Objective"
+                    value={ch.objective}
+                    onChange={(e) => patchChapter(i, { objective: e.target.value })}
+                  />
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <label className="flex items-center gap-1">
+                      Bloom:
+                      <input
+                        className="w-28 rounded border border-border bg-background px-2 py-1"
+                        value={ch.bloom_level}
+                        onChange={(e) => patchChapter(i, { bloom_level: e.target.value })}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1">
+                      Minutes:
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-20 rounded border border-border bg-background px-2 py-1"
+                        value={ch.estimated_minutes}
+                        onChange={(e) =>
+                          patchChapter(i, { estimated_minutes: Number(e.target.value) || 0 })
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    className="rounded p-1 text-muted-foreground hover:bg-secondary disabled:opacity-40"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => move(i, 1)}
+                    disabled={i === draft.chapters.length - 1}
+                    className="rounded p-1 text-muted-foreground hover:bg-secondary disabled:opacity-40"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => remove(i)}
+                    className="rounded p-1 text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => approve.mutate(draft)}
+          disabled={approve.isPending || draft.chapters.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          {approve.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+          Approve & generate course
+        </button>
+        <span className="text-xs text-muted-foreground">
+          Starts Phase 2 (script writer) → assets → build → hosting.
+        </span>
+      </div>
+    </section>
+  );
+}
+
+const BUSY_STATUSES = new Set([
+  "draft",
+  "planning",
+  "authoring",
+  "spec_ready",
+  "building",
+  "generating",
+]);
+
+const BUSY_MESSAGES: Record<string, string> = {
+  draft: "Preparing the course…",
+  planning: "The planner agent is analyzing the brief and company knowledge…",
+  authoring: "The script writer is producing the Lastenheft…",
+  spec_ready: "Spec ready — fetching assets and building the course app…",
+  building: "Building the per-course application and publishing it…",
+  generating: "Generating…",
+};
+
 export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const busyStatuses = new Set(["draft", "generating"]);
   const { data: course } = useCourse(id, true);
-  const poll = course ? busyStatuses.has(course.status) : true;
+  const poll = course ? BUSY_STATUSES.has(course.status) : true;
   useCourse(id, poll); // keep polling cadence while busy
   const { data: jobs } = useCourseJobs(id, poll);
   const { data: edits } = useCourseEdits(id, true);
@@ -105,6 +340,7 @@ export function CourseDetailPage() {
   }
 
   const isReady = course.status === "ready" || course.status === "published";
+  const isBusy = BUSY_STATUSES.has(course.status);
 
   return (
     <div className="space-y-8">
@@ -123,9 +359,10 @@ export function CourseDetailPage() {
         <p className="mt-1 text-muted-foreground">{course.description}</p>
       </div>
 
-      {course.status === "draft" ? (
+      {isBusy ? (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Devin is drafting the course concept…
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {BUSY_MESSAGES[course.status] ?? "Working…"}
         </div>
       ) : null}
 
@@ -135,7 +372,12 @@ export function CourseDetailPage() {
         </div>
       ) : null}
 
-      {/* Concept review + generate */}
+      {/* Phase 1 — plan approval gate */}
+      {course.status === "plan_review" && course.plan ? (
+        <PlanReview plan={course.plan} courseId={course.id} />
+      ) : null}
+
+      {/* Legacy concept review + generate */}
       {course.concept && !isReady ? (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
