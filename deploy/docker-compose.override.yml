@@ -78,3 +78,11 @@ services:
       - /etc/nginx/templates
     ports:
       - "80:80"
+
+# Dev uses freshly-named volumes so first boot runs the Postgres init scripts
+# (which create the Keycloak database). Bump the suffix to start clean again.
+volumes:
+  postgres_data:
+    name: megathon_postgres_data_v2
+  minio_data:
+    name: megathon_minio_data_v2
