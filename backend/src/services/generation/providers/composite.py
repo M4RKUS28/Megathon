@@ -6,6 +6,10 @@ Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_VIDEO_PROVIDER`,
 images -> Nano-Banana (Gemini), else PixVerse; videos -> PixVerse; audio ->
 Gemini TTS. If the selected provider is unconfigured or raises, the branded SVG
 placeholder is used so the pipeline always yields a hostable asset.
+
+Graceful degradation: when a provider fails for an asset that looks forced or
+generic (detected via `_is_likely_placeholder`), fall back immediately without
+retry. Save expensive retries for assets with rich, intentional descriptions.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ import logging
 from src.config.settings import settings
 
 from ...agents.schemas import AssetSpec
-from ..assets import AssetProvider, PlaceholderAssetProvider
+from ..assets import AssetProvider, PlaceholderAssetProvider, _is_likely_placeholder
 from .gemini_media import GeminiTTSProvider, NanoBananaImageProvider
 from .pixverse import PixVerseProvider
 
@@ -23,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _IMAGE_TYPES = {"image", "diagram", "chart", "model"}
 _VIDEO_TYPES = {"video", "animation"}
-_AUDIO_TYPES = {"audio"}
+_AUDIO_TYPES = {"audio", "narration"}
 
 
 def _image_provider() -> AssetProvider | None:
@@ -88,12 +92,20 @@ class CompositeAssetProvider(AssetProvider):
             try:
                 return provider.produce(spec, primary_color)
             except Exception as exc:  # noqa: BLE001 — fall back, never fail the batch
-                logger.warning(
-                    "provider %s failed for %s (%s); using placeholder",
-                    type(provider).__name__,
-                    spec.template_link,
-                    exc,
-                )
+                # For forced/generic assets, don't log a scary warning — this is expected
+                if _is_likely_placeholder(spec):
+                    logger.debug(
+                        "provider %s failed for forced asset %s; expected, using placeholder",
+                        type(provider).__name__,
+                        spec.template_link,
+                    )
+                else:
+                    logger.warning(
+                        "provider %s failed for %s (%s); using placeholder",
+                        type(provider).__name__,
+                        spec.template_link,
+                        exc,
+                    )
         return self.placeholder.produce(spec, primary_color)
 
 
