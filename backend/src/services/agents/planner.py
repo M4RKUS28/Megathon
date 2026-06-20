@@ -33,6 +33,37 @@ Work like a ReAct agent:
    progressive competency build-up, and an assessment per chapter. Apply didactic best
    practices (Bloom's taxonomy, microlearning, scenario-based and spaced learning).
 
+CONTENT DENSITY rules:
+- Each chapter must have 5-10 specific, concrete key_points — not vague one-liners like
+  "understand the basics." Each key point should name a specific concept, process, or skill.
+- Provide 3-5 subtopics per chapter that break the chapter into teachable sub-sections.
+- Set min_pages to at least 5 (more for complex chapters, up to 8).
+- Set depth to "standard" for most chapters, "deep" for complex/technical topics.
+
+FORMAT GUIDELINES:
+- The primary format is expository prose with rich interactions — NOT conversation-driven.
+- Set dialogue_appropriate=true ONLY for chapters focused on soft skills, communication,
+  behavioural norms, ethics, or interpersonal scenarios. For technical, process, or knowledge
+  chapters, set dialogue_appropriate=false.
+- Set chart_appropriate=true ONLY when the chapter involves real quantitative data, metrics,
+  trends, or structured comparisons. Do NOT set it for qualitative or conceptual topics.
+- Set primary_format="expository" and content_density="rich" on the plan.
+
+INTERACTION GUIDANCE:
+- For each chapter, set suggested_interactions to 2-3 interaction types from this palette:
+  flashcards, dragdrop, hotspot, timeline, accordion, scenario.
+- Vary the interaction types across chapters — do not suggest the same set for every chapter.
+  Each chapter should have a different primary interaction from its neighbours.
+- Match interaction types to the content: use "timeline" for sequential processes,
+  "scenario" for decision-making topics, "flashcards" for terminology-heavy chapters,
+  "dragdrop" for matching/classification, "hotspot" for visual/spatial content,
+  "accordion" for multi-faceted topics with distinct sub-sections.
+
+PAGE COUNT GUIDANCE:
+- Each chapter should have 5-8 pages (set min_pages accordingly).
+- A typical chapter arc: Introduction → Core concept → Deep dive → Real-world example →
+  Common pitfalls → Practice → Recap.
+
 Return the final COURSE PLAN as structured output. Make it specific and useful — fold the
 knowledge you found into objectives, mandatory_topics and compliance_requirements.
 Record what you found in knowledge_sources."""

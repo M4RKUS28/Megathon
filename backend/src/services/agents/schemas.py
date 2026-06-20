@@ -29,6 +29,13 @@ class PlanChapter(BaseModel):
     key_points: list[str] = Field(default_factory=list)
     # Bloom's taxonomy level targeted by the chapter.
     bloom_level: str = "understand"
+    # ── Phase-2 enrichment fields (guide the script writer) ──
+    subtopics: list[str] = Field(default_factory=list)
+    min_pages: int = 5
+    suggested_interactions: list[str] = Field(default_factory=list)
+    dialogue_appropriate: bool = False
+    chart_appropriate: bool = False
+    depth: str = "standard"
 
 
 class CoursePlan(BaseModel):
@@ -44,6 +51,10 @@ class CoursePlan(BaseModel):
     compliance_requirements: list[str] = Field(default_factory=list)
     knowledge_sources: list[KnowledgeHit] = Field(default_factory=list)
     chapters: list[PlanChapter] = Field(default_factory=list)
+    # ── Content-style guidance for the script writer ──
+    primary_format: str = "expository"
+    content_density: str = "rich"
+    style_notes: list[str] = Field(default_factory=list)
 
 
 # ── Phase 2 — Lastenheft (full interactive spec) ─────────────────────────────
