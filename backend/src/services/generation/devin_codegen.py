@@ -19,6 +19,7 @@ from typing import Any
 
 from src.config.settings import settings
 from src.services.devin.client import DevinClient, DevinError
+from src.services.generation.contract import COURSE_APP_CONTRACT
 
 logger = logging.getLogger(__name__)
 
@@ -49,21 +50,7 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "You are the Devin Implementation Agent. Build a COMPLETE, self-contained "
         "Vite + React + TypeScript single-page application that renders the "
         "interactive course described by the Lastenheft below.\n\n"
-        "Requirements:\n"
-        "- Use Vite, React, TypeScript, Tailwind. You may add Framer Motion, "
-        "Chart.js/Recharts, React Flow as needed for the interactions.\n"
-        "- Implement every chapter, page and block type (heading, paragraph, list, "
-        "callout, image, video, audio, dialogue, chart, flashcards, dragdrop, "
-        "hotspot, timeline, accordion, scenario).\n"
-        "- A chapter-end quiz is mandatory; require >=80% to unlock the next chapter, "
-        "and allow retry below 80%.\n"
-        "- Reference assets STRICTLY by their template_link (e.g. "
-        '<img src="/resources/images/01" />); a build step maps them to real URLs '
-        "via /asset_map.json which is loaded at runtime.\n"
-        "- The app must build to static files with `npm run build` (output dir dist/). "
-        "Read /course.json and /asset_map.json from the public/ root at runtime.\n"
-        "- Include package.json, vite.config.ts, tsconfig.json, index.html, and all "
-        "src/ files. Do not include node_modules or dist.\n\n"
+        f"{COURSE_APP_CONTRACT}\n\n"
         "Return ONLY structured output: a `files` array of {path, content} covering "
         "the whole project. Use forward-slash relative paths.\n\n"
         f"=== Lastenheft (course.json) ===\n{json.dumps(course)[:120000]}\n\n"
