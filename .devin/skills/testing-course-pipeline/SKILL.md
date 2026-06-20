@@ -76,9 +76,35 @@ print(Counter(v.rsplit('.',1)[-1] for v in am.values()))"
 - Real Gemini planner takes ~20-40 s (vs ~0.01 s fallback); real image/audio gen pushes the
   build phase to several minutes. Poll, don't assume a hang.
 
+### Real Gemini plan vs fallback — the reliable adversarial signals
+The planner falls back **silently** on any agent exception (`planner.py` try/except), so a
+"plan_review" status alone does NOT prove the real LLM ran. Distinguish via:
+- **Compliance requirements card** in the plan_review UI: `fallback_plan` hardcodes
+  `compliance_requirements=[]` (`fallback.py`) and the UI only renders that card when non-empty
+  (`CourseDetail.tsx`). For a compliance/regulation brief, a real Gemini plan populates it
+  (e.g. "FCPA", "UK Bribery Act 2010") — fallback shows no card. Strongest single signal.
+- **Chapter titles/objectives**: fallback chapters are the **verbatim** `brief.topics` with
+  objective text of the exact form "Understand {topic} as it applies to {audience}." and key
+  points "Why {topic} matters at {company}". Real Gemini reworks/reorders/adds chapters and
+  writes specific objectives. (So a brief with N topics yielding exactly N verbatim-titled
+  chapters + templated objectives ⇒ fallback.)
+- **`knowledge_sources`** is `[]` in fallback, populated (tool/query/summary entries) when the
+  ReAct agent actually ran — check `GET /api/v1/courses/{id}` `.plan.knowledge_sources`.
+- **Worker log**: real success = `plan ready for course <id>`; fallback/agent failure logs
+  `using fallback` / `planner agent failed` / a Gemini `thought_signature` 400.
+
+### Gemini 3 model gotcha (thought_signature)
+`GEMINI_MODEL=gemini-3.5-flash` is a **Gemini 3** model, which requires `thought_signature`
+to be replayed on every multi-turn function call. The planner is a tool-using ReAct agent, so
+on `langchain-google-genai` 2.x it 400s on turn 2 (`Function call is missing a thought_signature
+…`) and silently falls back — every course came out as the deterministic plan. Fixed by bumping
+to `langchain-google-genai>=4.2` (+ `langgraph` 1.x, `langchain-core` 1.x). The script-writer
+uses single-turn `with_structured_output`, so it was unaffected — only the planner broke.
+If the planner always falls back despite a valid key, check the model name vs the lib version.
+
 ## UI flow (status transitions are the key signal)
 1. `/courses` → "New course" → fill Title/Audience/Goals/Key topics → "Draft with Devin".
-2. Lands on `/courses/{id}`; status badge → **Plan review** (amber). The `PlanReview` component (`frontend/src/pages/CourseDetail.tsx`) shows editable objectives/duration and a chapters list (rename, Add chapter, up/down reorder, trash delete). Chapters are derived from the brief topics (proves the planner ran).
+2. Lands on `/courses/{id}`; status badge → **Plan review** (amber). The `PlanReview` component (`frontend/src/pages/CourseDetail.tsx`) shows editable objectives/duration and a chapters list (rename, Add chapter, up/down reorder, trash delete). (To prove the *real* planner ran vs the silent fallback, use the signals in "Real Gemini plan vs fallback" above — not just the presence of chapters.)
 3. "Approve & generate course" → `POST .../plan/approve` → status goes Authoring/Building → **Ready**. The Preview iframe renders the hosted course; edited chapter titles persist into it. Generation log lists plan/spec/build = Succeeded.
 4. `/team` → manager dashboard: 5 stat cards + members table. Empty ("No direct reports yet.") unless the logged-in user manages direct reports — that empty state is correct, not a bug.
 
