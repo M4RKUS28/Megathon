@@ -1,5 +1,7 @@
 # Coursive
 
+-----DEMO LINK-----
+
 **Coursive** is a white-label platform that turns a short course brief into a fully
 interactive, hosted e-learning course using a multi-agent generation pipeline, and then
 delivers it to learners as an LMS (assignments, progress tracking, quizzes, reporting).
