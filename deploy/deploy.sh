@@ -103,6 +103,48 @@ normalize_image_values() {
   fi
 }
 
+find_traefik_container_ids() {
+  local configured
+  configured="$(env_value TRAEFIK_CONTAINER)"
+  if [[ -n "$configured" ]]; then
+    docker ps --filter "id=$configured" --format '{{.ID}}'
+    docker ps --filter "name=$configured" --format '{{.ID}}'
+    return
+  fi
+  docker ps --format '{{.ID}}\t{{.Image}}\t{{.Names}}' | grep -i "traefik" | awk '{ print $1 }' || true
+}
+
+container_is_on_network() {
+  local container_id="$1"
+  local network="$2"
+  local attached
+  attached="$(
+    docker inspect --format "{{ if index .NetworkSettings.Networks \"$network\" }}true{{ end }}" "$container_id" 2>/dev/null || true
+  )"
+  [[ "$attached" == "true" ]]
+}
+
+connect_traefik_to_network() {
+  local network="$1"
+  local found="false"
+  local seen=" "
+  local container_id
+  while IFS= read -r container_id; do
+    [[ -z "$container_id" ]] && continue
+    [[ "$seen" == *" $container_id "* ]] && continue
+    seen="${seen}${container_id} "
+    found="true"
+    if ! container_is_on_network "$container_id" "$network"; then
+      docker network connect "$network" "$container_id"
+      echo "Connected Traefik container $container_id to Docker network: $network"
+    fi
+  done < <(find_traefik_container_ids)
+
+  if [[ "$found" != "true" ]]; then
+    echo "No running Traefik container detected. Ensure Traefik is running and attached to Docker network '$network', or set TRAEFIK_CONTAINER in $ENV_FILE." >&2
+  fi
+}
+
 require_command docker
 require_command grep
 require_command awk
@@ -125,6 +167,8 @@ if ! docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1; then
   docker network create "$TRAEFIK_NETWORK" >/dev/null
   echo "Created Docker network: $TRAEFIK_NETWORK"
 fi
+
+connect_traefik_to_network "$TRAEFIK_NETWORK"
 
 export PROJECT_ROOT
 
