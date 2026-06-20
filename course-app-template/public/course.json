@@ -1,0 +1,41 @@
+{
+  "title": "Sample Course",
+  "description": "Placeholder course data — replaced per course at generation time.",
+  "companyName": "Coursive",
+  "primaryColor": "#5145E5",
+  "language": "en",
+  "passing_pct": 80,
+  "chapters": [
+    {
+      "id": "intro",
+      "title": "Introduction",
+      "objective": "Understand how this interactive course works.",
+      "pages": [
+        {
+          "id": "intro-p1",
+          "title": "Welcome",
+          "blocks": [
+            { "type": "paragraph", "text": "This is a placeholder page rendered by the Coursive per-course app." },
+            { "type": "list", "items": ["Interactive blocks", "Per-chapter quizzes", "80% unlock gate"] },
+            {
+              "type": "dialogue",
+              "data": { "turns": [{ "speaker": "Mentor", "text": "Ready?" }, { "speaker": "You", "text": "Let's go!" }] }
+            }
+          ]
+        }
+      ],
+      "quiz": {
+        "passing_pct": 80,
+        "retryable": true,
+        "questions": [
+          {
+            "question": "What unlocks the next chapter?",
+            "options": ["Scoring at least 80%", "Waiting", "Nothing"],
+            "answerIndex": 0,
+            "explanation": "You need 80% on the quiz to proceed."
+          }
+        ]
+      }
+    }
+  ]
+}
