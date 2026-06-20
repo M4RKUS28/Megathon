@@ -149,6 +149,32 @@
       function resolve(l) {
         return l ? am[l] || l : "";
       }
+      function esc(v) {
+        return String(v == null ? "" : v)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+      function labelize(key) {
+        return String(key)
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/[_-]+/g, " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase());
+      }
+      function valueHtml(v) {
+        if (v == null || v === "") return "";
+        if (typeof v !== "object") return esc(v);
+        if (Array.isArray(v))
+          return "<ul>" + v.map((x) => "<li>" + valueHtml(x) + "</li>").join("") + "</ul>";
+        return (
+          '<div class="muted">' +
+          Object.keys(v)
+            .map((k) => "<p><b>" + esc(labelize(k)) + ":</b> " + valueHtml(v[k]) + "</p>")
+            .join("") +
+          "</div>"
+        );
+      }
       function blockText(b) {
         if (b.text) return b.text;
         if (b.items) return b.items.join(", ");
@@ -165,6 +191,20 @@
         if (b.type === "callout") return '<div class="callout">' + (b.text || "") + "</div>";
         if (b.type === "image" && resolve(b.asset))
           return '<img style="width:100%;border-radius:12px" src="' + resolve(b.asset) + '"/>';
+        if (b.type === "audio" && resolve(b.asset)) {
+          const transcript = b.text
+            ? '<button type="button" onclick="event.stopPropagation();alert(' +
+              JSON.stringify(b.text) +
+              ')" style="float:right;border:1px solid #e5e7eb;border-radius:999px;background:#fff;width:28px;height:28px;font-weight:700">i</button>'
+            : "";
+          return (
+            '<div class="callout"><b>Listen to this page</b>' +
+            transcript +
+            '<audio controls src="' +
+            resolve(b.asset) +
+            '" style="display:block;width:100%;margin-top:10px"></audio></div>'
+          );
+        }
         if (b.type === "conversation" || b.type === "dialogue") {
           const data = b.data || {};
           const personas = data.personas || [];
@@ -186,7 +226,12 @@
             })
             .join("");
         }
-        return b.text ? "<p>" + b.text + "</p>" : "";
+        let out = "";
+        if (b.text) out += "<p>" + b.text + "</p>";
+        if (b.items && b.items.length)
+          out += "<ul>" + b.items.map((x) => "<li>" + x + "</li>").join("") + "</ul>";
+        if (b.data) out += valueHtml(b.data);
+        return out;
       }
       function steps(pages, onQuiz) {
         let s = '<div class="steps">';

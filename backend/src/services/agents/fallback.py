@@ -239,6 +239,20 @@ def _chapter_pages(
                 },
             ),
             Block(
+                type="minigame",
+                data={
+                    "game": "order",
+                    "title": "Sequence sprint",
+                    "prompt": f"Put the {chapter_title.lower()} workflow in the right order.",
+                    "steps": [
+                        "Prepare the right context and access",
+                        "Execute the task using the documented process",
+                        "Review the outcome and capture what changed",
+                        "Share the result with the people who need it",
+                    ],
+                },
+            ),
+            Block(
                 type="chart",
                 asset=chart_link,
                 data={

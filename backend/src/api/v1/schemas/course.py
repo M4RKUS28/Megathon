@@ -37,6 +37,7 @@ class CourseDetail(CourseSummary):
     course_url: str | None = None
     iframe_url: str | None = None
     devin_session_id: str | None = None
+    devin_session_url: str | None = None
 
 
 class PlanApproval(BaseModel):
@@ -52,6 +53,7 @@ class JobResponse(BaseModel):
     status: str
     error: str | None = None
     devin_session_id: str | None = None
+    devin_session_url: str | None = None
     result: dict | None = None
     created_at: datetime
 
@@ -69,6 +71,7 @@ class EditResponse(BaseModel):
     status: str
     preview_url: str | None = None
     devin_session_id: str | None = None
+    devin_session_url: str | None = None
     created_at: datetime
 
 

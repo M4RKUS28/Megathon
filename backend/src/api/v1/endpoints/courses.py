@@ -48,6 +48,7 @@ from src.db.models.course import (
     GenerationJob,
 )
 from src.db.models.org import ROLE_ADMIN, ROLE_COURSE_CREATOR, User
+from src.services.devin.client import session_web_url
 from src.services.generation.builder import index_url
 from src.services.queue.pool import get_pool
 
@@ -96,6 +97,20 @@ def _detail(course: Course) -> CourseDetail:
         course_url=course.course_url,
         iframe_url=course.iframe_url,
         devin_session_id=course.devin_session_id,
+        devin_session_url=session_web_url(course.devin_session_id),
+    )
+
+
+def _job_response(job: GenerationJob) -> JobResponse:
+    return JobResponse(
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        error=job.error,
+        devin_session_id=job.devin_session_id,
+        devin_session_url=session_web_url(job.devin_session_id),
+        result=job.result,
+        created_at=job.created_at,
     )
 
 
@@ -181,15 +196,7 @@ async def approve_plan(
 
     pool = await get_pool()
     await pool.enqueue_job("run_spec_job", str(job.id))
-    return JobResponse(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        error=job.error,
-        devin_session_id=job.devin_session_id,
-        result=job.result,
-        created_at=job.created_at,
-    )
+    return _job_response(job)
 
 
 @router.get("/{course_id}/jobs", response_model=list[JobResponse])
@@ -200,18 +207,7 @@ async def get_course_jobs(
     if course is None:
         raise NotFoundError("Course")
     jobs = await list_jobs_for_course(db, course.id)
-    return [
-        JobResponse(
-            id=j.id,
-            type=j.type,
-            status=j.status,
-            error=j.error,
-            devin_session_id=j.devin_session_id,
-            result=j.result,
-            created_at=j.created_at,
-        )
-        for j in jobs
-    ]
+    return [_job_response(j) for j in jobs]
 
 
 # ── Devin edit-loop ──────────────────────────────────────────────────────────
@@ -225,6 +221,7 @@ def _edit_response(edit: EditRequest) -> EditResponse:
         if edit.preview_object_prefix
         else None,
         devin_session_id=edit.devin_session_id,
+        devin_session_url=session_web_url(edit.devin_session_id),
         created_at=edit.created_at,
     )
 
@@ -329,15 +326,7 @@ async def accept_edit(
     pool = await get_pool()
     await pool.enqueue_job("run_build_job", str(job.id))
 
-    return JobResponse(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        error=job.error,
-        devin_session_id=job.devin_session_id,
-        result=job.result,
-        created_at=job.created_at,
-    )
+    return _job_response(job)
 
 
 @router.post("/{course_id}/edits/{edit_id}/reject", response_model=EditResponse)

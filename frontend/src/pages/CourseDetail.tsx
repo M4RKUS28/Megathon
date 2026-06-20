@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   Loader2,
   Maximize,
   Minimize,

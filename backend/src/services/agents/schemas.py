@@ -77,6 +77,12 @@ BLOCK_TYPES = [
     "timeline",
     "accordion",
     "scenario",  # branching decision scenario
+    "minigame",  # gamified, scored exercise with instant feedback. `data.game`
+    # selects the kind (custom kinds allowed; the renderer degrades gracefully):
+    #   quiz   -> {prompt?, questions: [{question, options, answerIndex, explanation?}]}
+    #   order  -> {prompt?, steps: [str]}            (steps given in the CORRECT order)
+    #   sort   -> {prompt?, categories: [str], items: [{text, category}]}
+    #   memory -> {prompt?, pairs: [{a, b}]}         (flip-card matching)
 ]
 
 

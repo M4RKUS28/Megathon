@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Coursive">
+  <rect width="64" height="64" rx="14" fill="#0C0E1A"/>
+  <path
+    d="M45.5 18.5c-4-4-9.7-6.2-15.6-5.7C19.6 13.7 12 21.6 12 32s7.6 18.3 17.9 19.2c5.9.5 11.6-1.6 15.6-5.7"
+    fill="none"
+    stroke="#F6F5F1"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+  <path
+    d="M31 22h14.5c3.6 0 6.5 2.9 6.5 6.5S49.1 35 45.5 35H27"
+    fill="none"
+    stroke="#5145E5"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="46" cy="35" r="5" fill="#FF5C38"/>
+</svg>

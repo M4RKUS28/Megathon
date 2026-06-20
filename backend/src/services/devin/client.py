@@ -7,12 +7,20 @@ reads back validated `structured_output`.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 import httpx
 
 from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def session_web_url(session_id: str | None) -> str | None:
+    """Human-facing Devin app URL for a session id (for links shown in the UI)."""
+    if not session_id:
+        return None
+    return f"{settings.devin_app_base_url.rstrip('/')}/sessions/{session_id}"
 
 # v3 GET session fields: `status` (new/claimed/running/exit/error/suspended/resuming)
 # and `status_detail` (working/waiting_for_user/finished/...). A session that has
@@ -136,8 +144,14 @@ class DevinClient:
         structured_output_schema: dict | None = None,
         title: str | None = None,
         tags: list[str] | None = None,
+        on_created: Callable[[str], Awaitable[None]] | None = None,
     ) -> tuple[str, dict]:
-        """Create a session, wait for completion, return (session_id, structured_output)."""
+        """Create a session, wait for completion, return (session_id, structured_output).
+
+        `on_created` is awaited with the session id as soon as the session exists
+        (before the potentially long wait), so callers can persist/surface a link
+        to the live session immediately.
+        """
         created = await self.create_session(
             prompt,
             structured_output_schema=structured_output_schema,
@@ -146,5 +160,10 @@ class DevinClient:
         )
         session_id = created["session_id"]
         logger.info("Devin session created: %s (%s)", session_id, created.get("url"))
+        if on_created is not None:
+            try:
+                await on_created(session_id)
+            except Exception:  # noqa: BLE001 — surfacing the link must never fail the run
+                logger.warning("on_created callback failed for session %s", session_id)
         output = await self.wait_for_output(session_id)
         return session_id, output
