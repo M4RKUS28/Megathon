@@ -16,6 +16,7 @@ import asyncio
 import html
 import json
 import logging
+from collections.abc import Awaitable, Callable
 
 from src.config.settings import settings
 from src.db.minio import ensure_bucket_exists, public_object_url, put_bytes
@@ -76,6 +77,7 @@ async def fetch_assets(
     primary_color: str = "#5145E5",
     provider: AssetProvider | None = None,
     concurrency: int = 8,
+    on_step: Callable[[str], Awaitable[None]] | None = None,
 ) -> dict[str, str]:
     """Produce + upload every manifest asset; return template_link -> storage_url.
 
@@ -92,6 +94,8 @@ async def fetch_assets(
     ensure_bucket_exists(settings.courses_bucket)
 
     sem = asyncio.Semaphore(max(1, concurrency))
+    total = len(specs)
+    done = {"n": 0}
 
     async def _produce_one(spec: AssetSpec) -> tuple[str, str] | None:
         async with sem:
@@ -107,6 +111,12 @@ async def fetch_assets(
             await asyncio.to_thread(
                 put_bytes, content, object_name, settings.courses_bucket, ctype
             )
+            done["n"] += 1
+            if on_step is not None:
+                try:
+                    await on_step(f"Generated asset {done['n']}/{total}")
+                except Exception:  # noqa: BLE001 — progress logging is non-critical
+                    logger.debug("asset on_step failed", exc_info=True)
             return spec.template_link, public_object_url(
                 object_name, settings.courses_bucket
             )

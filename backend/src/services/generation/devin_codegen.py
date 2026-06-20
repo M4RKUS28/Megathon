@@ -18,9 +18,11 @@ generated app stays sandboxed and embeddable.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from src.config.settings import settings
@@ -29,6 +31,19 @@ from src.services.generation.builder import BuildError, try_build_from_sources
 from src.services.generation.contract import COURSE_APP_CONTRACT  # noqa: F401 (re-exported)
 
 logger = logging.getLogger(__name__)
+
+# Optional async callback used to surface granular progress to the frontend.
+StepLogger = Callable[[str], Awaitable[None]]
+
+
+async def _emit(on_step: StepLogger | None, message: str) -> None:
+    """Best-effort progress emit; never let logging break the build."""
+    if on_step is None:
+        return
+    try:
+        await on_step(message)
+    except Exception:  # noqa: BLE001 — progress logging is non-critical
+        logger.debug("step logger raised for %r", message, exc_info=True)
 
 # ---------------------------------------------------------------------------
 # Structured-output JSON schema
@@ -447,12 +462,282 @@ def _derive_course_data(spec: dict, asset_map: dict) -> tuple[dict, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Per-page code generation (one Devin session per page)
+# ---------------------------------------------------------------------------
+
+# Structured output for a single bespoke page component file.
+PAGE_FILE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["content"],
+    "properties": {"content": {"type": "string"}},
+}
+
+_PAGE_PROMPT = """\
+# Role
+
+You are the Coursive Page Component Agent. Author ONE bespoke, interactive
+React + TypeScript component that renders a SINGLE page of an e-learning course.
+The surrounding app shell (navigation, chapter unlocking, quizzes, progress,
+asset loading, branding) ALREADY EXISTS — you implement only this one page.
+
+## Output
+
+Return structured output: a JSON object `{ "content": "<file-content>" }`
+containing the COMPLETE source of one TypeScript React module. No markdown, no
+commentary — only the structured JSON.
+
+## Hard contract (do not deviate)
+
+- The module MUST `export default` a single React function component.
+- Its props are EXACTLY:
+
+```ts
+import type { ComponentType } from "react";
+import type { AssetMap, Page } from "../types";
+
+interface PageComponentProps {
+  page: Page;            // this page's data (title, blocks, ...)
+  resolve: (link?: string) => string | undefined;  // template_link -> URL
+  assetMap: AssetMap;
+}
+```
+
+- Import the `Page`/`Block`/`AssetMap` types from `"../types"`. Do NOT redefine them.
+- Resolve every media/image reference through `resolve(block.asset)` — never
+  hard-code or fetch external URLs.
+- Render ALL of the page's textual prose: iterate the page's `paragraph`,
+  `heading`, `list`, and `callout` blocks and show their full text. Do NOT
+  summarise or drop content — every paragraph must appear.
+- Build bespoke, attractive interactive UI for the page's interaction blocks
+  (dialogue, chart, flashcards, dragdrop, hotspot, timeline, accordion,
+  scenario, ...) using the page `blocks[*].data`.
+- Use the course's brand color via the CSS variable `var(--brand)` for accents.
+- Fully responsive (320px–1920px). The app runs in an iframe; never touch
+  `window.top` or `window.parent` navigation.
+
+## Allowed dependencies ONLY (already installed — do NOT add others)
+
+`react`, `react-dom`, `framer-motion`, `chart.js`, `react-chartjs-2`, plus
+Tailwind CSS utility classes and inline SVG. You may NOT import any other
+package (no recharts, no reactflow, no syntax highlighters, no network libs).
+
+## Quality
+
+- TypeScript strict: fully typed, no `any`, no unused imports/vars (the project
+  runs `tsc -b` and will fail the build on errors).
+- Self-contained: the whole component lives in this one file.
+"""
+
+
+def _page_prompt(course: dict, chapter: dict, page: dict, primary_color: str) -> str:
+    """Prompt for authoring a single page's bespoke component."""
+    ctx = {
+        "courseTitle": course.get("title", ""),
+        "primaryColor": primary_color,
+        "chapterTitle": chapter.get("title", ""),
+        "chapterObjective": chapter.get("objective", ""),
+    }
+    return (
+        f"{_PAGE_PROMPT}\n---\n\n"
+        f"# Context\n\n```json\n{json.dumps(ctx, ensure_ascii=False)}\n```\n\n"
+        f"# Page to implement (page.json)\n\n"
+        f"```json\n{json.dumps(page, ensure_ascii=False)[:60_000]}\n```\n"
+    )
+
+
+def _safe_component_name(chapter_idx: int, page_idx: int) -> str:
+    return f"Page_{chapter_idx}_{page_idx}"
+
+
+def _load_template_files() -> dict[str, str]:
+    """Read the course-app-template into a {relpath: content} file map."""
+    from src.services.generation.builder import _app_template_dir
+
+    template = _app_template_dir()
+    if template is None:
+        return {}
+    skip_dirs = {"node_modules", "dist", ".git"}
+    files: dict[str, str] = {}
+    for path in template.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(template)
+        if any(part in skip_dirs for part in rel.parts):
+            continue
+        try:
+            files[str(rel).replace("\\", "/")] = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue  # skip binaries / unreadable files
+    return files
+
+
+def _registry_source(entries: list[tuple[str, str]]) -> str:
+    """Generate src/pages/registry.tsx wiring every authored page component.
+
+    ``entries`` is a list of (key, component_name) where key is "<c>.<p>" and
+    the module lives at src/pages/<component_name>.tsx.
+    """
+    imports = "\n".join(
+        f'import {name} from "./{name}";' for _key, name in entries
+    )
+    mapping = "\n".join(f'  "{key}": {name},' for key, name in entries)
+    return (
+        'import type { ComponentType } from "react";\n'
+        'import type { AssetMap, Page } from "../types";\n'
+        f"{imports}\n\n"
+        "export interface PageComponentProps {\n"
+        "  page: Page;\n"
+        "  resolve: (link?: string) => string | undefined;\n"
+        "  assetMap: AssetMap;\n"
+        "}\n\n"
+        "export const pageComponents: "
+        "Record<string, ComponentType<PageComponentProps>> = {\n"
+        f"{mapping}\n"
+        "};\n"
+    )
+
+
+async def _generate_one_page(
+    client: DevinClient,
+    course: dict,
+    chapter: dict,
+    page: dict,
+    chapter_idx: int,
+    page_idx: int,
+    primary_color: str,
+    sem: asyncio.Semaphore,
+    on_step: StepLogger | None,
+    total_pages: int,
+    counter: dict[str, int],
+) -> tuple[str, str, str, str, str] | None:
+    """Author one page component. Returns (key, name, path, content, session_id) or None."""
+    name = _safe_component_name(chapter_idx, page_idx)
+    key = f"{chapter_idx}.{page_idx}"
+    async with sem:
+        try:
+            session_id, output = await client.run(
+                _page_prompt(course, chapter, page, primary_color),
+                structured_output_schema=PAGE_FILE_SCHEMA,
+                title=(
+                    f"Course page {chapter_idx + 1}.{page_idx + 1}: "
+                    f"{page.get('title', '')[:60]}"
+                ),
+                tags=["coursive", "course-page"],
+            )
+        except DevinError as exc:
+            logger.warning("page %s session failed: %s", key, exc)
+            return None
+    content = output.get("content") if isinstance(output, dict) else None
+    counter["done"] += 1
+    await _emit(
+        on_step,
+        f"Authored page {counter['done']}/{total_pages} "
+        f"(ch{chapter_idx + 1}.{page_idx + 1})",
+    )
+    if not isinstance(content, str) or "export default" not in content:
+        logger.warning("page %s returned no usable component", key)
+        return None
+    return key, name, f"src/pages/{name}.tsx", content, session_id
+
+
+async def _generate_course_app_per_page(
+    spec: dict, asset_map: dict, on_step: StepLogger | None
+) -> tuple[str | None, dict[str, str] | None]:
+    """Author each page in its own Devin session; assemble onto the template shell."""
+    files = _load_template_files()
+    if not files:
+        logger.warning("course-app-template not found; cannot use per-page mode")
+        return None, None
+
+    course, amap = _derive_course_data(spec, asset_map)
+    primary_color = str(course.get("primaryColor", "#5145E5"))
+    chapters = course.get("chapters", [])
+
+    jobs: list[tuple[dict, dict, int, int]] = []
+    for c_idx, chapter in enumerate(chapters):
+        for p_idx, page in enumerate(chapter.get("pages", [])):
+            jobs.append((chapter, page, c_idx, p_idx))
+
+    total_pages = len(jobs)
+    if total_pages == 0:
+        logger.warning("spec has no pages; cannot use per-page mode")
+        return None, None
+
+    client = DevinClient()
+    sem = asyncio.Semaphore(max(1, settings.course_build_page_concurrency))
+    counter = {"done": 0}
+    await _emit(
+        on_step,
+        f"Authoring {total_pages} page components in parallel "
+        f"(one Devin session each)…",
+    )
+
+    results = await asyncio.gather(
+        *(
+            _generate_one_page(
+                client, course, chapter, page, c_idx, p_idx, primary_color,
+                sem, on_step, total_pages, counter,
+            )
+            for (chapter, page, c_idx, p_idx) in jobs
+        )
+    )
+
+    entries: list[tuple[str, str]] = []
+    primary_session: str | None = None
+    for res in results:
+        if res is None:
+            continue
+        key, name, path, content, session_id = res
+        files[path] = content
+        entries.append((key, name))
+        if primary_session is None:
+            primary_session = session_id
+
+    files["src/pages/registry.tsx"] = _registry_source(entries)
+    await _emit(
+        on_step,
+        f"Assembling app — {len(entries)}/{total_pages} bespoke pages, "
+        f"{total_pages - len(entries)} via fallback renderer",
+    )
+
+    # ── build-validate-repair loop on the assembled app ────────────────────
+    max_retries = settings.course_build_repair_max_retries
+    for attempt in range(1, max_retries + 2):
+        try:
+            await _emit(
+                on_step,
+                "Building course app"
+                + (f" (repair attempt {attempt - 1})" if attempt > 1 else "")
+                + "…",
+            )
+            await asyncio.to_thread(try_build_from_sources, files, course, amap)
+            await _emit(on_step, "Course app built successfully")
+            return primary_session, files
+        except BuildError as exc:
+            logger.warning(
+                "per-page build attempt %d/%d failed: %s",
+                attempt, max_retries + 1, exc,
+            )
+            if attempt > max_retries:
+                await _emit(on_step, "Build failed after repairs; using template")
+                return primary_session, None
+            await _emit(on_step, f"Build failed — repairing (attempt {attempt})…")
+            repaired = await _request_repair(
+                client, exc.logs, files, spec, asset_map, attempt
+            )
+            if repaired is None:
+                return primary_session, None
+            files = repaired
+    return primary_session, None
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
 async def generate_course_app(
-    spec: dict, asset_map: dict
+    spec: dict, asset_map: dict, on_step: StepLogger | None = None
 ) -> tuple[str | None, dict[str, str] | None]:
     """Return (devin_session_id, file map) or (None, None) to use the template.
 
@@ -484,6 +769,16 @@ async def generate_course_app(
 
     logger.info("Using Devin code-gen for course app (mode=%s)", mode)
 
+    # Per-page mode: author each page in its own parallel Devin session on the
+    # fixed template shell. Falls back to the single-session path below if the
+    # template is unavailable or no pages were authored.
+    if settings.course_build_per_page:
+        session_id, files = await _generate_course_app_per_page(spec, asset_map, on_step)
+        if files is not None:
+            return session_id, files
+        logger.info("per-page code-gen produced no build; trying single-session path")
+
+    await _emit(on_step, "Authoring the full course app (single Devin session)…")
     try:
         session_id, output = await client.run(
             _build_prompt(spec, asset_map),

@@ -8,8 +8,10 @@ import asyncio
 import logging
 import re
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.db.crud.company import get_company
 from src.db.crud.course import get_course_by_id, get_job
@@ -344,7 +346,26 @@ async def process_build_job(job_id: str) -> None:
         job.status = JOB_RUNNING
         job.attempts += 1
         course.status = COURSE_BUILDING
+        job.result = {"steps": []}
         await db.commit()
+
+        # Live progress log surfaced in the frontend (job.result["steps"]).
+        # A lock serialises the commits because asset fetch and per-page code-gen
+        # run concurrently and both emit steps onto the one shared DB session.
+        steps: list[dict] = []
+        step_lock = asyncio.Lock()
+
+        async def log_step(message: str) -> None:
+            async with step_lock:
+                steps.append(
+                    {
+                        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+                        "msg": message,
+                    }
+                )
+                job.result = {**(job.result or {}), "steps": list(steps)}
+                flag_modified(job, "result")
+                await db.commit()
 
         try:
             company = await get_company(db, course.company_id)
@@ -365,18 +386,22 @@ async def process_build_job(job_id: str) -> None:
             # instead of fetching every image before code-gen even starts.
             reuse = bool((job.payload or {}).get("reuse_assets")) and bool(course.asset_map)
             if reuse:
+                await log_step("Reusing existing assets")
                 asset_map = course.asset_map or {}
                 devin_session_id, source_files = await generate_course_app(
-                    course.spec, asset_map
+                    course.spec, asset_map, log_step
                 )
             else:
+                await log_step(f"Generating {len(manifest)} media assets…")
                 asset_map, (devin_session_id, source_files) = await asyncio.gather(
-                    fetch_assets(manifest, prefix, primary),
-                    generate_course_app(course.spec, {}),
+                    fetch_assets(manifest, prefix, primary, on_step=log_step),
+                    generate_course_app(course.spec, {}, log_step),
                 )
+            await log_step("Publishing asset map")
             publish_asset_map(prefix, asset_map)
 
             # Phase 3 + 4 — build per-course app and host it
+            await log_step("Hosting the course")
             hosting = publish_built_course(
                 slug,
                 str(course.id),
@@ -393,19 +418,29 @@ async def process_build_job(job_id: str) -> None:
             course.course_url = hosting["course_url"]
             course.iframe_url = hosting["iframe_url"]
             course.status = COURSE_READY
+            await log_step("Course ready")
             job.status = JOB_SUCCEEDED
             job.result = {
                 "assets": len(asset_map),
                 "built": hosting["built"],
                 "course_url": hosting["course_url"],
                 "iframe_url": hosting["iframe_url"],
+                "steps": steps,
             }
             await db.commit()
             logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])
         except Exception as exc:  # noqa: BLE001
             logger.exception("build job %s failed", job_id)
+            steps.append(
+                {
+                    "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "msg": f"Failed: {exc}",
+                }
+            )
             job.status = JOB_FAILED
             job.error = str(exc)
+            job.result = {**(job.result or {}), "steps": steps}
+            flag_modified(job, "result")
             course.status = COURSE_FAILED
             await db.commit()
 
