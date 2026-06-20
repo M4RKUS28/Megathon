@@ -13,17 +13,10 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock* ./
 RUN uv sync --frozen --no-dev
 
-# ── Course template build (Vite) ─────────────────────────────────────────────
-# The generated-course player is a Vite app that loads concept.json at runtime.
-# It is built once here and bundled into the image; the worker publishes a copy
-# (plus each course's concept.json) to MinIO per course.
-FROM node:20-slim AS course-build
-WORKDIR /tpl
-COPY courses-template/package*.json ./
-RUN npm ci
-COPY courses-template/ ./
-RUN npm run build
-
+# ── Per-course app template (Vite) ───────────────────────────────────────────
+# Each course is compiled into its OWN Vite/React/TS app from this template; the
+# builder copies these sources, bakes in course.json/asset_map.json and runs
+# `npm run build` to produce that course's dist/, which is published to MinIO.
 FROM node:22-slim AS course-app-template
 WORKDIR /course_app_template
 COPY course-app-template/package*.json ./
@@ -35,7 +28,6 @@ FROM base AS development
 
 RUN uv sync --frozen
 COPY backend/ .
-COPY --from=course-build /tpl/dist /app/course_template_dist
 COPY --from=course-app-template /course_app_template /app/course_app_template
 
 ENTRYPOINT ["sh", "/app/entrypoint.sh"]
@@ -45,7 +37,6 @@ CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "800
 FROM base AS production
 
 COPY backend/ .
-COPY --from=course-build /tpl/dist /app/course_template_dist
 COPY --from=course-app-template /course_app_template /app/course_app_template
 
 ENTRYPOINT ["sh", "/app/entrypoint.sh"]

@@ -141,8 +141,6 @@ export type CourseStatus =
   | "authoring"
   | "spec_ready"
   | "building"
-  | "concept_ready"
-  | "generating"
   | "ready"
   | "published"
   | "failed";
@@ -156,28 +154,6 @@ export interface CourseSummary {
   created_by: string;
   created_at: string;
   host_url: string | null;
-}
-
-export interface CourseConceptBlock {
-  type: "heading" | "paragraph" | "list" | "callout" | "code";
-  text?: string;
-  items?: string[];
-}
-
-export interface CourseConceptChapter {
-  id: string;
-  title: string;
-  objective?: string;
-  blocks: CourseConceptBlock[];
-  quiz: { question: string; options: string[]; answerIndex: number; explanation?: string }[];
-}
-
-export interface CourseConcept {
-  title: string;
-  description: string;
-  companyName?: string;
-  primaryColor?: string;
-  chapters: CourseConceptChapter[];
 }
 
 // ── Phase 1 Course Plan ──────────────────────────────────────────────────────
@@ -222,7 +198,6 @@ export interface AssetSpec {
 }
 
 export interface CourseDetail extends CourseSummary {
-  concept: CourseConcept | null;
   plan: CoursePlan | null;
   spec: Record<string, unknown> | null;
   asset_manifest: { assets: AssetSpec[] } | null;
@@ -265,7 +240,6 @@ export const coursesApi = {
   get: (id: string) => api.get<CourseDetail>(`/courses/${id}`),
   create: (body: { title: string; description: string; brief: CourseBriefInput }) =>
     api.post<CourseDetail>("/courses", body),
-  generate: (id: string) => api.post<GenerationJobRecord>(`/courses/${id}/generate`),
   approvePlan: (id: string, plan?: CoursePlan) =>
     api.post<GenerationJobRecord>(`/courses/${id}/plan/approve`, { plan: plan ?? null }),
   jobs: (id: string) => api.get<GenerationJobRecord[]>(`/courses/${id}/jobs`),
@@ -294,9 +268,7 @@ export interface LearningCourse extends CourseSummary {
   enrollment: Enrollment | null;
 }
 
-export interface LearningCourseDetail extends LearningCourse {
-  concept: CourseConcept | null;
-}
+export type LearningCourseDetail = LearningCourse;
 
 export interface ProgressUpdate {
   status?: string;

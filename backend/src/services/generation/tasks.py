@@ -10,18 +10,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def run_concept_job(ctx: dict, job_id: str) -> None:
-    from src.services.generation.pipeline import process_concept_job
-
-    await process_concept_job(job_id)
-
-
-async def run_generate_job(ctx: dict, job_id: str) -> None:
-    from src.services.generation.pipeline import process_generate_job
-
-    await process_generate_job(job_id)
-
-
 async def run_edit_job(ctx: dict, job_id: str) -> None:
     from src.services.generation.pipeline import process_edit_job
 

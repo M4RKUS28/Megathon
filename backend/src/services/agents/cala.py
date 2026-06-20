@@ -64,7 +64,9 @@ class _McpHttpClient:
             "Accept": "application/json, text/event-stream",
         }
         if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            # Cala authenticates via the X-API-KEY header (not an OAuth bearer
+            # token); sending `Authorization: Bearer ...` yields 401 invalid_token.
+            headers["X-API-KEY"] = self.api_key
         if self._session_id:
             headers["Mcp-Session-Id"] = self._session_id
         return headers

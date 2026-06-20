@@ -7,8 +7,6 @@ const MAP: Record<string, { label: string; cls: string }> = {
   authoring: { label: "Authoring…", cls: "bg-blue-100 text-blue-700" },
   spec_ready: { label: "Spec ready", cls: "bg-amber-100 text-amber-700" },
   building: { label: "Building…", cls: "bg-blue-100 text-blue-700" },
-  concept_ready: { label: "Concept ready", cls: "bg-amber-100 text-amber-700" },
-  generating: { label: "Generating…", cls: "bg-blue-100 text-blue-700" },
   ready: { label: "Ready", cls: "bg-emerald-100 text-emerald-700" },
   published: { label: "Published", cls: "bg-emerald-100 text-emerald-700" },
   failed: { label: "Failed", cls: "bg-red-100 text-red-700" },

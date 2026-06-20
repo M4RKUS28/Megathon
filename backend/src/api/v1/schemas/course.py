@@ -30,7 +30,6 @@ class CourseSummary(BaseModel):
 
 
 class CourseDetail(CourseSummary):
-    concept: dict | None = None
     plan: dict | None = None
     spec: dict | None = None
     asset_manifest: dict | None = None
@@ -108,7 +107,7 @@ class LearningCourse(CourseSummary):
 
 
 class LearningCourseDetail(LearningCourse):
-    concept: dict | None = None
+    pass
 
 
 # ── Assignments / reporting ──────────────────────────────────────────────────

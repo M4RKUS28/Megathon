@@ -84,6 +84,30 @@ def _chapter_pages(
         f"People applying {title_lc} in a real {company} workplace situation: "
         "hands-on, step-by-step, brand colors."
     )
+    intro_audio = f"/resources/audio/{idx:02d}-p1"
+    concepts_audio = f"/resources/audio/{idx:02d}-p2"
+    practice_audio = f"/resources/audio/{idx:02d}-p3"
+    intro_narration = (
+        f"Welcome to {chapter_title}. In this chapter you will learn what {title_lc} "
+        f"means at {company} and why it matters for your day-to-day work. We will go "
+        "step by step: first the key concepts, then how to apply them in practice. "
+        "Take your time on each page, and when you are ready, the knowledge check at "
+        "the end lets you confirm what you have learned."
+    )
+    concepts_narration = (
+        f"Let's look at the key concepts behind {title_lc}. There are three things to "
+        f"remember: why {title_lc} matters, what you need to get started, and the "
+        "common pitfalls to avoid. Keep these in mind as we move on — they are the "
+        "foundation for everything that follows, and they will come back in the "
+        "knowledge check."
+    )
+    practice_narration = (
+        f"Now let's put {title_lc} into practice. You'll match each step to what it "
+        "does, and see how the key metrics improve over time as adoption grows. The "
+        f"takeaway is simple: {title_lc} is part of how {company} works, and applying "
+        "it well makes a real difference. Try the interactions on this page before you "
+        "continue."
+    )
     assets = [
         AssetSpec(
             template_link=hero_link,
@@ -111,6 +135,30 @@ def _chapter_pages(
             purpose="Data visualisation for chapter metrics",
             alt_text=f"{chapter_title} key metrics chart",
             usage_context=f"chart block on Apply it page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=intro_audio,
+            type="audio",
+            description=intro_narration,
+            purpose="Spoken narration for the introduction page",
+            alt_text=f"Audio narration for Introduction page in {chapter_title}",
+            usage_context=f"audio block on Introduction page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=concepts_audio,
+            type="audio",
+            description=concepts_narration,
+            purpose="Spoken narration for the key concepts page",
+            alt_text=f"Audio narration for Key concepts page in {chapter_title}",
+            usage_context=f"audio block on Key concepts page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=practice_audio,
+            type="audio",
+            description=practice_narration,
+            purpose="Spoken narration for the apply-it page",
+            alt_text=f"Audio narration for Apply it page in {chapter_title}",
+            usage_context=f"audio block on Apply it page in chapter '{chapter_title}'",
         ),
     ]
 
@@ -187,6 +235,7 @@ def _chapter_pages(
                     ]
                 },
             ),
+            Block(type="audio", asset=intro_audio, text=intro_narration),
         ],
         asset_needs=[
             AssetNeed(
@@ -273,6 +322,7 @@ def _chapter_pages(
                     "Tip: revisit these concepts before the knowledge check."
                 ),
             ),
+            Block(type="audio", asset=concepts_audio, text=concepts_narration),
         ],
         asset_needs=[],
     )
@@ -358,6 +408,7 @@ def _chapter_pages(
                     f"{company} works."
                 ),
             ),
+            Block(type="audio", asset=practice_audio, text=practice_narration),
         ],
         asset_needs=[
             AssetNeed(
