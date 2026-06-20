@@ -58,19 +58,81 @@ function newChapterId() {
   return `ch_new_${Date.now()}_${_cid}`;
 }
 
+const sumMinutes = (chapters: PlanChapter[]) =>
+  chapters.reduce((s, c) => s + (c.estimated_minutes || 0), 0);
+
+// Spread a target total duration across chapters, keeping their relative
+// weights and making the per-chapter minutes add up exactly to the target.
+function rescaleChapterMinutes(chapters: PlanChapter[], target: number): PlanChapter[] {
+  const n = chapters.length;
+  if (n === 0) return chapters;
+  const safeTarget = Math.max(0, Math.round(target));
+  const current = sumMinutes(chapters);
+  const next =
+    current <= 0
+      ? chapters.map((c) => ({ ...c, estimated_minutes: Math.floor(safeTarget / n) }))
+      : chapters.map((c) => ({
+          ...c,
+          estimated_minutes: Math.max(
+            1,
+            Math.round(((c.estimated_minutes || 0) / current) * safeTarget),
+          ),
+        }));
+  const drift = safeTarget - sumMinutes(next);
+  if (drift !== 0) {
+    let maxIdx = 0;
+    for (let k = 1; k < next.length; k++) {
+      if (next[k].estimated_minutes > next[maxIdx].estimated_minutes) maxIdx = k;
+    }
+    next[maxIdx] = {
+      ...next[maxIdx],
+      estimated_minutes: Math.max(0, next[maxIdx].estimated_minutes + drift),
+    };
+  }
+  return next;
+}
+
 function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) {
   const approve = useApprovePlan(courseId);
-  const [draft, setDraft] = useState<CoursePlan>(() => structuredClone(plan));
+  const [draft, setDraft] = useState<CoursePlan>(() => {
+    const cloned = structuredClone(plan);
+    // Keep the headline duration in sync with the chapter breakdown so the
+    // estimate reflects the actual sum of chapter times.
+    const sum = sumMinutes(cloned.chapters);
+    if (sum > 0) cloned.estimated_minutes = sum;
+    return cloned;
+  });
 
-  const totalMinutes = useMemo(
-    () => draft.chapters.reduce((s, c) => s + (c.estimated_minutes || 0), 0),
-    [draft.chapters],
-  );
+  const totalMinutes = useMemo(() => sumMinutes(draft.chapters), [draft.chapters]);
 
   const patchChapter = (i: number, patch: Partial<PlanChapter>) =>
     setDraft((d) => ({
       ...d,
       chapters: d.chapters.map((c, j) => (j === i ? { ...c, ...patch } : c)),
+    }));
+
+  // Editing one chapter's minutes updates the headline total to match.
+  const setChapterMinutes = (i: number, minutes: number) =>
+    setDraft((d) => {
+      const chapters = d.chapters.map((c, j) =>
+        j === i ? { ...c, estimated_minutes: minutes } : c,
+      );
+      return { ...d, chapters, estimated_minutes: sumMinutes(chapters) };
+    });
+
+  // Editing the total duration redistributes minutes across all chapters. The
+  // redistribution runs on blur so typing the total digit-by-digit doesn't
+  // rescale from intermediate values and skew the per-chapter proportions.
+  const setTotalMinutes = (target: number) =>
+    setDraft((d) => ({ ...d, estimated_minutes: target }));
+
+  const redistributeMinutes = () =>
+    setDraft((d) => ({
+      ...d,
+      chapters:
+        d.estimated_minutes > 0
+          ? rescaleChapterMinutes(d.chapters, d.estimated_minutes)
+          : d.chapters,
     }));
 
   const move = (i: number, dir: -1 | 1) =>
@@ -83,12 +145,14 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
     });
 
   const remove = (i: number) =>
-    setDraft((d) => ({ ...d, chapters: d.chapters.filter((_, j) => j !== i) }));
+    setDraft((d) => {
+      const chapters = d.chapters.filter((_, j) => j !== i);
+      return { ...d, chapters, estimated_minutes: sumMinutes(chapters) };
+    });
 
   const add = () =>
-    setDraft((d) => ({
-      ...d,
-      chapters: [
+    setDraft((d) => {
+      const chapters = [
         ...d.chapters,
         {
           id: newChapterId(),
@@ -99,8 +163,9 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
           key_points: [],
           bloom_level: "understand",
         },
-      ],
-    }));
+      ];
+      return { ...d, chapters, estimated_minutes: sumMinutes(chapters) };
+    });
 
   return (
     <section className="space-y-5">
@@ -136,11 +201,13 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
                 min={0}
                 className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 outline-none focus:border-primary"
                 value={draft.estimated_minutes}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, estimated_minutes: Number(e.target.value) || 0 }))
-                }
+                onChange={(e) => setTotalMinutes(Number(e.target.value) || 0)}
+                onBlur={redistributeMinutes}
               />
-              <span className="text-muted-foreground">min · chapters total {totalMinutes} min</span>
+              <span className="text-muted-foreground">
+                min total · auto-distributed across {draft.chapters.length}{" "}
+                chapter{draft.chapters.length === 1 ? "" : "s"} ({totalMinutes} min)
+              </span>
             </div>
           </div>
           {draft.compliance_requirements.length ? (
@@ -202,9 +269,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
                         min={0}
                         className="w-20 rounded border border-border bg-background px-2 py-1"
                         value={ch.estimated_minutes}
-                        onChange={(e) =>
-                          patchChapter(i, { estimated_minutes: Number(e.target.value) || 0 })
-                        }
+                        onChange={(e) => setChapterMinutes(i, Number(e.target.value) || 0)}
                       />
                     </label>
                   </div>
