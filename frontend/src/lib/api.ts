@@ -416,3 +416,20 @@ export async function uploadFileDirect(file: File): Promise<FileRecord> {
   const { data: record } = await filesApi.confirmUpload(intent.file_id, file.size);
   return record;
 }
+
+// ── Provider diagnostics (verify external API keys work) ─────────────────────
+
+export interface ProviderCheck {
+  provider: string;
+  label: string;
+  configured: boolean;
+  ok: boolean;
+  detail: string;
+  status: number | null;
+  latency_ms: number | null;
+}
+
+export const diagnosticsApi = {
+  providers: () =>
+    api.get<{ providers: ProviderCheck[] }>("/diagnostics/providers"),
+};
