@@ -83,7 +83,7 @@ export function AboutPage() {
             {signedIn ? "Open dashboard" : "Try the demo tenant"}
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </Link>
-          <span className="font-mono text-xs text-ink/40">acme · creator / creator</span>
+          <span className="font-mono text-xs text-ink/40">acme · creator@acme.test / creator2026</span>
         </div>
       </section>
 

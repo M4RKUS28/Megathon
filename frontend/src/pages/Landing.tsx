@@ -107,7 +107,7 @@ export function LandingPage() {
               </Link>
             </div>
             <p className="mt-6 font-mono text-xs text-paper/40">
-              Demo tenant: <span className="text-paper/70">acme</span> · creator / creator
+              Demo tenant: <span className="text-paper/70">acme</span> · creator@acme.test / creator2026
             </p>
           </div>
           <AssemblyVisual />
