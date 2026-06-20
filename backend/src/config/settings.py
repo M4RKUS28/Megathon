@@ -57,9 +57,13 @@ class Settings(BaseSettings):
     pixverse_image_model: str = "gpt-image-2.0"
     pixverse_image_path: str = "/openapi/v2/image/generation"
     pixverse_video_model: str = "v4.5"
+    # Narration via Google's Generative Language (Gemini) TTS, which accepts an
+    # AI Studio API key. Returns raw PCM that we wrap as WAV.
     google_tts_api_key: str = ""
-    google_tts_voice: str = "en-US-Studio-O"
+    google_tts_model: str = "gemini-2.5-flash-preview-tts"
+    google_tts_voice: str = "Kore"
     google_tts_language: str = "en-US"
+    google_tts_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     # Per-course generation caps to bound latency/cost.
     media_max_images: int = 10
     media_max_videos: int = 2
