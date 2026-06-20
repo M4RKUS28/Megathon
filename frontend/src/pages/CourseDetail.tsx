@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
+  Bot,
   Check,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
+  FileCode,
+  FileText,
   Loader2,
   Maximize,
   Minimize,
@@ -27,7 +32,13 @@ import {
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
-import type { CourseConceptChapter, CoursePlan, PlanChapter } from "@/lib/api";
+import type {
+  CourseConceptChapter,
+  CourseDetail,
+  CoursePlan,
+  GenerationJobRecord,
+  PlanChapter,
+} from "@/lib/api";
 
 function ConceptPreview({ chapters }: { chapters: CourseConceptChapter[] }) {
   return (
@@ -323,6 +334,128 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
   );
 }
 
+type BuildMethod = "devin" | "template" | "static_fallback" | "legacy" | null;
+
+function deriveBuildMethod(jobs: GenerationJobRecord[] | undefined): {
+  method: BuildMethod;
+  devinSessionId: string | null;
+  lastError: string | null;
+  lastBuildStatus: string | null;
+} {
+  if (!jobs || jobs.length === 0)
+    return { method: null, devinSessionId: null, lastError: null, lastBuildStatus: null };
+
+  // Find the latest build or generate job.
+  const buildJobs = jobs.filter((j) => j.type === "build" || j.type === "generate");
+  if (buildJobs.length === 0)
+    return { method: null, devinSessionId: null, lastError: null, lastBuildStatus: null };
+
+  const latest = buildJobs[0]; // jobs arrive newest-first from the API
+  const lastError = latest.status === "failed" ? latest.error : null;
+  const lastBuildStatus = latest.status;
+
+  if (latest.type === "generate")
+    return { method: "legacy", devinSessionId: latest.devin_session_id, lastError, lastBuildStatus };
+
+  const built = (latest.result as Record<string, unknown> | null)?.built;
+  if (latest.devin_session_id && built === true)
+    return { method: "devin", devinSessionId: latest.devin_session_id, lastError, lastBuildStatus };
+  if (built === true)
+    return { method: "template", devinSessionId: null, lastError, lastBuildStatus };
+  if (built === false)
+    return { method: "static_fallback", devinSessionId: null, lastError, lastBuildStatus };
+
+  return { method: null, devinSessionId: latest.devin_session_id, lastError, lastBuildStatus };
+}
+
+const BUILD_METHOD_META: Record<
+  Exclude<BuildMethod, null>,
+  { label: string; icon: typeof Bot; cls: string; desc: string }
+> = {
+  devin: {
+    label: "Devin",
+    icon: Bot,
+    cls: "bg-violet-100 text-violet-700",
+    desc: "Built by a Devin coding session",
+  },
+  template: {
+    label: "Template",
+    icon: FileCode,
+    cls: "bg-sky-100 text-sky-700",
+    desc: "Built from the course-app-template (Vite)",
+  },
+  static_fallback: {
+    label: "Static fallback",
+    icon: FileText,
+    cls: "bg-amber-100 text-amber-700",
+    desc: "Rendered with the static HTML fallback (Vite build unavailable)",
+  },
+  legacy: {
+    label: "Legacy renderer",
+    icon: FileText,
+    cls: "bg-gray-100 text-gray-600",
+    desc: "Built with the legacy shared renderer",
+  },
+};
+
+function BuildInfoPanel({
+  course,
+  jobs,
+}: {
+  course: CourseDetail;
+  jobs: GenerationJobRecord[] | undefined;
+}) {
+  const { method, devinSessionId, lastError, lastBuildStatus } = deriveBuildMethod(jobs);
+  const sessionId = devinSessionId ?? course.devin_session_id;
+
+  if (!method && !sessionId && !lastError) return null;
+
+  const meta = method ? BUILD_METHOD_META[method] : null;
+  const Icon = meta?.icon;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Build info
+      </h3>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {meta ? (
+          <span
+            title={meta.desc}
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}
+          >
+            {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+            {meta.label}
+          </span>
+        ) : null}
+
+        {lastBuildStatus && lastBuildStatus !== "succeeded" ? (
+          <StatusBadge status={lastBuildStatus} />
+        ) : null}
+
+        {sessionId ? (
+          <a
+            href={`https://app.devin.ai/sessions/${sessionId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Devin session
+          </a>
+        ) : null}
+      </div>
+
+      {lastError ? (
+        <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="break-words">{lastError}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const BUSY_STATUSES = new Set([
   "draft",
   "planning",
@@ -428,6 +561,8 @@ export function CourseDetailPage() {
         </div>
         <p className="mt-1 text-muted-foreground">{course.description}</p>
       </div>
+
+      <BuildInfoPanel course={course} jobs={jobs} />
 
       {isBusy ? (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
@@ -611,21 +746,50 @@ export function CourseDetailPage() {
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
         <div className="mt-3 space-y-1.5">
-          {jobs?.map((j) => (
-            <div
-              key={j.id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
-            >
-              <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
-              <StatusBadge status={j.status} />
-              {j.devin_session_id ? (
-                <span className="font-mono text-xs text-muted-foreground">
-                  {j.devin_session_id}
+          {jobs?.map((j) => {
+            const builtFlag =
+              j.type === "build" && j.status === "succeeded"
+                ? (j.result as Record<string, unknown> | null)?.built
+                : undefined;
+            return (
+              <div
+                key={j.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              >
+                <span className="font-mono text-xs uppercase text-muted-foreground">
+                  {j.type}
                 </span>
-              ) : null}
-              {j.error ? <span className="text-xs text-red-600">{j.error}</span> : null}
-            </div>
-          ))}
+                <StatusBadge status={j.status} />
+                {builtFlag === true && j.devin_session_id ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                    <Bot className="h-3 w-3" /> Devin
+                  </span>
+                ) : builtFlag === true ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
+                    <FileCode className="h-3 w-3" /> Template
+                  </span>
+                ) : builtFlag === false ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    <FileText className="h-3 w-3" /> Static fallback
+                  </span>
+                ) : null}
+                {j.devin_session_id ? (
+                  <a
+                    href={`https://app.devin.ai/sessions/${j.devin_session_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Session
+                  </a>
+                ) : null}
+                {j.error ? (
+                  <span className="basis-full text-xs text-red-600">{j.error}</span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>
