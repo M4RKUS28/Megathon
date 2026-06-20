@@ -227,6 +227,18 @@ export interface CourseBriefInput {
   topics: string[];
 }
 
+export interface EditDiffBlock {
+  location: string;
+  action: "changed" | "added" | "removed";
+  old_type: string | null;
+  new_type: string | null;
+}
+
+export interface EditDiff {
+  summary: string;
+  blocks: EditDiffBlock[];
+}
+
 export interface EditRecord {
   id: string;
   prompt: string;
@@ -234,6 +246,9 @@ export interface EditRecord {
   status: string;
   preview_url: string | null;
   devin_session_id: string | null;
+  devin_session_url: string | null;
+  edit_tier: string | null;
+  diff: EditDiff | null;
   created_at: string;
 }
 

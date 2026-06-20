@@ -59,7 +59,7 @@ class JobResponse(BaseModel):
 
 
 class EditCreate(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=3, max_length=2000)
     target_selector: str | None = None
     target_text: str | None = None
 
@@ -72,6 +72,8 @@ class EditResponse(BaseModel):
     preview_url: str | None = None
     devin_session_id: str | None = None
     devin_session_url: str | None = None
+    edit_tier: str | None = None
+    diff: dict | None = None
     created_at: datetime
 
 

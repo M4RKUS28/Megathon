@@ -107,9 +107,10 @@ async def test_edit_block_only_changes_selected_block_offline():
     plan = fallback_plan(BRIEF, "Acme")
     spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
     before = spec["chapters"][0]["pages"][0]["blocks"][0]
-    new_spec = await generate_edited_spec(
+    result = await generate_edited_spec(
         spec, "make it friendlier", "0.0.0", before.get("text")
     )
+    new_spec = result.new_spec
     # Same shape, only the targeted block changed.
     assert len(new_spec["chapters"]) == len(spec["chapters"])
     after = new_spec["chapters"][0]["pages"][0]["blocks"][0]
@@ -119,14 +120,100 @@ async def test_edit_block_only_changes_selected_block_offline():
         new_spec["chapters"][-1]["pages"][-1]["blocks"][-1]
         == spec["chapters"][-1]["pages"][-1]["blocks"][-1]
     )
+    # Hybrid tier metadata is present.
+    assert result.edit_tier == "simple"
+    assert result.diff is not None
+    assert result.diff.summary
 
 
 async def test_edit_without_selector_applies_spec_level_change_offline():
     plan = fallback_plan(BRIEF, "Acme")
     spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
-    new_spec = await generate_edited_spec(spec, "add a safety reminder", None, None)
+    result = await generate_edited_spec(spec, "add a safety reminder", None, None)
+    new_spec = result.new_spec
     assert Lastenheft(**new_spec).chapters
     assert new_spec != spec
+    # Spec-level edits without selector are classified as complex.
+    assert result.edit_tier == "complex"
+    assert result.diff is not None
+
+
+def test_classify_edit_complexity_simple_cases():
+    from src.services.agents.editor import classify_edit_complexity
+
+    assert classify_edit_complexity("make it friendlier", "0.0.0") == "simple"
+    assert classify_edit_complexity("add an example", "0.0.0") == "simple"
+    assert classify_edit_complexity("fix the typo", "1.2.3") == "simple"
+    assert classify_edit_complexity("rephrase this paragraph", "0.0.0") == "simple"
+    assert classify_edit_complexity("make it shorter", "0.0.0") == "simple"
+    assert classify_edit_complexity("translate to German", "0.0.0") == "simple"
+
+
+def test_classify_edit_complexity_complex_cases():
+    from src.services.agents.editor import classify_edit_complexity
+
+    assert classify_edit_complexity("add a new chapter about safety", "0.0.0") == "complex"
+    assert classify_edit_complexity("restructure the course", "0.0.0") == "complex"
+    assert classify_edit_complexity("modify quiz questions", "0.0.0") == "complex"
+    assert classify_edit_complexity("add compliance notes", "0.0.0") == "complex"
+    assert classify_edit_complexity("remove chapter 3", "0.0.0") == "complex"
+    assert classify_edit_complexity("anything at all", None) == "complex"
+    assert classify_edit_complexity("update quiz to be harder", "0.0.0") == "complex"
+    assert classify_edit_complexity("add blocks throughout all pages", "0.0.0") == "complex"
+
+
+def test_compute_edit_diff_detects_changes():
+    from src.services.agents.editor import compute_edit_diff
+
+    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hello"}]}]}]}
+    new = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hi there"}]}]}]}
+    diff = compute_edit_diff(old, new)
+    assert len(diff.changed) == 1
+    assert diff.changed[0].action == "changed"
+    assert "1 block(s) changed" in diff.summary
+
+
+def test_compute_edit_diff_detects_added_blocks():
+    from src.services.agents.editor import compute_edit_diff
+
+    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hello"}]}]}]}
+    new = {
+        "chapters": [
+            {
+                "pages": [
+                    {
+                        "blocks": [
+                            {"type": "paragraph", "text": "Hello"},
+                            {"type": "callout", "text": "New"},
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    diff = compute_edit_diff(old, new)
+    assert any(d.action == "added" for d in diff.changed)
+
+
+def test_validate_edited_spec_catches_quiz_issues():
+    from src.services.agents.editor import validate_edited_spec
+
+    spec = {
+        "chapters": [
+            {
+                "pages": [{"blocks": [{"type": "paragraph", "text": "Content"}]}],
+                "quiz": {
+                    "passing_pct": 150,
+                    "questions": [
+                        {"question": "Q?", "options": ["A", "B"], "answerIndex": 5}
+                    ],
+                },
+            }
+        ]
+    }
+    warnings = validate_edited_spec(spec)
+    assert any("passing_pct" in w for w in warnings)
+    assert any("answerIndex" in w for w in warnings)
 
 
 def test_scorm_manifest_valid():

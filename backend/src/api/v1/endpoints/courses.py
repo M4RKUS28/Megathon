@@ -216,7 +216,11 @@ async def get_course_jobs(
 
 
 # ── Devin edit-loop ──────────────────────────────────────────────────────────
-def _edit_response(edit: EditRequest) -> EditResponse:
+def _edit_response(
+    edit: EditRequest,
+    job_result: dict | None = None,
+) -> EditResponse:
+    result = job_result or {}
     return EditResponse(
         id=edit.id,
         prompt=edit.prompt,
@@ -227,6 +231,8 @@ def _edit_response(edit: EditRequest) -> EditResponse:
         else None,
         devin_session_id=edit.devin_session_id,
         devin_session_url=session_web_url(edit.devin_session_id),
+        edit_tier=result.get("edit_tier"),
+        diff=result.get("diff"),
         created_at=edit.created_at,
     )
 
@@ -278,7 +284,24 @@ async def list_edits(
         .where(EditRequest.course_id == course.id)
         .order_by(EditRequest.created_at.desc())
     )
-    return [_edit_response(e) for e in result.scalars().all()]
+    edits = result.scalars().all()
+
+    # Look up job results to populate edit_tier and diff on each response.
+    edit_ids = [str(e.id) for e in edits]
+    job_result = await db.execute(
+        select(GenerationJob)
+        .where(
+            GenerationJob.course_id == course.id,
+            GenerationJob.type == "edit",
+        )
+    )
+    jobs_by_edit: dict[str, dict | None] = {}
+    for j in job_result.scalars().all():
+        eid = (j.payload or {}).get("edit_request_id")
+        if eid in edit_ids and j.result:
+            jobs_by_edit[eid] = j.result
+
+    return [_edit_response(e, jobs_by_edit.get(str(e.id))) for e in edits]
 
 
 async def _get_edit(db: AsyncSession, course_id: uuid.UUID, edit_id: uuid.UUID) -> EditRequest:
