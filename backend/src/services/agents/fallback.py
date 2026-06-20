@@ -15,6 +15,7 @@ from .schemas import (
     Quiz,
     QuizQuestion,
     SpecChapter,
+    StyleGuide,
 )
 
 
@@ -83,6 +84,7 @@ def _chapter_pages(
                 "friendly workplace scene, brand colors, soft lighting."
             ),
             purpose="Chapter intro / context image",
+            alt_text=f"Hero image for {chapter_title}",
         ),
         AssetSpec(
             template_link=apply_link,
@@ -93,13 +95,23 @@ def _chapter_pages(
                 "hands-on, step-by-step, brand colors."
             ),
             purpose="Applied example image",
+            alt_text=f"Applying {title_lc} in practice",
         ),
     ]
     intro_page = Page(
         id=f"{ch_id}-p1",
         title="Introduction",
+        content_goal=f"Orient the learner on {title_lc} and set expectations",
+        learner_action="Read the overview, engage with the mentor dialogue",
+        ui_treatment="hero splash with full-width image",
+        estimated_minutes=2,
         blocks=[
-            Block(type="image", asset=hero_link, text=chapter_title),
+            Block(
+                type="image",
+                asset=hero_link,
+                text=chapter_title,
+                interaction_goal="Set visual context for the chapter",
+            ),
             Block(
                 type="paragraph",
                 text=(
@@ -109,6 +121,8 @@ def _chapter_pages(
             ),
             Block(
                 type="dialogue",
+                interaction_goal="Build rapport and preview the learning journey",
+                suggested_interaction="Animated speech bubbles appearing sequentially",
                 data={
                     "turns": [
                         {"speaker": "Mentor", "text": f"Welcome! Let's cover {title_lc}."},
@@ -125,6 +139,10 @@ def _chapter_pages(
     concepts_page = Page(
         id=f"{ch_id}-p2",
         title="Key concepts",
+        content_goal=f"Teach the core concepts of {title_lc}",
+        learner_action="Study concepts, flip flashcards to self-test",
+        ui_treatment="two-column: concepts left, flashcards right",
+        estimated_minutes=3,
         blocks=[
             Block(
                 type="list",
@@ -133,9 +151,14 @@ def _chapter_pages(
                     "What you need to get started",
                     "Common pitfalls and how to avoid them",
                 ],
+                interaction_goal="Present core knowledge points",
             ),
             Block(
                 type="flashcards",
+                interaction_goal="Active recall of key terms",
+                suggested_interaction="Flip-card animation with progress indicator",
+                required_behavior="Cards must be flippable; track which were viewed",
+                feedback_behavior="Show checkmark after card is flipped",
                 data={
                     "cards": [
                         {"front": "Key term", "back": f"A concept central to {title_lc}."},
@@ -152,10 +175,18 @@ def _chapter_pages(
     practice_page = Page(
         id=f"{ch_id}-p3",
         title="Apply it",
+        content_goal=f"Let the learner practice applying {title_lc}",
+        learner_action="Complete drag-drop exercise and review metrics chart",
+        ui_treatment="interactive workspace with stacked activities",
+        estimated_minutes=4,
         blocks=[
             Block(type="image", asset=apply_link, text=f"Applying {title_lc}"),
             Block(
                 type="dragdrop",
+                interaction_goal="Verify the learner can sequence steps correctly",
+                required_behavior="Pairs snap into place; incorrect pairings bounce back",
+                feedback_behavior="Green highlight on correct match, shake on incorrect",
+                success_criterion="All pairs correctly matched",
                 data={
                     "prompt": "Match each step to its description.",
                     "pairs": [
@@ -168,6 +199,8 @@ def _chapter_pages(
             Block(
                 type="chart",
                 asset=chart_link,
+                interaction_goal="Visualise adoption trend to reinforce the message",
+                suggested_interaction="Animate bars on scroll; tooltip on hover",
                 data={
                     "chartType": "bar",
                     "title": f"{chapter_title}: key metrics",
@@ -190,21 +223,31 @@ def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str)
     for i, ch in enumerate(plan.chapters):
         pages, assets = _chapter_pages(ch.title, ch.id, i, company_name)
         manifest.extend(assets)
+        learning_points = ch.key_points or [f"Understand {ch.title.lower()}"]
         chapters.append(
             SpecChapter(
                 id=ch.id,
                 title=ch.title,
                 objective=ch.objective,
                 pages=pages,
+                learning_points=learning_points,
+                estimated_minutes=ch.estimated_minutes,
+                competency=ch.competency,
+                bloom_level=ch.bloom_level,
                 quiz=Quiz(
                     passing_pct=80,
                     retryable=True,
+                    assessment_id=f"quiz-{ch.id}",
+                    chapter_ref=ch.id,
+                    competency_assessed=ch.competency or ch.title,
                     questions=[
                         QuizQuestion(
                             question=f"What is the focus of '{ch.title}'?",
                             options=[ch.title, "Payroll", "Office snacks", "Parking"],
                             answerIndex=0,
                             explanation=f"This chapter is about {ch.title.lower()}.",
+                            bloom_level="remember",
+                            learning_point_ref=learning_points[0] if learning_points else "",
                         ),
                         QuizQuestion(
                             question=f"Which is a key point for {ch.title.lower()}?",
@@ -212,6 +255,8 @@ def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str)
                             + ["Ignore the SOP", "Skip onboarding", "Guess"],
                             answerIndex=0,
                             explanation="Refer to the key points covered in this chapter.",
+                            bloom_level="understand",
+                            learning_point_ref=learning_points[0] if learning_points else "",
                         ),
                     ],
                 ),
@@ -226,4 +271,8 @@ def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str)
         passing_pct=80,
         chapters=chapters,
         asset_manifest=manifest,
+        target_audience=plan.audience,
+        difficulty=plan.difficulty,
+        estimated_minutes=plan.estimated_minutes,
+        style_guide=StyleGuide(tone="friendly and professional"),
     )
