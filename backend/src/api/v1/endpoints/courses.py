@@ -87,6 +87,11 @@ def _host_url(course: Course) -> str | None:
     return index_url(course.dist_object_prefix) if course.dist_object_prefix else None
 
 
+def _devin_url(session_id: str | None, result: dict | None = None) -> str | None:
+    url = (result or {}).get("devin_session_url")
+    return str(url) if url else session_web_url(session_id)
+
+
 def _detail(course: Course) -> CourseDetail:
     return CourseDetail(
         **_summary(course).model_dump(),
@@ -97,7 +102,7 @@ def _detail(course: Course) -> CourseDetail:
         course_url=course.course_url,
         iframe_url=course.iframe_url,
         devin_session_id=course.devin_session_id,
-        devin_session_url=session_web_url(course.devin_session_id),
+        devin_session_url=_devin_url(course.devin_session_id),
     )
 
 
@@ -108,7 +113,7 @@ def _job_response(job: GenerationJob) -> JobResponse:
         status=job.status,
         error=job.error,
         devin_session_id=job.devin_session_id,
-        devin_session_url=session_web_url(job.devin_session_id),
+        devin_session_url=_devin_url(job.devin_session_id, job.result),
         result=job.result,
         created_at=job.created_at,
     )

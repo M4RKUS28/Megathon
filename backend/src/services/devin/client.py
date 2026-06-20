@@ -144,13 +144,13 @@ class DevinClient:
         structured_output_schema: dict | None = None,
         title: str | None = None,
         tags: list[str] | None = None,
-        on_created: Callable[[str], Awaitable[None]] | None = None,
+        on_created: Callable[[dict], Awaitable[None]] | None = None,
     ) -> tuple[str, dict]:
         """Create a session, wait for completion, return (session_id, structured_output).
 
-        `on_created` is awaited with the session id as soon as the session exists
-        (before the potentially long wait), so callers can persist/surface a link
-        to the live session immediately.
+        `on_created` is awaited with the create-session response as soon as the
+        session exists (before the potentially long wait), so callers can persist
+        the live `url` and session id immediately.
         """
         created = await self.create_session(
             prompt,
@@ -162,7 +162,7 @@ class DevinClient:
         logger.info("Devin session created: %s (%s)", session_id, created.get("url"))
         if on_created is not None:
             try:
-                await on_created(session_id)
+                await on_created(created)
             except Exception:  # noqa: BLE001 — surfacing the link must never fail the run
                 logger.warning("on_created callback failed for session %s", session_id)
         output = await self.wait_for_output(session_id)

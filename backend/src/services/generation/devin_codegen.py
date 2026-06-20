@@ -123,6 +123,10 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "via /asset_map.json which is loaded at runtime. Use every provided asset.\n"
         "- The app must build to static files with `npm run build` (output dir dist/). "
         "Read /course.json and /asset_map.json from the public/ root at runtime.\n"
+        "- Before providing final structured output, run the course locally, click through "
+        "every chapter page and each chapter-end quiz tab, verify media/transcript controls "
+        "and minigames render, and fix any console/runtime/build errors you find. Include only "
+        "source files after this validation passes.\n"
         "- Include package.json, vite.config.ts, tsconfig.json, index.html, and all "
         "src/ files. Do not include node_modules or dist.\n\n"
         "Return ONLY structured output: a `files` array of {path, content} covering "
@@ -159,13 +163,13 @@ def _validate_files(output: dict) -> dict[str, str] | None:
 async def generate_course_app(
     spec: dict,
     asset_map: dict,
-    on_session: Callable[[str], Awaitable[None]] | None = None,
+    on_session: Callable[[dict], Awaitable[None]] | None = None,
 ) -> tuple[str | None, dict[str, str] | None]:
     """Return (devin_session_id, file map) or (None, None) to use the template.
 
-    `on_session` is awaited with the session id the moment the Devin session is
-    created (before its long build wait), so the pipeline can persist the id and
-    surface a live link to the session in the UI.
+    `on_session` is awaited with the create-session response the moment the Devin
+    session is created (before its long build wait), so the pipeline can persist
+    the id/url and surface a live link to the session in the UI.
     """
     if not settings.course_build_use_devin:
         return None, None
