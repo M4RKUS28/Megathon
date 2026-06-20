@@ -87,14 +87,22 @@ BLOCK_TYPES = [
 
 
 class AssetSpec(BaseModel):
-    """An entry in the isolated asset manifest (Phase 2). No asset is fetched
-    here — only the template link and the spec a fetch agent / generator needs."""
+    """An entry in the isolated asset manifest (Phase 2).
+
+    No asset is fetched here — only the template link and the spec a resource-
+    fetch agent (or generator) needs to produce the final binary. At build time
+    the ``template_link`` is the *only* identifier the implementation code
+    should reference; the asset pipeline resolves each link to a production
+    ``storage_url`` in ``asset_map.json``.
+    """
 
     template_link: str  # e.g. /resources/images/01
     type: str  # image | video | audio | chart | model | diagram
-    dimensions: str = "16:9"  # aspect ratio or WxH
-    description: str = ""  # detailed visual/audio brief
-    purpose: str = ""  # function in the course
+    dimensions: str = "16:9"  # aspect ratio or WxH (e.g. "16:9", "800x450")
+    description: str = ""  # detailed visual/audio brief for the generator
+    purpose: str = ""  # function of the asset in the course
+    alt_text: str = ""  # accessible alt text for screen readers
+    usage_context: str = ""  # where/how this asset appears (e.g. "hero image on intro page")
     # Optional TTS voice override for audio assets (e.g. distinct voices for the
     # two sides of a conversation). Falls back to the configured default voice.
     voice: str | None = None
