@@ -73,6 +73,30 @@ def _chapter_pages(
     hero_link = f"/resources/images/{idx:02d}-a"
     apply_link = f"/resources/images/{idx:02d}-b"
     chart_link = f"/resources/charts/{idx:02d}"
+    intro_audio = f"/resources/audio/{idx:02d}-p1"
+    concepts_audio = f"/resources/audio/{idx:02d}-p2"
+    practice_audio = f"/resources/audio/{idx:02d}-p3"
+    intro_narration = (
+        f"Welcome to {chapter_title}. In this chapter you will learn what {title_lc} "
+        f"means at {company} and why it matters for your day-to-day work. We will go "
+        "step by step: first the key concepts, then how to apply them in practice. "
+        "Take your time on each page, and when you are ready, the knowledge check at "
+        "the end lets you confirm what you have learned."
+    )
+    concepts_narration = (
+        f"Let's look at the key concepts behind {title_lc}. There are three things to "
+        f"remember: why {title_lc} matters, what you need to get started, and the "
+        "common pitfalls to avoid. Keep these in mind as we move on — they are the "
+        "foundation for everything that follows, and they will come back in the "
+        "knowledge check."
+    )
+    practice_narration = (
+        f"Now let's put {title_lc} into practice. You'll match each step to what it "
+        "does, and see how the key metrics improve over time as adoption grows. The "
+        f"takeaway is simple: {title_lc} is part of how {company} works, and applying "
+        "it well makes a real difference. Try the interactions on this page before you "
+        "continue."
+    )
     assets = [
         AssetSpec(
             template_link=hero_link,
@@ -93,6 +117,24 @@ def _chapter_pages(
                 "hands-on, step-by-step, brand colors."
             ),
             purpose="Applied example image",
+        ),
+        AssetSpec(
+            template_link=intro_audio,
+            type="audio",
+            description=intro_narration,
+            purpose="Spoken narration for the introduction page",
+        ),
+        AssetSpec(
+            template_link=concepts_audio,
+            type="audio",
+            description=concepts_narration,
+            purpose="Spoken narration for the key concepts page",
+        ),
+        AssetSpec(
+            template_link=practice_audio,
+            type="audio",
+            description=practice_narration,
+            purpose="Spoken narration for the apply-it page",
         ),
     ]
     intro_page = Page(
@@ -120,6 +162,7 @@ def _chapter_pages(
                     ]
                 },
             ),
+            Block(type="audio", asset=intro_audio, text=intro_narration),
         ],
     )
     concepts_page = Page(
@@ -147,6 +190,7 @@ def _chapter_pages(
                 type="callout",
                 text="Tip: revisit these concepts before the knowledge check.",
             ),
+            Block(type="audio", asset=concepts_audio, text=concepts_narration),
         ],
     )
     practice_page = Page(
@@ -179,6 +223,7 @@ def _chapter_pages(
                 type="callout",
                 text=f"Key takeaway: {chapter_title} is part of how {company} works.",
             ),
+            Block(type="audio", asset=practice_audio, text=practice_narration),
         ],
     )
     return [intro_page, concepts_page, practice_page], assets

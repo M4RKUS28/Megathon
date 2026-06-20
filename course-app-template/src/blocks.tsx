@@ -279,7 +279,16 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     }
     case "audio": {
       const src = resolve(block.asset);
-      return src ? <audio controls className="w-full" src={src} /> : null;
+      if (!src) return null;
+      return (
+        <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
+            <span aria-hidden="true">🔊</span>
+            Listen to this page
+          </div>
+          <audio controls className="w-full" src={src} />
+        </div>
+      );
     }
     case "dialogue":
       return <Dialogue data={block.data} />;
