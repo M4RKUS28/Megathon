@@ -174,3 +174,115 @@ async def test_generate_course_app_disabled_returns_none():
     session_id, files = await generate_course_app({"title": "t"}, {})
     assert session_id is None
     assert files is None
+
+
+# ── COURSE_BUILD_MODE settings validation ────────────────────────────────────
+def test_build_mode_default_is_auto():
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_build_mode_normalizes_legacy_true_to_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_USE_DEVIN", "true")
+    monkeypatch.delenv("COURSE_BUILD_MODE", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "devin"
+
+
+def test_build_mode_normalizes_legacy_false_to_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_USE_DEVIN", "false")
+    monkeypatch.delenv("COURSE_BUILD_MODE", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_build_mode_explicit_template(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "template")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "template"
+
+
+def test_build_mode_explicit_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "devin")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "devin"
+
+
+def test_build_mode_invalid_falls_back_to_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "foobar")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_devin_build_enabled_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "auto")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is True
+
+
+def test_devin_build_enabled_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "devin")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is True
+
+
+def test_devin_build_enabled_template(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "template")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is False
+
+
+def test_devin_configured_true(monkeypatch):
+    monkeypatch.setenv("DEVIN_API_KEY", "cog_test")
+    monkeypatch.setenv("DEVIN_ORG_ID", "org-123")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is True
+
+
+def test_devin_configured_missing_key(monkeypatch):
+    monkeypatch.delenv("DEVIN_API_KEY", raising=False)
+    monkeypatch.delenv("DEVIN", raising=False)
+    monkeypatch.setenv("DEVIN_ORG_ID", "org-123")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is False
+
+
+def test_devin_configured_missing_org(monkeypatch):
+    monkeypatch.setenv("DEVIN_API_KEY", "cog_test")
+    monkeypatch.delenv("DEVIN_ORG_ID", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is False
+
+
+async def test_generate_course_app_template_mode_skips(monkeypatch):
+    monkeypatch.setattr(
+        "src.services.generation.devin_codegen.settings.course_build_mode",
+        "template",
+    )
+    session_id, files = await generate_course_app({"title": "t"}, {})
+    assert session_id is None
+    assert files is None

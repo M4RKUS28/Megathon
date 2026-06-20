@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, Field, computed_field
+from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -74,9 +74,42 @@ class Settings(BaseSettings):
     course_app_template: str = "/app/course_app_template"
     course_build_enabled: bool = True
     course_build_timeout: int = 600
-    # Phase 3: use a real Devin coding session to author the per-course Vite app
-    # (it returns the project source files). Falls back to the template build.
-    course_build_use_devin: bool = False
+    # Phase 3: build mode for per-course Vite apps.
+    #   auto     — use Devin when DEVIN_API_KEY + DEVIN_ORG_ID are set, else template
+    #   devin    — prefer Devin (fall back to template on failure)
+    #   template — always use the local template build
+    # Accepts legacy boolean values for backward compat (true -> devin, false -> auto).
+    course_build_mode: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("COURSE_BUILD_MODE", "COURSE_BUILD_USE_DEVIN"),
+    )
+
+    @field_validator("course_build_mode", mode="before")
+    @classmethod
+    def _normalize_build_mode(cls, v: object) -> str:
+        """Accept legacy booleans and normalize to auto|devin|template."""
+        if isinstance(v, bool):
+            return "devin" if v else "auto"
+        s = str(v).strip().lower()
+        if s in ("true", "1", "yes"):
+            return "devin"
+        if s in ("false", "0", "no", ""):
+            return "auto"
+        if s not in ("auto", "devin", "template"):
+            return "auto"
+        return s
+
+    @computed_field
+    @property
+    def devin_build_enabled(self) -> bool:
+        """Whether the resolved mode allows Devin code-gen (auto or devin)."""
+        return self.course_build_mode in ("auto", "devin")
+
+    @computed_field
+    @property
+    def devin_configured(self) -> bool:
+        """Whether Devin API credentials are present."""
+        return bool(self.devin_api_key) and bool(self.devin_org_id)
 
     # Google Gemini (agentic planner / script-writer pipeline + media)
     gemini_api_key: str = ""

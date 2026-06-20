@@ -1,11 +1,14 @@
 """Phase 3 — Devin Implementation Agent (per-course code generation).
 
-When `COURSE_BUILD_USE_DEVIN` is enabled and the Devin API is configured, this
-authors each course's OWN Vite/React/TS application from the Lastenheft by running
-a real Devin coding session that returns the project source files as structured
-output. The builder then writes those files, runs `npm run build`, and publishes
-the resulting `dist/` (Phase 4). If Devin is unavailable or fails, the caller
-falls back to the prebuilt `course-app-template` build.
+Build-mode resolution (``COURSE_BUILD_MODE``, default ``auto``):
+
+- **auto** — use Devin when ``DEVIN_API_KEY`` + ``DEVIN_ORG_ID`` are present,
+  otherwise fall back transparently to the local template build.
+- **devin** — always attempt Devin; still falls back to template on failure
+  (pipeline never hard-fails due to code-gen).
+- **template** — skip Devin entirely, always use the prebuilt template.
+
+The legacy env var ``COURSE_BUILD_USE_DEVIN=true`` is treated as ``devin`` mode.
 
 We keep hosting under our control (MinIO) rather than asking Devin to host, so the
 generated app stays sandboxed and embeddable.
@@ -170,13 +173,30 @@ async def generate_course_app(
     `on_session` is awaited with the create-session response the moment the Devin
     session is created (before its long build wait), so the pipeline can persist
     the id/url and surface a live link to the session in the UI.
+
+    Mode resolution:
+    - template: immediately return (None, None).
+    - auto: use Devin only when credentials are configured; skip silently otherwise.
+    - devin: always attempt Devin; warn loudly on misconfiguration but still fall
+      back to avoid breaking the pipeline.
     """
-    if not settings.course_build_use_devin:
+    mode = settings.course_build_mode
+
+    if mode == "template":
         return None, None
+
     client = DevinClient()
     if not client.enabled:
-        logger.info("COURSE_BUILD_USE_DEVIN set but Devin API not configured; using template")
+        if mode == "devin":
+            logger.warning(
+                "COURSE_BUILD_MODE=devin but Devin API not configured "
+                "(missing DEVIN_API_KEY/DEVIN_ORG_ID); falling back to template"
+            )
+        else:
+            logger.debug("Devin API not configured; using template (auto mode)")
         return None, None
+
+    logger.info("Using Devin code-gen for course app (mode=%s)", mode)
 
     try:
         session_id, output = await client.run(
@@ -187,12 +207,12 @@ async def generate_course_app(
             on_created=on_session,
         )
     except DevinError as exc:
-        logger.warning("Devin course-app generation failed (%s); using template", exc)
+        logger.warning("Devin course-app generation failed (%s); falling back to template", exc)
         return None, None
 
     files = _validate_files(output)
     if not files:
-        logger.warning("Devin returned no usable project files; using template")
+        logger.warning("Devin returned no usable project files; falling back to template")
         return session_id, None
     logger.info("Devin authored %d project files for the course app", len(files))
     return session_id, files
