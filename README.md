@@ -27,13 +27,20 @@ Fill `.env` with real Devin values:
 ```bash
 DEVIN_API_KEY=cog_...
 DEVIN_API_BASE_URL=https://api.devin.ai
-DEVIN_ORG_ID=org-...
-DEVIN_PROJECT_ID=...
 DEVIN_REPO_URL=https://github.com/your-org/your-repo
 DEVIN_DEFAULT_BRANCH=main
 DATABASE_URL=sqlite:///./courseforge.db
 TESTING=false
 ```
+
+Optional Devin metadata:
+
+```bash
+DEVIN_ORG_ID=org-...
+DEVIN_PROJECT_ID=...
+```
+
+If `DEVIN_ORG_ID` is omitted, preflight resolves it from `GET /v3/self`. `DEVIN_PROJECT_ID` is retained for hackathon/project metadata; the documented Devin session endpoints used here do not require it.
 
 The service user key must be a Devin API v3 service-user key with permissions for `ReadAccountMeta`, repository read/indexing if you use prepare preflight, and organization session management.
 

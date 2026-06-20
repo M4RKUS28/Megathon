@@ -33,10 +33,15 @@ class Settings:
         return {
             "DEVIN_API_KEY": bool(self.devin_api_key),
             "DEVIN_API_BASE_URL": bool(self.devin_api_base_url),
-            "DEVIN_ORG_ID": bool(self.devin_org_id),
-            "DEVIN_PROJECT_ID": bool(self.devin_project_id),
             "DEVIN_REPO_URL": bool(self.devin_repo_url),
             "DEVIN_DEFAULT_BRANCH": bool(self.devin_default_branch),
+        }
+
+    @property
+    def optional_env_status(self) -> dict[str, bool]:
+        return {
+            "DEVIN_ORG_ID": bool(self.devin_org_id),
+            "DEVIN_PROJECT_ID": bool(self.devin_project_id),
         }
 
     @property

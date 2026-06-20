@@ -44,6 +44,7 @@ def repo_path_from_url(repo_url: str) -> str:
 class RealDevinClient:
     settings: Settings
     timeout: float = 20.0
+    _resolved_org_id: str | None = None
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.settings.devin_api_key}", "Content-Type": "application/json"}
@@ -59,10 +60,23 @@ class RealDevinClient:
             return {}
         return response.json()
 
+    async def _org_id(self) -> str:
+        if self.settings.devin_org_id:
+            return self.settings.devin_org_id
+        if self._resolved_org_id:
+            return self._resolved_org_id
+        self_payload = await self._request("GET", "/v3/self")
+        org_id = self_payload.get("org_id")
+        if not org_id:
+            raise DevinClientError("Authenticated Devin service user did not return an org_id from GET /v3/self.")
+        self._resolved_org_id = org_id
+        return org_id
+
     async def preflight(self, prepare_repository: bool = False) -> dict[str, Any]:
         missing = self.settings.missing_required_env
         checks: dict[str, Any] = {
             "env": self.settings.required_env_status,
+            "optional_env": self.settings.optional_env_status,
             "api_base_url": self.settings.normalized_base_url,
             "repo_path": repo_path_from_url(self.settings.devin_repo_url),
             "prepare_repository": prepare_repository,
@@ -74,18 +88,22 @@ class RealDevinClient:
 
         self_payload = await self._request("GET", "/v3/self")
         checks["self"] = self_payload
-        if self_payload.get("org_id") and self_payload.get("org_id") != self.settings.devin_org_id:
+        org_id = self.settings.devin_org_id or self_payload.get("org_id")
+        if self_payload.get("org_id") and self.settings.devin_org_id and self_payload.get("org_id") != self.settings.devin_org_id:
             return {
                 "ok": False,
                 "mode": "real",
                 "checks": checks,
                 "error": f"Authenticated org_id {self_payload.get('org_id')} does not match DEVIN_ORG_ID.",
             }
+        if not org_id:
+            return {"ok": False, "mode": "real", "checks": checks, "error": "GET /v3/self did not return org_id and DEVIN_ORG_ID is not set."}
+        checks["resolved_org_id"] = org_id
 
         repo_path = checks["repo_path"]
         repo_list = await self._request(
             "GET",
-            f"/v3beta1/organizations/{quote(self.settings.devin_org_id, safe='')}/repositories",
+            f"/v3beta1/organizations/{quote(org_id, safe='')}/repositories",
             params=[("only_repo_paths", repo_path), ("load_indexing_status", "true"), ("first", "10")],
         )
         checks["repository_lookup"] = repo_list
@@ -95,7 +113,7 @@ class RealDevinClient:
         if prepare_repository:
             prepared = await self._request(
                 "PUT",
-                f"/v3beta1/organizations/{quote(self.settings.devin_org_id, safe='')}/repositories/{quote(repo_path, safe='')}/indexing",
+                f"/v3beta1/organizations/{quote(org_id, safe='')}/repositories/{quote(repo_path, safe='')}/indexing",
                 json={"branch_names": [self.settings.devin_default_branch]},
             )
             checks["repository_prepare"] = prepared
@@ -103,6 +121,7 @@ class RealDevinClient:
 
     async def create_session(self, *, title: str, prompt: str, tags: list[str]) -> dict[str, Any]:
         repo_path = repo_path_from_url(self.settings.devin_repo_url)
+        org_id = await self._org_id()
         payload = {
             "title": title,
             "prompt": prompt,
@@ -124,15 +143,17 @@ class RealDevinClient:
                 },
             },
         }
-        return await self._request("POST", f"/v3/organizations/{quote(self.settings.devin_org_id, safe='')}/sessions", json=payload)
+        return await self._request("POST", f"/v3/organizations/{quote(org_id, safe='')}/sessions", json=payload)
 
     async def get_session(self, devin_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"/v3/organizations/{quote(self.settings.devin_org_id, safe='')}/sessions/{quote(devin_id, safe='')}")
+        org_id = await self._org_id()
+        return await self._request("GET", f"/v3/organizations/{quote(org_id, safe='')}/sessions/{quote(devin_id, safe='')}")
 
     async def list_messages(self, devin_id: str) -> dict[str, Any]:
+        org_id = await self._org_id()
         return await self._request(
             "GET",
-            f"/v3/organizations/{quote(self.settings.devin_org_id, safe='')}/sessions/{quote(devin_id, safe='')}/messages",
+            f"/v3/organizations/{quote(org_id, safe='')}/sessions/{quote(devin_id, safe='')}/messages",
             params={"first": 100},
         )
 
