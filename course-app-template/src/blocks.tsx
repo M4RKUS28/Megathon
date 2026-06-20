@@ -1,5 +1,5 @@
 ﻿import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
   ArcElement,
@@ -221,7 +221,158 @@ function personaOf(turn: ConversationTurn, personas: Persona[]): Persona {
   );
 }
 
+// --- Dialogue Graph types (real shape for conversation/dialogue blocks) ---
+
+interface DialogueChoice {
+  text: string;
+  next_node: string | null;
+}
+
+interface DialogueNode {
+  id: string;
+  text: string;
+  choices?: DialogueChoice[];
+}
+
+interface DialogueGraphData {
+  speaker?: string;
+  dialogue_nodes: DialogueNode[];
+}
+
+function isDialogueGraph(d: Record<string, unknown>): boolean {
+  return Array.isArray(d.dialogue_nodes);
+}
+
+function DialogueGraph({ data }: { data: Record<string, unknown> }) {
+  const reduced = useReducedMotion();
+  const raw = data as unknown as DialogueGraphData;
+  const nodes = raw.dialogue_nodes;
+  const speakerName = typeof raw.speaker === "string" ? raw.speaker : "Speaker";
+  const nodeMap = useMemo(() => {
+    const m = new Map<string, DialogueNode>();
+    for (const n of nodes) m.set(n.id, n);
+    return m;
+  }, [nodes]);
+
+  const [transcript, setTranscript] = useState<{ role: "speaker" | "learner"; text: string }[]>([]);
+  const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodes[0]?.id ?? null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const currentNode = currentNodeId ? nodeMap.get(currentNodeId) : undefined;
+  const choices = currentNode?.choices ?? [];
+  const isTerminal = !currentNode || choices.length === 0;
+
+  useEffect(() => {
+    if (currentNode && (transcript.length === 0 || transcript[transcript.length - 1].text !== currentNode.text)) {
+      setTranscript((prev) => [...prev, { role: "speaker", text: currentNode.text }]);
+    }
+  }, [currentNode, transcript]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+  }, [transcript.length, reduced]);
+
+  const pickChoice = useCallback((choice: DialogueChoice) => {
+    setTranscript((prev) => [...prev, { role: "learner", text: choice.text }]);
+    if (choice.next_node && nodeMap.has(choice.next_node)) {
+      const nextNode = nodeMap.get(choice.next_node)!;
+      setCurrentNodeId(choice.next_node);
+      setTranscript((prev) => [...prev, { role: "speaker", text: nextNode.text }]);
+    } else {
+      setCurrentNodeId(null);
+    }
+  }, [nodeMap]);
+
+  const restart = useCallback(() => {
+    setTranscript([]);
+    setCurrentNodeId(nodes[0]?.id ?? null);
+  }, [nodes]);
+
+  if (!nodes.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No dialogue available.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white" role="region" aria-label="Interactive dialogue">
+      <div className="border-b border-black/5 px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Dialogue</span>
+        <div className="text-sm font-semibold text-gray-700">{speakerName}</div>
+      </div>
+
+      <div className="max-h-[400px] overflow-y-auto p-4">
+        <div className="space-y-2.5" role="log" aria-label="Conversation transcript" aria-live="polite">
+          {transcript.map((entry, i) => {
+            const isLearner = entry.role === "learner";
+            return (
+              <motion.div
+                key={i}
+                initial={reduced ? { opacity: 1 } : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${isLearner ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
+                    isLearner
+                      ? "bg-[var(--brand)] text-white"
+                      : "border border-black/5 bg-white"
+                  }`}
+                >
+                  <div className={`mb-0.5 text-[11px] font-semibold ${isLearner ? "text-white/85" : "opacity-70"}`}>
+                    {isLearner ? "You" : speakerName}
+                  </div>
+                  <div>{entry.text}</div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Choice buttons */}
+        {!isTerminal && choices.length > 0 ? (
+          <div className="mt-3 space-y-1.5">
+            {choices.map((choice, ci) => (
+              <button
+                key={ci}
+                type="button"
+                onClick={() => pickChoice(choice)}
+                className="block w-full rounded-xl border border-[var(--brand)]/30 bg-[var(--brand)]/5 px-3 py-2 text-left text-sm font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              >
+                {choice.text}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="flex items-center justify-between border-t border-black/5 px-4 py-3">
+        <span className="text-xs text-gray-400">
+          {isTerminal && transcript.length > 0 ? "Conversation complete" : `${transcript.length} messages`}
+        </span>
+        <button
+          type="button"
+          onClick={restart}
+          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          Restart
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Conversation({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
+  // Real shape: dialogue_nodes graph
+  if (data && isDialogueGraph(data)) {
+    return <DialogueGraph data={data} />;
+  }
+
+  // Legacy shape: linear turns + personas
   const { personas, turns } = useMemo(() => normalizeConversation(data), [data]);
   const [shown, setShown] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -246,7 +397,6 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
     [resolve],
   );
 
-  // Auto-play the most recently revealed bubble.
   useEffect(() => {
     if (!turns.length) return;
     const turn = turns[shown - 1];
@@ -260,7 +410,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   const advance = () => setShown((s) => Math.min(s + 1, turns.length));
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4">
+    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4" role="region" aria-label="Conversation">
       <audio
         ref={audioRef}
         className="hidden"
@@ -280,7 +430,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
         <PersonaStage persona={right} active={right === active} resolve={resolve} />
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-2.5" role="log" aria-label="Conversation transcript" aria-live="polite">
         {turns.slice(0, shown).map((t, i) => {
           const p = personaOf(t, personas);
           const mine = p?.side === "right";
@@ -304,18 +454,21 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
                   }`}
                 >
                   {p?.name}
-                  {p?.role ? <span className="font-normal opacity-70">Â· {p.role}</span> : null}
+                  {p?.role ? <span className="font-normal opacity-70">{String.fromCharCode(183)} {p.role}</span> : null}
                 </div>
                 <div>{t.text}</div>
                 {t.audio ? (
                   <button
                     type="button"
                     onClick={() => play(t.audio, t.text)}
-                    className={`mt-1 inline-flex items-center gap-1 text-[11px] ${
+                    className={`mt-1 inline-flex items-center gap-1 text-[11px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
                       mine ? "text-white/85" : "text-[var(--brand)]"
                     }`}
                   >
-                    <span aria-hidden="true">ðŸ”Š</span> Replay
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5z"/>
+                    </svg>
+                    Replay
                   </button>
                 ) : null}
               </div>
@@ -332,23 +485,24 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
           <button
             type="button"
             onClick={() => setShown(1)}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           >
-            â†» Replay conversation
+            Replay conversation
           </button>
         ) : (
           <button
             type="button"
             onClick={advance}
-            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white"
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Next â–¶
+            Next
           </button>
         )}
       </div>
     </div>
   );
 }
+
 
 function shuffle<T>(items: T[]): T[] {
   return [...items]
@@ -722,34 +876,902 @@ function Flashcards({ data }: { data?: Record<string, unknown> }) {
   );
 }
 
+// --- DragDrop types ---
+
+interface DragDropItemReal {
+  id: string;
+  text: string;
+  category: string;
+}
+
+interface DragDropCategoryReal {
+  id: string;
+  title: string;
+}
+
+interface DragDropNormalized {
+  prompt?: string;
+  items: { id: string; text: string; correctBin: string }[];
+  bins: { id: string; title: string }[];
+}
+
+function normalizeDragDropData(data?: Record<string, unknown>): DragDropNormalized {
+  if (!data) return { items: [], bins: [] };
+  // Real shape: { items, categories }
+  if (Array.isArray(data.items) && Array.isArray(data.categories)) {
+    const rawItems = data.items as DragDropItemReal[];
+    const rawCats = data.categories as DragDropCategoryReal[];
+    return {
+      prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+      items: rawItems.map((it, i) => ({
+        id: it.id ?? `item-${i}`,
+        text: it.text,
+        correctBin: it.category,
+      })),
+      bins: rawCats.map((c) => ({ id: c.id, title: c.title })),
+    };
+  }
+  // Legacy shape: { prompt, pairs: [{ left, right }] }
+  const pairs = (data.pairs as { left: string; right: string }[]) ?? [];
+  const uniqueRights = Array.from(new Set(pairs.map((p) => p.right)));
+  return {
+    prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+    items: pairs.map((p, i) => ({
+      id: `item-${i}`,
+      text: p.left,
+      correctBin: p.right,
+    })),
+    bins: uniqueRights.map((r) => ({ id: r, title: r })),
+  };
+}
+
 function DragDrop({ data }: { data?: Record<string, unknown> }) {
-  const pairs = (data?.pairs as { left: string; right: string }[]) ?? [];
-  const rights = useMemo(() => pairs.map((p) => p.right).sort(), [pairs]);
-  const [picks, setPicks] = useState<Record<number, string>>({});
+  const reduced = useReducedMotion();
+  const normalized = useMemo(() => normalizeDragDropData(data), [data]);
+  const { prompt, items, bins } = normalized;
+
+  // Shuffled pool of items
+  const shuffledItems = useMemo(() => {
+    const arr = [...items];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.map((it) => it.id).join(",")]);
+
+  // Placements: itemId -> binId
+  const [placements, setPlacements] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [dragOverBin, setDragOverBin] = useState<string | null>(null);
+
+  const unplaced = shuffledItems.filter((it) => !placements[it.id]);
+  const allPlaced = items.length > 0 && unplaced.length === 0;
+  const score = checked
+    ? items.reduce((sum, it) => sum + (placements[it.id] === it.correctBin ? 1 : 0), 0)
+    : 0;
+
+  const placeItem = useCallback((itemId: string, binId: string) => {
+    setPlacements((prev) => ({ ...prev, [itemId]: binId }));
+    setSelectedItem(null);
+    setChecked(false);
+  }, []);
+
+  const removeItem = useCallback((itemId: string) => {
+    setPlacements((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    setChecked(false);
+  }, []);
+
+  const reset = useCallback(() => {
+    setPlacements({});
+    setChecked(false);
+    setSelectedItem(null);
+  }, []);
+
+  const handleDragStart = useCallback((e: React.DragEvent, itemId: string) => {
+    e.dataTransfer.setData("text/plain", itemId);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, binId: string) => {
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData("text/plain");
+    if (itemId) placeItem(itemId, binId);
+    setDragOverBin(null);
+  }, [placeItem]);
+
+  const handleBinClick = useCallback((binId: string) => {
+    if (selectedItem) {
+      placeItem(selectedItem, binId);
+    }
+  }, [selectedItem, placeItem]);
+
+  const handleItemKeyDown = useCallback((e: React.KeyboardEvent, itemId: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setSelectedItem((prev) => (prev === itemId ? null : itemId));
+    }
+  }, []);
+
+  const handleBinKeyDown = useCallback((e: React.KeyboardEvent, binId: string) => {
+    if ((e.key === "Enter" || e.key === " ") && selectedItem) {
+      e.preventDefault();
+      placeItem(selectedItem, binId);
+    }
+  }, [selectedItem, placeItem]);
+
+  if (!items.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No items to sort.
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-black/5 bg-white p-4">
-      {data?.prompt ? <p className="mb-3 text-sm font-medium">{String(data.prompt)}</p> : null}
-      <div className="space-y-2">
-        {pairs.map((p, i) => {
-          const correct = picks[i] === p.right;
-          return (
-            <div key={i} className="flex items-center gap-3">
-              <span className="w-28 shrink-0 text-sm font-medium">{p.left}</span>
-              <select
-                value={picks[i] ?? ""}
-                onChange={(e) => setPicks((s) => ({ ...s, [i]: e.target.value }))}
-                className={`flex-1 rounded-lg border px-2 py-1.5 text-sm ${
-                  picks[i] ? (correct ? "border-emerald-500" : "border-red-400") : "border-black/10"
-                }`}
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Drag and drop sorting activity">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Sort Items</div>
+          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+        </div>
+        {checked ? (
+          <div className="rounded-lg border border-black/5 bg-white px-3 py-1.5 text-sm font-bold text-[var(--brand)]">
+            {score}/{items.length}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="p-4">
+        {/* Item pool */}
+        {unplaced.length > 0 ? (
+          <div className="mb-4">
+            <div className="mb-2 text-xs font-medium text-gray-500">Items to sort:</div>
+            <div className="flex flex-wrap gap-2" role="list" aria-label="Items to place">
+              {unplaced.map((item) => (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  layout={!reduced}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, item.id)}
+                  onClick={() => setSelectedItem((prev) => (prev === item.id ? null : item.id))}
+                  onKeyDown={(e) => handleItemKeyDown(e, item.id)}
+                  className={`cursor-grab rounded-lg border px-3 py-1.5 text-sm font-medium transition active:cursor-grabbing ${
+                    selectedItem === item.id
+                      ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
+                      : "border-black/10 bg-white hover:border-[var(--brand)]/50"
+                  } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
+                  role="listitem"
+                  aria-label={`${item.text}${selectedItem === item.id ? " (selected)" : ""}`}
+                  aria-pressed={selectedItem === item.id}
+                >
+                  {item.text}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Category bins */}
+        <div className={`grid gap-3 ${bins.length <= 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+          {bins.map((bin) => {
+            const binItems = items.filter((it) => placements[it.id] === bin.id);
+            const isOver = dragOverBin === bin.id;
+            return (
+              <div
+                key={bin.id}
+                onDragOver={handleDragOver}
+                onDragEnter={() => setDragOverBin(bin.id)}
+                onDragLeave={() => setDragOverBin(null)}
+                onDrop={(e) => handleDrop(e, bin.id)}
+                onClick={() => handleBinClick(bin.id)}
+                onKeyDown={(e) => handleBinKeyDown(e, bin.id)}
+                tabIndex={selectedItem ? 0 : -1}
+                role="group"
+                aria-label={`Category: ${bin.title}`}
+                className={`min-h-[80px] rounded-xl border-2 border-dashed p-3 transition ${
+                  isOver
+                    ? "border-[var(--brand)] bg-[var(--brand)]/5"
+                    : selectedItem
+                      ? "border-[var(--brand)]/30 bg-[var(--brand)]/5 cursor-pointer"
+                      : "border-black/10 bg-gray-50"
+                } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
               >
-                <option value="">Selectâ€¦</option>
-                {rights.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-              {picks[i] ? <span>{correct ? "âœ“" : "âœ—"}</span> : null}
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  {bin.title}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {binItems.map((item) => {
+                    const isCorrect = checked && placements[item.id] === item.correctBin;
+                    const isWrong = checked && placements[item.id] !== item.correctBin;
+                    return (
+                      <span
+                        key={item.id}
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${
+                          isCorrect
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            : isWrong
+                              ? "border-red-300 bg-red-50 text-red-700"
+                              : "border-black/10 bg-white"
+                        }`}
+                      >
+                        {item.text}
+                        {!checked ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+                            className="ml-0.5 text-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
+                            aria-label={`Remove ${item.text}`}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                              <path d="M18 6L6 18M6 6l12 12" />
+                            </svg>
+                          </button>
+                        ) : null}
+                        {isCorrect ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        ) : null}
+                        {isWrong ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        ) : null}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          Reset
+        </button>
+        {allPlaced && !checked ? (
+          <button
+            type="button"
+            onClick={() => setChecked(true)}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            Check
+          </button>
+        ) : null}
+        {checked ? (
+          <span className="text-sm font-medium" role="status" aria-live="polite">
+            {score === items.length ? (
+              <span className="text-emerald-600">All correct!</span>
+            ) : (
+              <span className="text-gray-600">{score} of {items.length} correct</span>
+            )}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+
+// --- Hotspot types ---
+
+interface HotspotSpotNormalized {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  title: string;
+  description: string;
+}
+
+function normalizeHotspotData(
+  data: Record<string, unknown> | undefined,
+  resolve: Resolve,
+): { imageUrl: string | undefined; spots: HotspotSpotNormalized[] } {
+  if (!data) return { imageUrl: undefined, spots: [] };
+  // Real shape: { image_url, hotspots: [...] }
+  if (Array.isArray(data.hotspots)) {
+    const hotspots = data.hotspots as { id?: string; x: number; y: number; radius?: number; title?: string; description?: string }[];
+    return {
+      imageUrl: resolve(data.image_url as string | undefined),
+      spots: hotspots.map((h, i) => ({
+        id: typeof h.id === "string" ? h.id : `spot-${i}`,
+        x: h.x,
+        y: h.y,
+        radius: typeof h.radius === "number" ? h.radius : 3,
+        title: typeof h.title === "string" ? h.title : `Spot ${i + 1}`,
+        description: typeof h.description === "string" ? h.description : "",
+      })),
+    };
+  }
+  // Legacy shape: { asset, spots: [{ x, y, label }] }
+  const legacySpots = (data.spots as { x: number; y: number; label: string }[]) ?? [];
+  return {
+    imageUrl: resolve(data.asset as string | undefined),
+    spots: legacySpots.map((s, i) => ({
+      id: `spot-${i}`,
+      x: s.x,
+      y: s.y,
+      radius: 3,
+      title: s.label,
+      description: "",
+    })),
+  };
+}
+
+function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
+  const reduced = useReducedMotion();
+  const { imageUrl, spots } = useMemo(() => normalizeHotspotData(data, resolve), [data, resolve]);
+  const [discovered, setDiscovered] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const total = spots.length;
+  const found = discovered.size;
+  const done = total > 0 && found >= total;
+
+  const clearHint = useCallback(() => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    setHint(null);
+  }, []);
+
+  const handleSpotClick = useCallback(
+    (spot: HotspotSpotNormalized) => {
+      clearHint();
+      setDiscovered((prev) => new Set(prev).add(spot.id));
+      setActiveId((prev) => (prev === spot.id ? null : spot.id));
+    },
+    [clearHint],
+  );
+
+  const handleImageClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).closest("button")) return;
+      clearHint();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = ((e.clientX - rect.left) / rect.width) * 100;
+      const clickY = ((e.clientY - rect.top) / rect.height) * 100;
+      const hit = spots.find((s) => {
+        const dx = clickX - s.x;
+        const dy = clickY - s.y;
+        return Math.sqrt(dx * dx + dy * dy) <= s.radius + 2;
+      });
+      if (hit) {
+        handleSpotClick(hit);
+      } else {
+        setHint("Try clicking on a highlighted region");
+        hintTimer.current = setTimeout(() => setHint(null), 2000);
+      }
+    },
+    [spots, handleSpotClick, clearHint],
+  );
+
+  const reset = useCallback(() => {
+    setDiscovered(new Set());
+    setActiveId(null);
+    clearHint();
+  }, [clearHint]);
+
+  useEffect(() => {
+    return () => { if (hintTimer.current) clearTimeout(hintTimer.current); };
+  }, []);
+
+  if (!spots.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No hotspots available.
+      </div>
+    );
+  }
+
+  const activeSpot = spots.find((s) => s.id === activeId);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Interactive hotspot image">
+      {/* Progress */}
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-2">
+        <span className="text-xs font-medium text-gray-500" role="status" aria-live="polite">
+          Discovered {found}/{total}
+        </span>
+        {found > 0 ? (
+          <button
+            type="button"
+            onClick={reset}
+            className="rounded-md px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          >
+            Reset
+          </button>
+        ) : null}
+      </div>
+
+      <div className="h-1 bg-gray-100">
+        <motion.div
+          className="h-full bg-[var(--brand)]"
+          animate={{ width: `${total ? (found / total) * 100 : 0}%` }}
+          transition={{ duration: reduced ? 0 : 0.4 }}
+        />
+      </div>
+
+      {/* Image + spots */}
+      <div
+        className="relative cursor-crosshair select-none"
+        onClick={handleImageClick}
+        role="img"
+        aria-label="Hotspot image with clickable regions"
+      >
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="block w-full" draggable={false} />
+        ) : (
+          <div className="flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400">
+            No image provided
+          </div>
+        )}
+
+        {spots.map((spot) => {
+          const isDiscovered = discovered.has(spot.id);
+          const isActive = activeId === spot.id;
+          return (
+            <button
+              key={spot.id}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleSpotClick(spot); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); handleSpotClick(spot); } }}
+              style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
+              className={`absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-bold shadow-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
+                isDiscovered
+                  ? "bg-emerald-500 text-white"
+                  : "bg-[var(--brand)] text-white"
+              } ${isActive ? "ring-4 ring-[var(--brand)]/30" : ""}`}
+              aria-label={isDiscovered ? `${spot.title} (discovered)` : `Undiscovered spot`}
+              aria-pressed={isActive}
+            >
+              {isDiscovered ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : (
+                <motion.span
+                  animate={reduced ? {} : { scale: [1, 1.3, 1] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  className="block h-2.5 w-2.5 rounded-full bg-white/80"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          );
+        })}
+
+        <AnimatePresence>
+          {hint ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-gray-900/90 px-3 py-1.5 text-xs text-white shadow-lg"
+              role="alert"
+            >
+              {hint}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+
+      {/* Detail panel */}
+      <AnimatePresence>
+        {activeSpot ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="overflow-hidden border-t border-black/5"
+          >
+            <div className="bg-gray-50 p-4">
+              <div className="text-sm font-semibold text-gray-900">{activeSpot.title}</div>
+              {activeSpot.description ? (
+                <div className="mt-1 text-sm text-gray-600">{activeSpot.description}</div>
+              ) : null}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Completion */}
+      <AnimatePresence>
+        {done ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="border-t border-emerald-200 bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700"
+            role="status"
+            aria-live="polite"
+          >
+            All {total} hotspots discovered!
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+
+// --- Timeline types ---
+
+interface TimelineStepNormalized {
+  id: string;
+  title: string;
+  description: string;
+}
+
+function normalizeTimelineData(data?: Record<string, unknown>): TimelineStepNormalized[] {
+  if (!data) return [];
+  // Real shape: { steps: [{ id, title, description }] }
+  if (Array.isArray(data.steps)) {
+    return (data.steps as { id?: string; title?: string; description?: string }[]).map((s, i) => ({
+      id: typeof s.id === "string" ? s.id : `step-${i}`,
+      title: typeof s.title === "string" ? s.title : `Step ${i + 1}`,
+      description: typeof s.description === "string" ? s.description : "",
+    }));
+  }
+  // Legacy shape: { events: [{ date, text }] }
+  const events = (data.events as { date: string; text: string }[]) ?? [];
+  return events.map((ev, i) => ({
+    id: `event-${i}`,
+    title: ev.date,
+    description: ev.text,
+  }));
+}
+
+function Timeline({ data }: { data?: Record<string, unknown> }) {
+  const reduced = useReducedMotion();
+  const authoredSteps = useMemo(() => normalizeTimelineData(data), [data]);
+  const [interactive, setInteractive] = useState(false);
+  const [userOrder, setUserOrder] = useState<TimelineStepNormalized[]>([]);
+  const [validated, setValidated] = useState(false);
+
+  const startInteractive = useCallback(() => {
+    const shuffled = [...authoredSteps];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setUserOrder(shuffled);
+    setValidated(false);
+    setInteractive(true);
+  }, [authoredSteps]);
+
+  const moveStep = useCallback((from: number, direction: -1 | 1) => {
+    const to = from + direction;
+    setUserOrder((prev) => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+    setValidated(false);
+  }, []);
+
+  const checkOrder = useCallback(() => setValidated(true), []);
+
+  const exitInteractive = useCallback(() => {
+    setInteractive(false);
+    setValidated(false);
+  }, []);
+
+  if (!authoredSteps.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No timeline data available.
+      </div>
+    );
+  }
+
+  if (interactive) {
+    const allCorrect = userOrder.every((s, i) => s.id === authoredSteps[i].id);
+    return (
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Interactive timeline reorder">
+        <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Reorder the steps</span>
+          <button
+            type="button"
+            onClick={exitInteractive}
+            className="text-xs font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          >
+            Back to timeline
+          </button>
+        </div>
+
+        <div className="space-y-2 p-4" role="list" aria-label="Reorderable steps">
+          {userOrder.map((step, i) => {
+            const isCorrect = validated && step.id === authoredSteps[i].id;
+            const isWrong = validated && step.id !== authoredSteps[i].id;
+            return (
+              <motion.div
+                layout={!reduced}
+                key={step.id}
+                className={`flex items-center gap-2 rounded-xl border p-3 ${
+                  isCorrect
+                    ? "border-emerald-300 bg-emerald-50"
+                    : isWrong
+                      ? "border-red-300 bg-red-50"
+                      : "border-black/10 bg-gray-50"
+                }`}
+                role="listitem"
+              >
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-700 shadow-sm">
+                  {i + 1}
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{step.title}</div>
+                  {step.description ? <div className="text-xs text-gray-500">{step.description}</div> : null}
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveStep(i, -1)}
+                    disabled={i === 0}
+                    className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                    aria-label={`Move ${step.title} up`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M18 15l-6-6-6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveStep(i, 1)}
+                    disabled={i === userOrder.length - 1}
+                    className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                    aria-label={`Move ${step.title} down`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
+          <span className="text-xs text-gray-500" role="status" aria-live="polite">
+            {validated ? (allCorrect ? "Correct order!" : "Some steps are out of order") : `${userOrder.length} steps`}
+          </span>
+          {!validated ? (
+            <button
+              type="button"
+              onClick={checkOrder}
+              className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Check Order
+            </button>
+          ) : !allCorrect ? (
+            <button
+              type="button"
+              onClick={() => setValidated(false)}
+              className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            >
+              Try Again
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // Default: vertical animated timeline
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Timeline">
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Timeline</span>
+        {authoredSteps.length > 1 ? (
+          <button
+            type="button"
+            onClick={startInteractive}
+            className="rounded-md px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          >
+            Try reordering
+          </button>
+        ) : null}
+      </div>
+
+      <ol className="relative space-y-0 border-l-2 border-[var(--brand)]/20 py-4 pl-8 pr-4 ml-4" aria-label="Timeline steps">
+        {authoredSteps.map((step, i) => (
+          <motion.li
+            key={step.id}
+            initial={reduced ? { opacity: 1 } : { opacity: 0, x: -12 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1, duration: 0.3 }}
+            className="relative pb-6 last:pb-0"
+          >
+            <span className="absolute -left-[33px] top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-bold text-white shadow-sm">
+              {i + 1}
+            </span>
+            <div className="text-sm font-semibold text-gray-900">{step.title}</div>
+            {step.description ? (
+              <div className="mt-0.5 text-sm text-gray-600">{step.description}</div>
+            ) : null}
+          </motion.li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+
+// --- Accordion types ---
+
+interface AccordionSectionNormalized {
+  title: string;
+  content: string;
+}
+
+function normalizeAccordionData(data?: Record<string, unknown>): AccordionSectionNormalized[] {
+  if (!data) return [];
+  // Real shape: { sections: [{ title, content }] }
+  if (Array.isArray(data.sections)) {
+    return (data.sections as { title?: string; content?: string }[]).map((s, i) => ({
+      title: typeof s.title === "string" ? s.title : `Section ${i + 1}`,
+      content: typeof s.content === "string" ? s.content : "",
+    }));
+  }
+  // Legacy shape: { items: [{ title, body }] }
+  const items = (data.items as { title: string; body: string }[]) ?? [];
+  return items.map((it) => ({
+    title: it.title,
+    content: it.body,
+  }));
+}
+
+function Accordion({ data }: { data?: Record<string, unknown> }) {
+  const reduced = useReducedMotion();
+  const sections = useMemo(() => normalizeAccordionData(data), [data]);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [explored, setExplored] = useState<Set<number>>(new Set());
+
+  const total = sections.length;
+  const exploredCount = explored.size;
+  const allExplored = total > 0 && exploredCount >= total;
+
+  const toggle = useCallback((i: number) => {
+    setOpenIndex((prev) => {
+      const next = prev === i ? null : i;
+      if (next !== null) {
+        setExplored((prev) => new Set(prev).add(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const collapseAll = useCallback(() => setOpenIndex(null), []);
+
+  const resetProgress = useCallback(() => {
+    setOpenIndex(null);
+    setExplored(new Set());
+  }, []);
+
+  if (!sections.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No sections available.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Accordion">
+      {/* Progress header */}
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-2">
+        <span className="text-xs font-medium text-gray-500" role="status" aria-live="polite">
+          {allExplored ? (
+            <span className="text-emerald-600">All sections explored!</span>
+          ) : (
+            `Explored ${exploredCount}/${total}`
+          )}
+        </span>
+        <div className="flex gap-2">
+          {openIndex !== null ? (
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            >
+              Collapse all
+            </button>
+          ) : null}
+          {exploredCount > 0 ? (
+            <button
+              type="button"
+              onClick={resetProgress}
+              className="text-xs font-medium text-[var(--brand)] hover:text-[var(--brand)]/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-gray-100">
+        <motion.div
+          className="h-full bg-[var(--brand)]"
+          animate={{ width: `${total ? (exploredCount / total) * 100 : 0}%` }}
+          transition={{ duration: reduced ? 0 : 0.3 }}
+        />
+      </div>
+
+      {/* Sections */}
+      <div className="divide-y divide-black/5" role="list">
+        {sections.map((section, i) => {
+          const isOpen = openIndex === i;
+          const wasExplored = explored.has(i);
+          return (
+            <div key={i} role="listitem">
+              <button
+                type="button"
+                onClick={() => toggle(i)}
+                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-medium text-gray-900 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
+                aria-expanded={isOpen}
+              >
+                <span className="flex items-center gap-2">
+                  {wasExplored ? (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full border border-black/10" aria-hidden="true" />
+                  )}
+                  {section.title}
+                </span>
+                <motion.span
+                  animate={{ rotate: isOpen ? 180 : 0 }}
+                  transition={{ duration: reduced ? 0 : 0.2 }}
+                  aria-hidden="true"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </motion.span>
+              </button>
+              <AnimatePresence initial={false}>
+                {isOpen ? (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: reduced ? 0 : 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-gray-600">{section.content}</div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
           );
         })}
@@ -758,102 +1780,262 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
   );
 }
 
-function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
-  const spots = (data?.spots as { x: number; y: number; label: string }[]) ?? [];
-  const [active, setActive] = useState<number | null>(null);
-  const img = resolve(data?.asset as string | undefined);
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-black/5 bg-white">
-      {img ? <img src={img} alt="" className="w-full" /> : <div className="h-48 bg-gray-100" />}
-      {spots.map((s, i) => (
-        <button
-          key={i}
-          onClick={() => setActive(active === i ? null : i)}
-          style={{ left: `${s.x}%`, top: `${s.y}%` }}
-          className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--brand)] text-xs font-bold text-white shadow"
-        >
-          {i + 1}
-        </button>
-      ))}
-      {active !== null && spots[active] ? (
-        <div className="border-t border-black/5 bg-gray-50 p-3 text-sm">{spots[active].label}</div>
-      ) : null}
-    </div>
-  );
+
+// --- Scenario types ---
+
+interface ScenarioOption {
+  text: string;
+  feedback: string;
+  next_step?: string | null;
+  correct?: boolean;
 }
 
-function Timeline({ data }: { data?: Record<string, unknown> }) {
-  const items = (data?.events as { date: string; text: string }[]) ?? [];
-  return (
-    <ol className="relative space-y-4 border-l-2 border-[var(--brand)]/30 pl-5">
-      {items.map((it, i) => (
-        <motion.li
-          key={i}
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          className="relative"
-        >
-          <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full bg-[var(--brand)]" />
-          <div className="text-xs font-semibold text-[var(--brand)]">{it.date}</div>
-          <div className="text-sm">{it.text}</div>
-        </motion.li>
-      ))}
-    </ol>
-  );
+interface ScenarioStep {
+  id: string;
+  question: string;
+  options: ScenarioOption[];
 }
 
-function Accordion({ data }: { data?: Record<string, unknown> }) {
-  const items = (data?.items as { title: string; body: string }[]) ?? [];
-  const [open, setOpen] = useState<number | null>(0);
-  return (
-    <div className="divide-y divide-black/5 overflow-hidden rounded-xl border border-black/5 bg-white">
-      {items.map((it, i) => (
-        <div key={i}>
-          <button
-            onClick={() => setOpen(open === i ? null : i)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
-          >
-            {it.title}
-            <span>{open === i ? "âˆ’" : "+"}</span>
-          </button>
-          {open === i ? <div className="px-4 pb-4 text-sm text-gray-600">{it.body}</div> : null}
-        </div>
-      ))}
-    </div>
-  );
+interface ScenarioNormalized {
+  prompt?: string;
+  steps: ScenarioStep[];
+}
+
+function normalizeScenarioData(data?: Record<string, unknown>): ScenarioNormalized {
+  if (!data) return { steps: [] };
+  // Real shape: { steps: [{ id, question, options: [{ text, feedback, next_step }] }] }
+  if (Array.isArray(data.steps)) {
+    const steps = (data.steps as { id?: string; question?: string; options?: { text: string; feedback?: string; next_step?: string | null; correct?: boolean }[] }[]).map(
+      (s, i) => ({
+        id: typeof s.id === "string" ? s.id : `step-${i}`,
+        question: typeof s.question === "string" ? s.question : `Decision ${i + 1}`,
+        options: (s.options ?? []).map((o) => ({
+          text: o.text,
+          feedback: typeof o.feedback === "string" ? o.feedback : "",
+          next_step: o.next_step ?? null,
+          correct: typeof o.correct === "boolean" ? o.correct : undefined,
+        })),
+      }),
+    );
+    return { prompt: typeof data.prompt === "string" ? data.prompt : undefined, steps };
+  }
+  // Legacy shape: { prompt, branches: [{ choice, outcome }] }
+  const branches = (data.branches as { choice: string; outcome: string }[]) ?? [];
+  const singleStep: ScenarioStep = {
+    id: "step-0",
+    question: typeof data.prompt === "string" ? data.prompt : "Make your choice:",
+    options: branches.map((b) => ({
+      text: b.choice,
+      feedback: b.outcome,
+      next_step: null,
+    })),
+  };
+  return { prompt: undefined, steps: branches.length ? [singleStep] : [] };
 }
 
 function Scenario({ data }: { data?: Record<string, unknown> }) {
-  const branches = (data?.branches as { choice: string; outcome: string }[]) ?? [];
-  const [picked, setPicked] = useState<number | null>(null);
-  return (
-    <div className="rounded-xl border border-black/5 bg-white p-4">
-      {data?.prompt ? <p className="mb-3 text-sm font-medium">{String(data.prompt)}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        {branches.map((b, i) => (
-          <button
-            key={i}
-            onClick={() => setPicked(i)}
-            className={`rounded-lg border px-3 py-1.5 text-sm ${
-              picked === i ? "border-[var(--brand)] bg-[var(--brand)]/10" : "border-black/10"
-            }`}
-          >
-            {b.choice}
-          </button>
-        ))}
+  const reduced = useReducedMotion();
+  const { prompt, steps } = useMemo(() => normalizeScenarioData(data), [data]);
+  const stepMap = useMemo(() => {
+    const m = new Map<string, ScenarioStep>();
+    for (const s of steps) m.set(s.id, s);
+    return m;
+  }, [steps]);
+
+  const [currentStepId, setCurrentStepId] = useState<string>(steps[0]?.id ?? "");
+  const [chosenOption, setChosenOption] = useState<ScenarioOption | null>(null);
+  const [history, setHistory] = useState<{ stepId: string; option: ScenarioOption }[]>([]);
+  const [complete, setComplete] = useState(false);
+
+  const currentStep = stepMap.get(currentStepId);
+
+  const pickOption = useCallback(
+    (option: ScenarioOption) => {
+      setChosenOption(option);
+    },
+    [],
+  );
+
+  const advance = useCallback(() => {
+    if (!chosenOption || !currentStepId) return;
+    setHistory((prev) => [...prev, { stepId: currentStepId, option: chosenOption }]);
+    if (chosenOption.next_step && stepMap.has(chosenOption.next_step)) {
+      setCurrentStepId(chosenOption.next_step);
+      setChosenOption(null);
+    } else {
+      setComplete(true);
+    }
+  }, [chosenOption, currentStepId, stepMap]);
+
+  const reset = useCallback(() => {
+    setCurrentStepId(steps[0]?.id ?? "");
+    setChosenOption(null);
+    setHistory([]);
+    setComplete(false);
+  }, [steps]);
+
+  if (!steps.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No scenario data available.
       </div>
-      {picked !== null && branches[picked] ? (
+    );
+  }
+
+  const totalSteps = steps.length;
+  const completedSteps = history.length;
+  const correctCount = history.filter((h) => h.option.correct === true).length;
+  const hasCorrectness = history.some((h) => h.option.correct !== undefined);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Decision scenario">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Scenario</div>
+          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+        </div>
+        <span className="text-xs text-gray-400">
+          Step {Math.min(completedSteps + 1, totalSteps)}/{totalSteps}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-gray-100">
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-3 rounded-lg bg-gray-50 p-3 text-sm"
+          className="h-full bg-[var(--brand)]"
+          animate={{ width: `${totalSteps ? ((complete ? totalSteps : completedSteps) / totalSteps) * 100 : 0}%` }}
+          transition={{ duration: reduced ? 0 : 0.3 }}
+        />
+      </div>
+
+      <div className="p-4">
+        {/* History */}
+        {history.length > 0 ? (
+          <div className="mb-4 space-y-2">
+            {history.map((h, i) => {
+              const step = stepMap.get(h.stepId);
+              const isCorrect = h.option.correct === true;
+              const isWrong = h.option.correct === false;
+              return (
+                <motion.div
+                  key={i}
+                  initial={reduced ? { opacity: 1 } : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="rounded-lg bg-gray-50 p-3"
+                >
+                  <div className="text-xs font-medium text-gray-500">{step?.question}</div>
+                  <div className={`mt-1 text-sm font-medium ${isCorrect ? "text-emerald-700" : isWrong ? "text-red-600" : "text-gray-900"}`}>
+                    {isCorrect ? (
+                      <svg className="mr-1 inline h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
+                    ) : isWrong ? (
+                      <svg className="mr-1 inline h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    ) : null}
+                    {h.option.text}
+                  </div>
+                  {h.option.feedback ? (
+                    <div className="mt-1 text-xs text-gray-500">{h.option.feedback}</div>
+                  ) : null}
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Current step or completion */}
+        {complete ? (
+          <motion.div
+            initial={reduced ? { opacity: 1 } : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="text-sm font-semibold text-emerald-700">Scenario Complete</div>
+            {hasCorrectness ? (
+              <div className="mt-1 text-xs text-emerald-600">
+                {correctCount} of {history.length} decisions correct
+              </div>
+            ) : (
+              <div className="mt-1 text-xs text-emerald-600">
+                You completed all {history.length} decision{history.length !== 1 ? "s" : ""}
+              </div>
+            )}
+          </motion.div>
+        ) : currentStep ? (
+          <div>
+            <div className="mb-3 text-sm font-semibold text-gray-900">{currentStep.question}</div>
+            <div className="space-y-2">
+              {currentStep.options.map((option, oi) => {
+                const isChosen = chosenOption === option;
+                const showFeedback = isChosen && option.feedback;
+                const isCorrect = isChosen && option.correct === true;
+                const isWrong = isChosen && option.correct === false;
+                return (
+                  <div key={oi}>
+                    <button
+                      type="button"
+                      onClick={() => pickOption(option)}
+                      disabled={chosenOption !== null && chosenOption !== option}
+                      className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${
+                        isCorrect
+                          ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                          : isWrong
+                            ? "border-red-300 bg-red-50 text-red-700"
+                            : isChosen
+                              ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
+                              : "border-black/10 hover:border-[var(--brand)]/50"
+                      } disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
+                      aria-pressed={isChosen}
+                    >
+                      {option.text}
+                    </button>
+                    <AnimatePresence>
+                      {showFeedback ? (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: reduced ? 0 : 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-1.5 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600" role="alert">
+                            {option.feedback}
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
-          {branches[picked].outcome}
-        </motion.div>
-      ) : null}
+          Restart
+        </button>
+        {chosenOption && !complete ? (
+          <button
+            type="button"
+            onClick={advance}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            Continue
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
+
 
 function ChartBlock({ data }: { data?: Record<string, unknown> }) {
   const chartType = (data?.chartType as string) ?? "bar";
