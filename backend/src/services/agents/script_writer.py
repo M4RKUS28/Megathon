@@ -20,6 +20,9 @@ import asyncio
 import logging
 from typing import TypedDict
 
+from langchain_core.messages import AIMessage
+from langchain_core.output_parsers import PydanticOutputParser
+
 from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
 from .schemas import (
@@ -32,6 +35,11 @@ from .schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Gemini's function-calling structured output silently returns empty nested
+# arrays for this deeply nested schema (pages/blocks/asset_needs/quiz come back
+# []). We instead prompt for raw JSON and parse it, which populates reliably.
+_CHAPTER_PARSER = PydanticOutputParser(pydantic_object=SpecChapter)
 
 SCRIPT_SYSTEM = """You are a senior interactive learning designer creating an implementation-
 ready Lastenheft (specification) for a bespoke Vite/React course app. A coding agent (Devin)
@@ -157,16 +165,36 @@ def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
         f"- key points: {kp}\n\n"
         f"Produce 3-5 content pages (each with blocks and asset_needs) and a quiz "
         f"with 3-5 questions for chapter [{chapter.id}]. Keep id='{chapter.id}' and "
-        f"title='{chapter.title}'."
+        f"title='{chapter.title}'.\n\n"
+        f"{_CHAPTER_PARSER.get_format_instructions()}"
     )
+
+
+def _message_text(message: AIMessage) -> str:
+    """Flatten a chat message's content to text.
+
+    Gemini 3 thinking models return ``content`` as a list of parts (text +
+    thought-signature blocks); join only the text parts.
+    """
+    content = message.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    return str(content)
 
 
 async def _design_one_chapter(
     model, plan: CoursePlan, chapter: PlanChapter
 ) -> SpecChapter:
-    spec: SpecChapter = await model.ainvoke(
+    message = await model.ainvoke(
         [("system", SCRIPT_SYSTEM), ("user", _chapter_text(plan, chapter))]
     )
+    spec: SpecChapter = _CHAPTER_PARSER.parse(_message_text(message))
     # Anchor identity to the plan so manifest/ordering stay consistent even if
     # the model echoes back blank or altered id/title fields.
     if not spec.id:
@@ -180,7 +208,7 @@ async def _design_interactions(state: _State) -> _State:
     plan = state["plan"]
     if not plan.chapters:
         raise RuntimeError("course plan has no chapters")
-    model = get_chat_model(temperature=0.5).with_structured_output(SpecChapter)
+    model = get_chat_model(temperature=0.5)
     chapters = await asyncio.gather(
         *(_design_one_chapter(model, plan, ch) for ch in plan.chapters)
     )
