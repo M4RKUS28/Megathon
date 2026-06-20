@@ -1,87 +1,146 @@
+/* Coursive login theme — mirrors the marketing app (frontend/src/pages/Landing.tsx).
+   Same brand tokens, fonts (Sora/Inter/JetBrains Mono), and patterns: a dark
+   "hero" brand pane on the left, a clean white form card on the right. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Sora:wght@500;600;700;800&display=swap");
+
 :root {
   --coursive-ink: #0c0e1a;
   --coursive-paper: #f6f5f1;
   --coursive-iris: #5145e5;
+  --coursive-iris-hover: #4338ca;
   --coursive-signal: #ff5c38;
   --coursive-mist: #e5e3dc;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 body.login-pf {
   min-height: 100vh;
   background: var(--coursive-paper);
   color: var(--coursive-ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-body.login-pf::before {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  content: "";
-  background:
-    linear-gradient(90deg, var(--coursive-ink) 0 42%, transparent 42%),
-    radial-gradient(circle at 24% 22%, rgba(81, 69, 229, 0.45), transparent 34%),
-    radial-gradient(circle at 18% 76%, rgba(255, 92, 56, 0.32), transparent 30%);
-}
-
+/* ── Two-pane layout: brand hero (left) + form card (right) ──────────────── */
 .login-pf-page {
-  position: relative;
-  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
   min-height: 100vh;
   padding: 0;
+  background: transparent;
 }
 
-.login-pf-page-header {
-  width: min(100%, 1120px);
-  margin: 0 auto;
-  padding: 32px 24px 0;
+/* Left pane — the dark hero, echoing the landing page's hero section. */
+#kc-header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  padding: 48px clamp(32px, 5vw, 72px);
+  color: var(--coursive-paper);
+  background-color: var(--coursive-ink);
+  /* Decorative brand glow — mirrors the radial gradients in AssemblyVisual. */
+  background-image:
+    radial-gradient(circle at 78% 22%, rgba(81, 69, 229, 0.42), transparent 46%),
+    radial-gradient(circle at 16% 88%, rgba(255, 92, 56, 0.26), transparent 42%);
 }
 
+/* Keep brand text above the decorative glow. */
+#kc-header-wrapper,
+#kc-header::before,
+#kc-header::after {
+  position: relative;
+  z-index: 1;
+}
+
+#kc-header::after {
+  /* Headline, pinned toward the bottom like the landing hero copy. */
+  order: 3;
+  max-width: 14ch;
+  margin-top: 18px;
+  content: "Onboarding that builds itself.";
+  font-family: var(--font-display);
+  font-size: clamp(32px, 3.6vw, 52px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+
+#kc-header::before {
+  /* Mono eyebrow above the headline (font-mono + signal, like the app). */
+  order: 2;
+  content: "WHITE-LABEL COURSE ENGINE";
+  color: var(--coursive-signal);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+}
+
+/* Wordmark — iris "C" tile + "Coursive" in Sora, matching <Wordmark/>. */
 #kc-header-wrapper {
+  order: 1;
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  margin-bottom: auto;
   color: var(--coursive-paper);
-  font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: 0;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-weight: 700;
 }
 
 #kc-header-wrapper::before {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border-radius: 8px;
   background: var(--coursive-iris);
   color: #fff;
   content: "C";
-  font-size: 17px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 #kc-header-wrapper::after {
   content: "Coursive";
-  font-size: 22px;
+  font-size: 20px;
+  letter-spacing: -0.01em;
 }
 
+/* Right pane — the form card, centered like the landing's bordered cards. */
 .login-pf-page .card-pf {
-  width: min(440px, calc(100vw - 32px));
-  margin: 8vh max(24px, calc((100vw - 1120px) / 2)) 32px auto;
-  padding: 34px;
+  place-self: center;
+  width: min(420px, calc(100vw - 48px));
+  margin: 40px auto;
+  padding: 36px;
   border: 1px solid var(--coursive-mist);
-  border-radius: 8px;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: 0 24px 80px rgba(12, 14, 26, 0.14);
+  box-shadow: 0 24px 70px rgba(12, 14, 26, 0.12);
 }
 
+/* ── Typography ──────────────────────────────────────────────────────────── */
 .login-pf-header h1,
 #kc-page-title {
+  margin: 0 0 6px;
   color: var(--coursive-ink);
-  font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: 28px;
+  font-family: var(--font-display);
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
+}
+
+#kc-content-wrapper > p,
+.subtitle,
+.instruction {
+  color: rgba(12, 14, 26, 0.6);
+  font-size: 14px;
 }
 
 .pf-c-form__label,
@@ -89,18 +148,24 @@ body.login-pf::before {
 label {
   color: rgba(12, 14, 26, 0.78);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
 .pf-c-form-control,
 input[type="text"],
 input[type="email"],
-input[type="password"] {
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
   min-height: 44px;
   border: 1px solid var(--coursive-mist);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   color: var(--coursive-ink);
+  font-family: var(--font-sans);
   font-size: 15px;
   box-shadow: none;
 }
@@ -108,47 +173,145 @@ input[type="password"] {
 .pf-c-form-control:focus,
 input[type="text"]:focus,
 input[type="email"]:focus,
-input[type="password"]:focus {
+input[type="password"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
   border-color: var(--coursive-iris);
-  box-shadow: 0 0 0 3px rgba(81, 69, 229, 0.14);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(81, 69, 229, 0.16);
 }
 
+.pf-c-form-control.pf-m-error,
+.has-error .pf-c-form-control,
+input.error {
+  border-color: var(--coursive-signal);
+  box-shadow: 0 0 0 3px rgba(255, 92, 56, 0.14);
+}
+
+/* Password reveal toggle — keep it tidy inside the field. */
+.pf-c-input-group {
+  border: 0;
+}
+
+.pf-c-input-group button,
+.pf-c-button.pf-m-control,
+.pf-m-control {
+  min-height: 44px;
+  border: 1px solid var(--coursive-mist);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: #fff;
+  color: rgba(12, 14, 26, 0.6);
+}
+
+.pf-c-input-group .pf-c-form-control {
+  border-radius: 10px 0 0 10px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
 .pf-c-button.pf-m-primary,
 #kc-login,
-#kc-register-form input[type="submit"] {
+input[type="submit"],
+button[type="submit"] {
+  width: 100%;
   min-height: 46px;
+  margin-top: 4px;
+  padding: 0 22px;
   border: 0;
   border-radius: 999px;
-  background: var(--coursive-ink);
-  color: var(--coursive-paper);
-  font-weight: 700;
+  background: var(--coursive-iris);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
   transition: background 160ms ease, transform 160ms ease;
 }
 
 .pf-c-button.pf-m-primary:hover,
 #kc-login:hover,
-#kc-register-form input[type="submit"]:hover {
-  background: #191c2e;
+input[type="submit"]:hover,
+button[type="submit"]:hover {
+  background: var(--coursive-iris-hover);
   transform: translateY(-1px);
 }
 
+/* Secondary / link-style buttons (e.g. "Back to login", reset cancel). */
+.pf-c-button.pf-m-secondary,
+.pf-c-button.pf-m-link {
+  min-height: 44px;
+  border: 1px solid var(--coursive-mist);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--coursive-ink);
+  font-weight: 600;
+}
+
+.pf-c-button.pf-m-secondary:hover,
+.pf-c-button.pf-m-link:hover {
+  background: var(--coursive-paper);
+}
+
+/* ── Links ───────────────────────────────────────────────────────────────── */
 a {
   color: var(--coursive-iris);
-  font-weight: 650;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 a:hover {
-  color: #3f35c8;
+  color: var(--coursive-iris-hover);
+  text-decoration: underline;
 }
 
+/* ── Options row (remember me / forgot password) ─────────────────────────── */
+#kc-form-options,
+.login-pf-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 18px;
+  font-size: 13px;
+}
+
+.checkbox,
+.pf-c-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(12, 14, 26, 0.7);
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--coursive-iris);
+}
+
+/* ── Footer / sign-up prompt ─────────────────────────────────────────────── */
+#kc-registration,
+#kc-info,
 .login-pf-signup {
   margin-top: 22px;
-  color: rgba(12, 14, 26, 0.62);
+  padding-top: 18px;
+  border-top: 1px solid var(--coursive-mist);
+  color: rgba(12, 14, 26, 0.6);
+  font-size: 14px;
   text-align: center;
 }
 
-.pf-c-alert {
-  border-radius: 8px;
+#kc-info {
+  border-top: 0;
+}
+
+/* ── Alerts ──────────────────────────────────────────────────────────────── */
+.pf-c-alert,
+.alert {
+  margin-bottom: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--coursive-mist);
+  font-size: 14px;
 }
 
 .pf-c-alert.pf-m-danger,
@@ -158,29 +321,63 @@ a:hover {
   color: var(--coursive-ink);
 }
 
-#kc-form-options,
-.login-pf-settings {
-  margin-bottom: 18px;
+.pf-c-alert.pf-m-success,
+.alert-success {
+  border-color: rgba(81, 69, 229, 0.3);
+  background: rgba(81, 69, 229, 0.07);
+  color: var(--coursive-ink);
 }
 
-.pf-c-input-group button,
-.pf-m-control {
-  border-color: var(--coursive-mist);
-  border-radius: 8px;
+.pf-c-alert.pf-m-warning,
+.alert-warning {
+  border-color: rgba(255, 92, 56, 0.3);
+  background: rgba(255, 92, 56, 0.06);
 }
 
+/* Inline field errors */
+.pf-c-form__helper-text.pf-m-error,
+.kc-feedback-text,
+#input-error {
+  color: var(--coursive-signal);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ── Social / identity-provider buttons ──────────────────────────────────── */
+#kc-social-providers a,
+.pf-c-button.pf-m-control[type="submit"] {
+  border-radius: 999px;
+}
+
+#kc-social-providers ul {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Responsive: stack the panes on small screens ────────────────────────── */
 @media (max-width: 860px) {
-  body.login-pf::before {
-    background:
-      linear-gradient(180deg, var(--coursive-ink) 0 220px, transparent 220px),
-      radial-gradient(circle at 30% 6%, rgba(81, 69, 229, 0.38), transparent 34%);
+  .login-pf-page {
+    grid-template-columns: 1fr;
   }
 
-  .login-pf-page-header {
-    padding-top: 24px;
+  #kc-header {
+    min-height: 0;
+    padding: 32px 24px 36px;
+  }
+
+  #kc-header-wrapper {
+    margin-bottom: 22px;
+  }
+
+  #kc-header::after {
+    max-width: 22ch;
+    margin-top: 12px;
+    font-size: clamp(26px, 7vw, 34px);
   }
 
   .login-pf-page .card-pf {
-    margin: 56px auto 24px;
+    margin: 28px auto;
   }
 }
