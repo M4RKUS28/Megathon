@@ -1,0 +1,5 @@
+# Shell scripts must use LF so they run inside Linux containers even when the
+# repo is checked out on Windows (Git autocrlf would otherwise insert CRLF and
+# break the script shebang: "/bin/sh^M: bad interpreter").
+*.sh text eol=lf
+entrypoint.sh text eol=lf

@@ -51,7 +51,7 @@ export function DashboardPage() {
             : "Assigned courses appear here once your team publishes them. Mandatory training is flagged so you never miss it."}
         </p>
         <Link
-          to={isStaff ? "/courses" : "/learning"}
+          to={isStaff ? "/courses" : "/learn"}
           className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >
           {isStaff ? "Create a course" : "Go to my learning"}
