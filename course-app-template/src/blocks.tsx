@@ -75,6 +75,16 @@ function isAssetRef(v?: string): boolean {
   return !!v && (v.startsWith("/") || v.startsWith("http"));
 }
 
+function speakWithBrowser(text?: string): boolean {
+  if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = document.documentElement.lang || navigator.language || "en";
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
 function HairStyle({ kind, hair }: { kind: number; hair: string }) {
   // A crown/cap that covers the forehead, plus per-style extras.
   const cap = "M27,42 Q27,16 50,16 Q73,16 73,42 Q73,28 50,28 Q27,28 27,42 Z";
@@ -219,15 +229,20 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   const { personas, turns } = useMemo(() => normalizeConversation(data), [data]);
   const [shown, setShown] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fallbackSpeechRef = useRef<string>("");
 
   const left = personas.find((p) => p.side !== "right") ?? personas[0];
   const right = personas.find((p) => p.side === "right") ?? personas[1] ?? personas[0];
 
   const play = useCallback(
-    (link?: string) => {
+    (link?: string, text?: string) => {
       const src = resolve(link);
       const el = audioRef.current;
-      if (!src || !el) return;
+      fallbackSpeechRef.current = text ?? "";
+      if (!src || !el) {
+        speakWithBrowser(text);
+        return;
+      }
       el.src = src;
       el.currentTime = 0;
       void el.play().catch(() => {});
@@ -238,7 +253,8 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   // Auto-play the most recently revealed bubble.
   useEffect(() => {
     if (!turns.length) return;
-    play(turns[shown - 1]?.audio);
+    const turn = turns[shown - 1];
+    play(turn?.audio, turn?.text);
   }, [shown, turns, play]);
 
   if (!turns.length) return null;
@@ -249,7 +265,17 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
 
   return (
     <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4">
-      <audio ref={audioRef} className="hidden" />
+      <audio
+        ref={audioRef}
+        className="hidden"
+        onLoadedMetadata={(e) => {
+          if (fallbackSpeechRef.current && e.currentTarget.duration <= 3.2) {
+            e.currentTarget.pause();
+            speakWithBrowser(fallbackSpeechRef.current);
+          }
+        }}
+        onError={() => speakWithBrowser(fallbackSpeechRef.current)}
+      />
       <div className="mb-4 flex items-end justify-between gap-2">
         <PersonaStage persona={left} active={left === active} resolve={resolve} />
         <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -288,7 +314,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
                 {t.audio ? (
                   <button
                     type="button"
-                    onClick={() => play(t.audio)}
+                    onClick={() => play(t.audio, t.text)}
                     className={`mt-1 inline-flex items-center gap-1 text-[11px] ${
                       mine ? "text-white/85" : "text-[var(--brand)]"
                     }`}
@@ -1459,7 +1485,8 @@ function ChartBlock({ data }: { data?: Record<string, unknown> }) {
 function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
   const src = resolve(block.asset);
   const [open, setOpen] = useState(false);
-  if (!src) return null;
+  const [useBrowserVoice, setUseBrowserVoice] = useState(!src && !!block.text);
+  if (!src && !block.text) return null;
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
@@ -1480,7 +1507,36 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
           </button>
         ) : null}
       </div>
-      <audio controls className="w-full" src={src} />
+      {src && !useBrowserVoice ? (
+        <audio
+          controls
+          className="w-full"
+          src={src}
+          onLoadedMetadata={(e) => {
+            if (block.text && e.currentTarget.duration <= 3.2) {
+              e.currentTarget.pause();
+              setUseBrowserVoice(true);
+            }
+          }}
+          onError={() => {
+            if (block.text) setUseBrowserVoice(true);
+          }}
+        />
+      ) : null}
+      {block.text && useBrowserVoice ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="text-xs text-amber-800">
+            Generated audio is unavailable. Using your browser voice for this transcript.
+          </div>
+          <button
+            type="button"
+            onClick={() => speakWithBrowser(block.text)}
+            className="mt-2 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-white"
+          >
+            Play spoken text
+          </button>
+        </div>
+      ) : null}
       {open && block.text ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <motion.div

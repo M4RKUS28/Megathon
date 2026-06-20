@@ -26,6 +26,7 @@ from ..assets import AssetProvider
 logger = logging.getLogger(__name__)
 
 _API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
+_RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 def _gemini_key() -> str:
@@ -169,11 +170,18 @@ class GeminiTTSProvider(AssetProvider):
     """Narration audio via Gemini TTS (gemini-3.1-flash-tts-preview)."""
 
     def __init__(
-        self, model: str | None = None, voice: str | None = None, timeout: int = 120
+        self,
+        model: str | None = None,
+        voice: str | None = None,
+        timeout: int = 120,
+        max_attempts: int = 3,
+        backoff_seconds: float = 1.5,
     ) -> None:
         self.model = model or settings.gemini_tts_model
         self.voice = voice or settings.gemini_tts_voice
         self.timeout = timeout
+        self.max_attempts = max(1, max_attempts)
+        self.backoff_seconds = max(0.0, backoff_seconds)
 
     @staticmethod
     def configured() -> bool:
@@ -188,8 +196,9 @@ class GeminiTTSProvider(AssetProvider):
         if not key:
             raise RuntimeError("GEMINI_API_KEY not set")
         voice = (spec.voice or self.voice).strip()
+        text = self._text(spec)
         body = {
-            "contents": [{"parts": [{"text": self._text(spec)}]}],
+            "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
@@ -200,10 +209,48 @@ class GeminiTTSProvider(AssetProvider):
             },
         }
         url = f"{_API_ROOT}/{self.model}:generateContent?key={key}"
+        logger.info(
+            "gemini-tts start: link=%s model=%s voice=%s text_chars=%d attempts=%d",
+            spec.template_link,
+            self.model,
+            voice,
+            len(text),
+            self.max_attempts,
+        )
+        last_error: Exception | None = None
+        resp: httpx.Response | None = None
         with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(url, json=body)
-        if resp.status_code >= 400:
-            raise RuntimeError(f"gemini-tts HTTP {resp.status_code}: {resp.text[:200]}")
+            for attempt in range(1, self.max_attempts + 1):
+                try:
+                    resp = client.post(url, json=body)
+                    if resp.status_code < 400:
+                        logger.debug(
+                            "gemini-tts response: link=%s attempt=%d status=%d",
+                            spec.template_link,
+                            attempt,
+                            resp.status_code,
+                        )
+                        break
+                    message = f"gemini-tts HTTP {resp.status_code}: {resp.text[:200]}"
+                    last_error = RuntimeError(message)
+                    retryable = resp.status_code in _RETRYABLE_STATUS
+                except httpx.HTTPError as exc:
+                    last_error = exc
+                    retryable = True
+                if attempt >= self.max_attempts or not retryable:
+                    break
+                delay = self.backoff_seconds * attempt
+                logger.warning(
+                    "gemini-tts retrying: link=%s attempt=%d/%d delay=%.1fs error=%s",
+                    spec.template_link,
+                    attempt,
+                    self.max_attempts,
+                    delay,
+                    last_error,
+                )
+                time.sleep(delay)
+        if resp is None or resp.status_code >= 400:
+            raise RuntimeError(str(last_error or "gemini-tts request failed"))
         parts = _inline_parts(resp.json())
         if not parts:
             raise RuntimeError("gemini-tts returned no audio data")
@@ -211,4 +258,11 @@ class GeminiTTSProvider(AssetProvider):
         pcm = base64.b64decode(inline["data"])
         mime = inline.get("mimeType") or inline.get("mime_type") or "audio/L16;rate=24000"
         wav = _pcm_to_wav(pcm, _rate_from_mime(mime))
+        logger.info(
+            "gemini-tts success: link=%s mime=%s pcm_bytes=%d wav_bytes=%d",
+            spec.template_link,
+            mime,
+            len(pcm),
+            len(wav),
+        )
         return wav, "wav", "audio/wav"

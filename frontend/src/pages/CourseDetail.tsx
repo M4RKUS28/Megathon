@@ -385,6 +385,9 @@ export function CourseDetailPage() {
 
   const isReady = course.status === "ready" || course.status === "published";
   const isBusy = BUSY_STATUSES.has(course.status);
+  const latestDevinJob = jobs?.find((j) => j.devin_session_url);
+  const devinSessionUrl = course.devin_session_url ?? latestDevinJob?.devin_session_url ?? null;
+  const devinSessionId = course.devin_session_id ?? latestDevinJob?.devin_session_id ?? null;
 
   return (
     <div className="space-y-8">
@@ -404,9 +407,32 @@ export function CourseDetailPage() {
       </div>
 
       {isBusy ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {BUSY_MESSAGES[course.status] ?? "Working…"}
+        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {BUSY_MESSAGES[course.status] ?? "Working…"}
+          </div>
+          {devinSessionUrl ? (
+            <a
+              href={devinSessionUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
+            >
+              Open live Devin session
+              <ExternalLink className="h-3.5 w-3.5" />
+              {devinSessionId ? (
+                <span className="ml-1 font-mono text-xs text-muted-foreground">
+                  {devinSessionId}
+                </span>
+              ) : null}
+            </a>
+          ) : course.status === "building" ? (
+            <p className="mt-2 text-xs">
+              If this build uses Devin, the live session link will appear here as soon as Devin
+              starts.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -570,10 +596,18 @@ export function CourseDetailPage() {
             >
               <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
               <StatusBadge status={j.status} />
-              {j.devin_session_id ? (
-                <span className="font-mono text-xs text-muted-foreground">
-                  {j.devin_session_id}
-                </span>
+              {j.devin_session_url ? (
+                <a
+                  href={j.devin_session_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-xs text-primary underline"
+                >
+                  {j.devin_session_id ?? "Devin session"}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : j.devin_session_id ? (
+                <span className="font-mono text-xs text-muted-foreground">{j.devin_session_id}</span>
               ) : null}
               {j.error ? <span className="text-xs text-red-600">{j.error}</span> : null}
             </div>

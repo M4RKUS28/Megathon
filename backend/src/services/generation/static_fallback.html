@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -144,6 +144,7 @@
       const passed = new Set();
       let am = {};
       let cur = {}; // quiz answers for the current chapter
+      let qt = 0; // active quiz question tab
       let selectMode = false; // "Edit with Devin" element-selection mode
       let picked = null; // selector string of the currently picked block
       function resolve(l) {
@@ -175,6 +176,13 @@
           "</div>"
         );
       }
+      function speakText(text) {
+        if (!text || !("speechSynthesis" in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = document.documentElement.lang || navigator.language || "en";
+        window.speechSynthesis.speak(utterance);
+      }
       function blockText(b) {
         if (b.text) return b.text;
         if (b.items) return b.items.join(", ");
@@ -191,18 +199,29 @@
         if (b.type === "callout") return '<div class="callout">' + (b.text || "") + "</div>";
         if (b.type === "image" && resolve(b.asset))
           return '<img style="width:100%;border-radius:12px" src="' + resolve(b.asset) + '"/>';
-        if (b.type === "audio" && resolve(b.asset)) {
+        if (b.type === "audio" && (resolve(b.asset) || b.text)) {
+          const src = resolve(b.asset);
           const transcript = b.text
             ? '<button type="button" onclick="event.stopPropagation();alert(' +
               JSON.stringify(b.text) +
               ')" style="float:right;border:1px solid #e5e7eb;border-radius:999px;background:#fff;width:28px;height:28px;font-weight:700">i</button>'
             : "";
+          const browserVoice = b.text
+            ? '<button type="button" onclick="event.stopPropagation();speakText(' +
+              JSON.stringify(b.text) +
+              ')" style="margin-top:10px;border:0;border-radius:8px;background:var(--brand);color:#fff;padding:8px 10px;font-weight:700">Play spoken text</button>'
+            : "";
+          const audio = src
+            ? '<audio controls src="' +
+              src +
+              '" onloadedmetadata="if(this.duration<=3.2)this.style.display=\'none\'" onerror="this.style.display=\'none\'" style="display:block;width:100%;margin-top:10px"></audio>'
+            : "";
           return (
             '<div class="callout"><b>Listen to this page</b>' +
             transcript +
-            '<audio controls src="' +
-            resolve(b.asset) +
-            '" style="display:block;width:100%;margin-top:10px"></audio></div>'
+            audio +
+            browserVoice +
+            "</div>"
           );
         }
         if (b.type === "conversation" || b.type === "dialogue") {
@@ -215,13 +234,24 @@
           return ((data.turns) || [])
             .map((t) => {
               const au = resolve(t.audio);
+              const browserVoice = t.text
+                ? '<button type="button" onclick="event.stopPropagation();speakText(' +
+                  JSON.stringify(t.text) +
+                  ')" style="margin-left:8px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;padding:4px 7px">Play text</button>'
+                : "";
               const audio = au
                 ? '<audio controls src="' +
                   au +
-                  '" style="height:26px;vertical-align:middle;margin-left:8px"></audio>'
+                  '" onloadedmetadata="if(this.duration<=3.2)this.style.display=\'none\'" onerror="this.style.display=\'none\'" style="height:26px;vertical-align:middle;margin-left:8px"></audio>'
                 : "";
               return (
-                "<p><b>" + nameOf(t.persona || t.speaker) + ":</b> " + (t.text || "") + audio + "</p>"
+                "<p><b>" +
+                nameOf(t.persona || t.speaker) +
+                ":</b> " +
+                (t.text || "") +
+                audio +
+                browserVoice +
+                "</p>"
               );
             })
             .join("");
@@ -253,7 +283,7 @@
         const onQuiz = p >= pages.length;
         const last = course.chapters.length - 1;
         let h = selectMode
-          ? '<div class="sel-banner">Select an element to edit — click any block below.</div>'
+          ? '<div class="sel-banner">Select an element to edit â€” click any block below.</div>'
           : "";
         h +=
           '<div class="card"><div class="eyebrow">Chapter ' +
@@ -271,7 +301,7 @@
             (p + 1) +
             " of " +
             pages.length +
-            (pg.title ? " — " + pg.title : "") +
+            (pg.title ? " â€” " + pg.title : "") +
             "</div>";
           (pg.blocks || []).forEach((b, bi) => {
             const selector = i + "." + p + "." + bi;
@@ -305,18 +335,46 @@
           return;
         }
         const pass_pct = (c.quiz && c.quiz.passing_pct) || 80;
-        h += '<div class="muted">Knowledge check — need ' + pass_pct + "% to continue</div></div>";
+        h += '<div class="muted">Knowledge check - need ' + pass_pct + "% to continue</div></div>";
         h += '<div class="card"><h3>Knowledge check</h3>';
-        ((c.quiz && c.quiz.questions) || []).forEach((q, qi) => {
+        const qs = (c.quiz && c.quiz.questions) || [];
+        if (qt >= qs.length) qt = Math.max(0, qs.length - 1);
+        h += '<div class="nav-row" style="justify-content:flex-start;gap:6px;flex-wrap:wrap">';
+        qs.forEach((q, qi) => {
+          const done = cur[qi] !== undefined;
+          const bg = qi === qt ? "background:var(--brand);color:white;" : done ? "background:#eef2ff;" : "";
+          h +=
+            '<button class="nav ghost" style="' +
+            bg +
+            '" onclick="quizTab(' +
+            qi +
+            ')">Q' +
+            (qi + 1) +
+            "</button>";
+        });
+        h += "</div>";
+        const q = qs[qt];
+        if (q) {
+          h += '<p class="muted">Question ' + (qt + 1) + " of " + qs.length + "</p>";
           h += "<p><b>" + q.question + "</b></p>";
           q.options.forEach((o, oi) => {
-            const sel = cur[qi] === oi ? ' style="border-color:var(--brand)"' : "";
+            const sel = cur[qt] === oi ? ' style="border-color:var(--brand)"' : "";
             h +=
-              '<button class="opt"' + sel + ' onclick="ans(' + qi + "," + oi + ')">' + o + "</button>";
+              '<button class="opt"' + sel + ' onclick="ans(' + qt + "," + oi + ')">' + o + "</button>";
           });
-        });
+        } else {
+          h += '<p class="muted">This quiz has no questions.</p>';
+        }
         h += '<div id="qr"></div><div class="nav-row">';
         h += '<button class="nav ghost" onclick="prev()">Back</button>';
+        h +=
+          '<button class="nav ghost" ' +
+          (qt <= 0 ? "disabled" : "") +
+          ' onclick="quizTab(qt-1)">Previous question</button>';
+        h +=
+          '<button class="nav ghost" ' +
+          (qt >= qs.length - 1 ? "disabled" : "") +
+          ' onclick="quizTab(qt+1)">Next question</button>';
         h += '<button class="nav" onclick="grade()">Submit</button>';
         if (passed.has(i) && i < last)
           h += '<button class="nav" onclick="nextChapter()">Next chapter</button>';
@@ -327,8 +385,13 @@
         cur[q] = o;
         render();
       }
+      function quizTab(q) {
+        qt = q;
+        render();
+      }
       function nextPage() {
         p++;
+        if (p >= ((course.chapters[i] && course.chapters[i].pages) || []).length) qt = 0;
         render();
       }
       function prev() {
@@ -337,6 +400,7 @@
           i--;
           p = 0;
           cur = {};
+          qt = 0;
         }
         render();
       }
@@ -358,14 +422,15 @@
             (pass ? "ok" : "bad") +
             '">' +
             pct +
-            "% — " +
-            (pass ? "passed" : "below " + ((c.quiz && c.quiz.passing_pct) || 80) + "% — try again") +
+            "% â€” " +
+            (pass ? "passed" : "below " + ((c.quiz && c.quiz.passing_pct) || 80) + "% â€” try again") +
             "</p>";
       }
       function nextChapter() {
         i++;
         p = 0;
         cur = {};
+        qt = 0;
         render();
       }
       function pick(ci, pi, bi) {

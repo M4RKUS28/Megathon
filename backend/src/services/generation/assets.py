@@ -1,19 +1,18 @@
-"""Phase 2.5 Process A — Resource fetch / asset pipeline.
+﻿"""Phase 2.5 Process A â€” Resource fetch / asset pipeline.
 
 Works the isolated asset manifest from the Lastenheft and produces an
 `asset_map`: each `template_link` -> a final, production `storage_url` (MinIO).
 
 Providers (Unsplash/Pexels/Google Images, PixVerse, Nano-Banana, Google TTS) sit
 behind the `AssetProvider` interface. The default `PlaceholderAssetProvider`
-generates a deterministic branded SVG placeholder per asset and uploads it, so the
-pipeline yields a real, hostable asset map without any external API keys. Drop in
-a real provider to fetch/generate true assets.
+generates a deterministic branded SVG placeholder for visual assets. Audio is not
+silently replaced with fake speech; if TTS is unavailable the course renderer can
+fall back to the transcript/browser voice instead of playing a silent snippet.
 """
 
 from __future__ import annotations
 
 import html
-import io
 import json
 import logging
 import re
@@ -69,18 +68,6 @@ def _is_likely_placeholder(spec: AssetSpec) -> bool:
         return True
 
     return False
-
-
-def _silent_wav(seconds: float = 3.0, rate: int = 24000) -> bytes:
-    """A valid, silent mono 16-bit WAV. Used as the audio placeholder so audio
-    players stay functional when no real TTS narration is available."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(b"\x00\x00" * int(rate * seconds))
-    return buf.getvalue()
 
 
 class AssetProvider:
@@ -143,7 +130,7 @@ class PlaceholderAssetProvider(AssetProvider):
 
     def produce(self, spec: AssetSpec, primary_color: str) -> tuple[bytes, str, str]:
         if spec.type in _AUDIO_TYPES:
-            return _silent_wav(), "wav", "audio/wav"
+            raise RuntimeError("audio placeholder disabled; TTS provider unavailable")
         w, h = _aspect(spec.dimensions)
         svg = self._build_svg(spec, w, h, primary_color)
         return svg.encode("utf-8"), "svg", "image/svg+xml"
@@ -204,10 +191,26 @@ def fetch_assets(
     specs = [a if isinstance(a, AssetSpec) else AssetSpec(**a) for a in manifest]
     ensure_bucket_exists(settings.courses_bucket)
 
+    by_type = Counter(spec.type for spec in specs)
+    logger.info(
+        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s",
+        course_prefix,
+        len(specs),
+        dict(sorted(by_type.items())),
+        type(provider).__name__,
+    )
+
     asset_map: dict[str, str] = {}
     skipped = 0
 
     for spec in specs:
+        logger.debug(
+            "asset produce start: link=%s type=%s purpose=%s description_chars=%d",
+            spec.template_link,
+            spec.type,
+            spec.purpose,
+            len(spec.description or ""),
+        )
         try:
             # For forced/generic assets, skip expensive providers and use placeholder
             if _is_likely_placeholder(spec):
@@ -225,6 +228,13 @@ def fetch_assets(
         object_name = f"{course_prefix}/{rel}.{ext}"
         put_bytes(content, object_name, settings.courses_bucket, ctype)
         asset_map[spec.template_link] = public_object_url(object_name, settings.courses_bucket)
+        logger.debug(
+            "asset uploaded: link=%s object=%s bytes=%d content_type=%s",
+            spec.template_link,
+            object_name,
+            len(content),
+            ctype,
+        )
 
     logger.info(
         "asset pipeline mapped %d/%d assets (%d skipped as forced/generic)",

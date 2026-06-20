@@ -1,4 +1,4 @@
-"""Composite asset provider — dispatches per asset type to the configured real
+﻿"""Composite asset provider â€” dispatches per asset type to the configured real
 provider, with deterministic placeholder fallback.
 
 Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_VIDEO_PROVIDER`,

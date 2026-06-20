@@ -7,6 +7,7 @@ state, and persists results.
 import logging
 import re
 import uuid
+from collections import Counter
 
 from sqlalchemy import select
 
@@ -268,14 +269,37 @@ async def process_build_job(job_id: str) -> None:
 
             prefix = course_prefix(slug, str(course.id), course.version)
             manifest = (course.asset_manifest or {}).get("assets", [])
+            manifest_by_type = Counter((a or {}).get("type", "unknown") for a in manifest)
+            logger.info(
+                "build job %s asset manifest: course=%s prefix=%s total=%d by_type=%s",
+                job_id,
+                course.id,
+                prefix,
+                len(manifest),
+                dict(sorted(manifest_by_type.items())),
+            )
 
             # Phase 2.5 process A — resource fetch -> asset_map.json. After an
             # accepted edit we reuse the already-fetched assets (no re-generation).
             reuse = bool((job.payload or {}).get("reuse_assets")) and bool(course.asset_map)
             if reuse:
                 asset_map = course.asset_map or {}
+                logger.info(
+                    "build job %s reusing existing asset_map: mapped=%d",
+                    job_id,
+                    len(asset_map),
+                )
             else:
                 asset_map = fetch_assets(manifest, prefix, primary)
+            mapped_audio = sum(1 for key in asset_map if "/audio/" in key)
+            expected_audio = manifest_by_type.get("audio", 0)
+            logger.info(
+                "build job %s asset_map ready: mapped=%d audio=%d/%d",
+                job_id,
+                len(asset_map),
+                mapped_audio,
+                expected_audio,
+            )
             publish_asset_map(prefix, asset_map)
 
             # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
