@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import re
 import wave
 
 import httpx
@@ -67,6 +68,55 @@ def _rate_from_mime(mime: str, default: int = 24000) -> int:
     return default
 
 
+# ── Context-aware style suffixes for image generation ─────────────────────────
+
+_STYLE_HERO = (
+    "Cinematic wide-angle composition, atmospheric lighting, rich color depth. "
+    "Modern and aspirational, suitable as a chapter opener."
+)
+_STYLE_EXAMPLE = (
+    "Practical hands-on scene showing the concept being applied in a real work "
+    "environment. Clear, step-by-step visual storytelling."
+)
+_STYLE_DIAGRAM = (
+    "Clean technical diagram with labeled components, clear directional arrows, "
+    "minimal color palette on a white background. Structured and readable."
+)
+_STYLE_SCENARIO = (
+    "Narrative illustration depicting a workplace scenario with expressive "
+    "characters in a realistic setting. Warm, approachable tone."
+)
+_STYLE_DEFAULT = (
+    "Modern flat-design illustration, clean geometric shapes, limited cohesive "
+    "color palette. Professional and engaging for e-learning."
+)
+
+_HERO_PATTERN = re.compile(r"\b(hero|intro|opener|welcome|banner)\b", re.IGNORECASE)
+_EXAMPLE_PATTERN = re.compile(
+    r"\b(example|apply|practice|hands-on|step|real|situation)\b", re.IGNORECASE
+)
+_SCENARIO_PATTERN = re.compile(
+    r"\b(scenario|decision|choice|branch|consequence)\b", re.IGNORECASE
+)
+
+
+def _style_suffix(spec: AssetSpec) -> str:
+    """Choose a style suffix based on asset type and purpose/description context."""
+    if spec.type in {"diagram", "chart", "model"}:
+        return _STYLE_DIAGRAM
+
+    purpose_and_desc = f"{spec.purpose} {spec.description}"
+
+    if _HERO_PATTERN.search(purpose_and_desc):
+        return _STYLE_HERO
+    if _SCENARIO_PATTERN.search(purpose_and_desc):
+        return _STYLE_SCENARIO
+    if _EXAMPLE_PATTERN.search(purpose_and_desc):
+        return _STYLE_EXAMPLE
+
+    return _STYLE_DEFAULT
+
+
 class NanoBananaImageProvider(AssetProvider):
     """Image generation via Gemini ("Nano-Banana", gemini-3.1-flash-image)."""
 
@@ -79,13 +129,18 @@ class NanoBananaImageProvider(AssetProvider):
         return bool(_gemini_key())
 
     def _prompt(self, spec: AssetSpec) -> str:
-        bits = [spec.description or spec.purpose or "an instructional illustration"]
+        desc = spec.description or spec.purpose or "an instructional illustration"
+        style = _style_suffix(spec)
+
+        parts = [desc]
+
         if spec.dimensions:
-            bits.append(f"Aspect ratio {spec.dimensions}.")
-        bits.append(
-            "Clean, modern corporate e-learning illustration. No text, no watermarks."
-        )
-        return " ".join(bits)
+            parts.append(f"Aspect ratio: {spec.dimensions}.")
+
+        parts.append(style)
+        parts.append("No text overlays, no watermarks, no stock-photo cliches.")
+
+        return " ".join(parts)
 
     def produce(self, spec: AssetSpec, primary_color: str) -> tuple[bytes, str, str]:
         key = _gemini_key()
