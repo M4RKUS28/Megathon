@@ -124,7 +124,8 @@ services:
   # ── Backend ───────────────────────────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: production
     restart: unless-stopped
     environment:
@@ -142,7 +143,8 @@ services:
   # ── Worker (Arq queue consumer — Devin generation pipeline) ───────────────────
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: production
     restart: unless-stopped
     command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings"]

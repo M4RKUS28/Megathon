@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     demo_company_slug: str = "acme"
     platform_public_url: str = "http://localhost"
 
+    # Course hosting: path to the prebuilt Vite course-template dist/ that the
+    # worker publishes per course. Built into the image; overridable locally.
+    course_template_dist: str = "/app/course_template_dist"
+
     @computed_field
     @property
     def database_url(self) -> str:

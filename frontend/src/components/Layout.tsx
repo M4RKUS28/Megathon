@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   Building2,
   FolderClosed,
+  GraduationCap,
   LayoutDashboard,
   Palette,
   Users,
@@ -26,6 +27,7 @@ const STAFF: AppRole[] = ["admin", "course_creator"];
 // Nav grows as each phase lands its pages.
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
+  { to: "/courses", label: "Courses", icon: GraduationCap, roles: STAFF },
   { to: "/people", label: "People", icon: Users, roles: STAFF },
   { to: "/branding", label: "Branding", icon: Palette, roles: ["admin"] },
   { to: "/companies", label: "Companies", icon: Building2, roles: ["admin"] },

@@ -11,6 +11,8 @@ import { FileManagerPage } from "@/pages/FileManager";
 import { BrandingPage } from "@/pages/Branding";
 import { PeoplePage } from "@/pages/People";
 import { CompaniesPage } from "@/pages/Companies";
+import { CoursesPage } from "@/pages/Courses";
+import { CourseDetailPage } from "@/pages/CourseDetail";
 
 export const router = createBrowserRouter([
   {
@@ -37,6 +39,22 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "dashboard", element: <DashboardPage /> },
+      {
+        path: "courses",
+        element: (
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <CoursesPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "courses/:id",
+        element: (
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <CourseDetailPage />
+          </RoleRoute>
+        ),
+      },
       { path: "files", element: <FileManagerPage /> },
       {
         path: "people",

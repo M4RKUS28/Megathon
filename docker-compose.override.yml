@@ -28,7 +28,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: development
     volumes:
       - ./backend/src:/app/src:rw
@@ -41,7 +42,8 @@ services:
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
       target: development
     command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings", "--watch", "src"]
     entrypoint: []

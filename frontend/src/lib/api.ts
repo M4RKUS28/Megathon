@@ -121,6 +121,100 @@ export const companyApi = {
   create: (body: { name: string; slug: string }) => api.post<CompanyRecord>("/companies", body),
 };
 
+// ── Courses ────────────────────────────────────────────────────────────────
+
+export type CourseStatus =
+  | "draft"
+  | "concept_ready"
+  | "generating"
+  | "ready"
+  | "published"
+  | "failed";
+
+export interface CourseSummary {
+  id: string;
+  title: string;
+  description: string;
+  status: CourseStatus;
+  version: number;
+  created_by: string;
+  created_at: string;
+  host_url: string | null;
+}
+
+export interface CourseConceptBlock {
+  type: "heading" | "paragraph" | "list" | "callout" | "code";
+  text?: string;
+  items?: string[];
+}
+
+export interface CourseConceptChapter {
+  id: string;
+  title: string;
+  objective?: string;
+  blocks: CourseConceptBlock[];
+  quiz: { question: string; options: string[]; answerIndex: number; explanation?: string }[];
+}
+
+export interface CourseConcept {
+  title: string;
+  description: string;
+  companyName?: string;
+  primaryColor?: string;
+  chapters: CourseConceptChapter[];
+}
+
+export interface CourseDetail extends CourseSummary {
+  concept: CourseConcept | null;
+  devin_session_id: string | null;
+}
+
+export interface GenerationJobRecord {
+  id: string;
+  type: string;
+  status: string;
+  error: string | null;
+  devin_session_id: string | null;
+  result: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface CourseBriefInput {
+  audience: string;
+  goals: string;
+  tone: string;
+  duration: string;
+  topics: string[];
+}
+
+export interface EditRecord {
+  id: string;
+  prompt: string;
+  target_selector: string | null;
+  status: string;
+  preview_url: string | null;
+  devin_session_id: string | null;
+  created_at: string;
+}
+
+export const coursesApi = {
+  list: () => api.get<CourseSummary[]>("/courses"),
+  get: (id: string) => api.get<CourseDetail>(`/courses/${id}`),
+  create: (body: { title: string; description: string; brief: CourseBriefInput }) =>
+    api.post<CourseDetail>("/courses", body),
+  generate: (id: string) => api.post<GenerationJobRecord>(`/courses/${id}/generate`),
+  jobs: (id: string) => api.get<GenerationJobRecord[]>(`/courses/${id}/jobs`),
+  edits: {
+    list: (id: string) => api.get<EditRecord[]>(`/courses/${id}/edits`),
+    create: (id: string, body: { prompt: string; target_selector?: string; target_text?: string }) =>
+      api.post<EditRecord>(`/courses/${id}/edits`, body),
+    accept: (id: string, editId: string) =>
+      api.post<GenerationJobRecord>(`/courses/${id}/edits/${editId}/accept`),
+    reject: (id: string, editId: string) =>
+      api.post<EditRecord>(`/courses/${id}/edits/${editId}/reject`),
+  },
+};
+
 // ── File endpoints ─────────────────────────────────────────────────────────
 
 export interface FileRecord {
