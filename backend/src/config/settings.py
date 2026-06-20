@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     # Nano-Banana image generation + Gemini TTS (reuse gemini_api_key).
-    gemini_image_model: str = "gemini-2.5-flash-image-preview"
+    gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
     gemini_tts_voice: str = "Kore"
 

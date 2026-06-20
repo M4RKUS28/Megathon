@@ -33,7 +33,7 @@ x-backend-env: &backend-env
   # Google Gemini (agentic pipeline + media generation)
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-  GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image-preview}
+  GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
   GEMINI_TTS_MODEL: ${GEMINI_TTS_MODEL:-gemini-2.5-flash-preview-tts}
   GEMINI_TTS_VOICE: ${GEMINI_TTS_VOICE:-Kore}
   # Cala MCP (company knowledge)
