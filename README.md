@@ -155,6 +155,8 @@ change in natural language:
 │   ├── docker-compose.override.yml  # dev (hot reload, exposed ports)
 │   ├── docker-compose.prod.yml      # production Traefik labels + image deployment
 │   └── deploy.sh                    # pull images and run production Compose
+├── docs/
+│   └── COURSE_APP_CONTRACT.md       # platform contract for Devin-generated course apps
 ├── .github/workflows/prod-build.yml # CI: build frontend + course template + docker images
 ├── nginx/                           # local dev gateway config
 │   ├── nginx.conf
@@ -272,7 +274,7 @@ each provider degrades to a deterministic fallback when unset.
 | Audio narration (Gemini TTS) | `GEMINI_API_KEY`, `GEMINI_TTS_MODEL` (`gemini-3.1-flash-tts-preview`), `GEMINI_TTS_VOICE` | no audio / placeholder |
 | Image/video generation (PixVerse) | `PIXVERSE_API_KEY` (`PIX_VERSE`) | branded SVG placeholder |
 | Company knowledge (Cala MCP) | `CALA_MCP_URL`, `CALA_API_KEY` (`CALA`) | placeholder knowledge snippets |
-| Per-course code-gen (Devin) | `DEVIN_API_KEY` (`DEVIN`), `COURSE_BUILD_USE_DEVIN=true`, `DEVIN_ORG_ID` | template-based Vite build |
+| Per-course code-gen (Devin) | `DEVIN_API_KEY` (`DEVIN`), `DEVIN_ORG_ID`, `COURSE_BUILD_MODE` (`auto`\|`devin`\|`template`) | `auto`: Devin when configured, else template build |
 | Asset provider selection | `ASSET_IMAGE_PROVIDER` / `ASSET_VIDEO_PROVIDER` / `ASSET_AUDIO_PROVIDER` (`auto`/…/`placeholder`) | `auto` |
 
 > **Important:** keys must reach the **worker** container (not only the backend). They are wired
@@ -301,7 +303,7 @@ each provider degrades to a deterministic fallback when unset.
 - **Cala MCP** knowledge client (real MCP handshake) — runs on placeholder until `CALA_MCP_URL` set.
 - **PixVerse** image/video — falls back to SVG until `PIXVERSE_API_KEY` set; endpoint paths may
   need adjustment per plan.
-- **Devin per-course code-gen** — gated behind `COURSE_BUILD_USE_DEVIN`; template build used otherwise.
+- **Devin per-course code-gen** — enabled automatically when `DEVIN_API_KEY` + `DEVIN_ORG_ID` are set (`COURSE_BUILD_MODE=auto`); template build used otherwise.
 
 ### ❌ Not yet implemented
 
@@ -322,6 +324,31 @@ each provider degrades to a deterministic fallback when unset.
 4. Richer learner analytics (engagement score, drop-off, certificates) + manager compliance views.
 5. LRS/webhook delivery for xAPI; SCORM package export (zip) for external LMS import.
 6. Auto-rebuild existing courses to upgrade their hosted renderer when the renderer changes.
+
+---
+
+## Devin integration & course-app contract
+
+When `COURSE_BUILD_USE_DEVIN=true`, Phase 3 dispatches a Devin coding session that
+authors each course's own Vite/React/TS application from the Lastenheft. The full
+platform contract (runtime data files, postMessage protocol, quiz gating, asset map,
+editor selection, forbidden behaviour) is documented in
+**[`docs/COURSE_APP_CONTRACT.md`](docs/COURSE_APP_CONTRACT.md)** and injected into
+the Devin prompt automatically via `backend/src/services/generation/contract.py`.
+
+```
+Brief -> Phase 1 (Planner) -> Approval Gate
+       -> Phase 2 (Script Writer / Lastenheft)
+       -> Phase 2.5A (Asset Pipeline -> asset_map.json)
+       -> Phase 3 (Devin codegen OR template build -> per-course Vite app)
+       -> Phase 4 (npm run build -> dist/ -> MinIO hosting)
+       -> Phase 5 (LMS: assignments, progress, reporting)
+
+Edit Loop:
+  Select block in iframe -> coursive:element-selected
+  -> POST /courses/{id}/edits -> editor agent rewrites block
+  -> preview build -> accept/reject -> versioned rebuild
+```
 
 ---
 

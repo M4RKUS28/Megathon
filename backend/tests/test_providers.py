@@ -5,6 +5,7 @@ and verify every provider degrades gracefully to the deterministic fallback.
 """
 
 import io
+import json
 import wave
 
 from src.services.agents.cala import (
@@ -135,30 +136,161 @@ def test_composite_audio_and_video_fall_back():
 
 
 # ── Devin code-gen ───────────────────────────────────────────────────────────
+_VALID_PKG = json.dumps(
+    {"name": "t", "scripts": {"build": "vite build"}}
+)
+
+
 def test_validate_files_accepts_good_project():
     out = _validate_files(
         {
             "files": [
-                {"path": "package.json", "content": "{}"},
+                {"path": "package.json", "content": _VALID_PKG},
+                {"path": "index.html", "content": "<html></html>"},
                 {"path": "src/main.tsx", "content": "x"},
             ]
         }
     )
-    assert out == {"package.json": "{}", "src/main.tsx": "x"}
+    assert out is not None
+    assert "package.json" in out
+    assert "src/main.tsx" in out
 
 
 def test_validate_files_rejects_missing_package_json():
-    assert _validate_files({"files": [{"path": "src/main.tsx", "content": "x"}]}) is None
+    assert _validate_files(
+        {"files": [{"path": "src/main.tsx", "content": "x"}]}
+    ) is None
 
 
 def test_validate_files_rejects_path_traversal():
     out = _validate_files(
-        {"files": [{"path": "package.json", "content": "{}"}, {"path": "../evil", "content": "x"}]}
+        {
+            "files": [
+                {"path": "package.json", "content": _VALID_PKG},
+                {"path": "index.html", "content": "<html></html>"},
+                {"path": "src/main.tsx", "content": "x"},
+                {"path": "../evil", "content": "x"},
+            ]
+        }
     )
-    assert out == {"package.json": "{}"}
+    assert out is not None
+    assert "../evil" not in out
+    assert "package.json" in out
 
 
 async def test_generate_course_app_disabled_returns_none():
+    session_id, files = await generate_course_app({"title": "t"}, {})
+    assert session_id is None
+    assert files is None
+
+
+# ── COURSE_BUILD_MODE settings validation ────────────────────────────────────
+def test_build_mode_default_is_auto():
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_build_mode_normalizes_legacy_true_to_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_USE_DEVIN", "true")
+    monkeypatch.delenv("COURSE_BUILD_MODE", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "devin"
+
+
+def test_build_mode_normalizes_legacy_false_to_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_USE_DEVIN", "false")
+    monkeypatch.delenv("COURSE_BUILD_MODE", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_build_mode_explicit_template(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "template")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "template"
+
+
+def test_build_mode_explicit_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "devin")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "devin"
+
+
+def test_build_mode_invalid_falls_back_to_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "foobar")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.course_build_mode == "auto"
+
+
+def test_devin_build_enabled_auto(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "auto")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is True
+
+
+def test_devin_build_enabled_devin(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "devin")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is True
+
+
+def test_devin_build_enabled_template(monkeypatch):
+    monkeypatch.setenv("COURSE_BUILD_MODE", "template")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_build_enabled is False
+
+
+def test_devin_configured_true(monkeypatch):
+    monkeypatch.setenv("DEVIN_API_KEY", "cog_test")
+    monkeypatch.setenv("DEVIN_ORG_ID", "org-123")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is True
+
+
+def test_devin_configured_missing_key(monkeypatch):
+    monkeypatch.delenv("DEVIN_API_KEY", raising=False)
+    monkeypatch.delenv("DEVIN", raising=False)
+    monkeypatch.setenv("DEVIN_ORG_ID", "org-123")
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is False
+
+
+def test_devin_configured_missing_org(monkeypatch):
+    monkeypatch.setenv("DEVIN_API_KEY", "cog_test")
+    monkeypatch.delenv("DEVIN_ORG_ID", raising=False)
+    from src.config.settings import Settings
+
+    s = Settings()
+    assert s.devin_configured is False
+
+
+async def test_generate_course_app_template_mode_skips(monkeypatch):
+    monkeypatch.setattr(
+        "src.services.generation.devin_codegen.settings.course_build_mode",
+        "template",
+    )
     session_id, files = await generate_course_app({"title": "t"}, {})
     assert session_id is None
     assert files is None

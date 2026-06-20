@@ -35,7 +35,8 @@ x-backend-env: &backend-env
   DEVIN_MAX_ACU_LIMIT: ${DEVIN_MAX_ACU_LIMIT:-20}
   DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG:-acme}
   PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://localhost}
-  COURSE_BUILD_USE_DEVIN: ${COURSE_BUILD_USE_DEVIN:-false}
+  COURSE_TEMPLATE_DIST: ${COURSE_TEMPLATE_DIST:-/app/course_template_dist}
+  COURSE_BUILD_MODE: ${COURSE_BUILD_MODE:-auto}
   # Google Gemini — agentic planner/script-writer + Nano-Banana image + TTS.
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
