@@ -19,6 +19,9 @@ x-backend-env: &backend-env
   KEYCLOAK_REALM: ${KEYCLOAK_REALM}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+  # Admin creds let the backend provision demo users on startup (see src/db/seed.py).
+  KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+  KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
   SECRET_KEY: ${SECRET_KEY}
   LOG_LEVEL: ${LOG_LEVEL}
   CORS_ORIGINS: ${CORS_ORIGINS}

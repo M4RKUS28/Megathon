@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     keycloak_realm: str = "app"
     keycloak_client_id: str = "app-frontend"
     keycloak_client_secret: str = "changeme"
+    # Admin credentials (master realm) used to provision demo users on startup.
+    # Leave the password empty to disable Keycloak user provisioning.
+    keycloak_admin_user: str = Field(
+        default="admin", validation_alias=AliasChoices("KEYCLOAK_ADMIN", "KEYCLOAK_ADMIN_USER")
+    )
+    keycloak_admin_password: str = ""
 
     # App
     secret_key: str = "changeme"
