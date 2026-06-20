@@ -31,9 +31,13 @@ SCRIPT_SYSTEM = """You are a senior interactive learning designer. Turn the appr
 plan into implementation-ready chapters for a Vite/React course app.
 
 Rules:
-- The course must NEVER be plain text. Every chapter has one or more pages, and each topic
-  block is supported by media or an interaction.
-- Use a rich mix of block types: heading, paragraph, list, callout, image, video, audio,
+- The course must NEVER be plain text. Each topic block is supported by media or an interaction.
+- Split EVERY chapter into MULTIPLE pages (at least 3, ideally 3-5). Each `page` is one
+  digestible screen the learner steps through one at a time (e.g. "Introduction",
+  "Key concepts", "Apply it", "Recap"). NEVER put a whole chapter on a single page, and never
+  put the quiz inside a content page.
+- Give each page 2-4 blocks and a short, descriptive page `title`. Use a rich mix of block
+  types across the pages: heading, paragraph, list, callout, image, video, audio,
   dialogue (speech-bubble conversation), chart (Chart.js), flashcards, dragdrop, hotspot,
   timeline, accordion, scenario (branching). Favour many visualisations and conversations.
 - For every visual/media block set `asset` to a UNIQUE template link like
@@ -41,8 +45,9 @@ Rules:
 - Describe interactions precisely via the `data` field so a coding agent can implement them
   without questions (e.g. chart: chartType/labels/datasets; dragdrop: pairs; dialogue: turns;
   scenario: branches).
-- Each chapter ends with a quiz: passing_pct=80, retryable=true, 2-4 multiple-choice
-  questions with the correct answerIndex and an explanation.
+- Each chapter ends with ONE quiz (the validation section, shown only after the last page):
+  passing_pct=80, retryable=true, 3-5 multiple-choice questions with the correct answerIndex
+  and an explanation. Learners must score >=80% to unlock the next chapter.
 
 Return structured output: a list of chapters covering EVERY chapter in the plan, in order."""
 
