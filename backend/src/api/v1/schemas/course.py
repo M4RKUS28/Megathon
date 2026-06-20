@@ -59,9 +59,16 @@ class JobResponse(BaseModel):
 
 
 class EditCreate(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=3, max_length=2000)
     target_selector: str | None = None
     target_text: str | None = None
+
+
+class EditDiff(BaseModel):
+    blocks_changed: list[str] = Field(default_factory=list)
+    blocks_added: list[str] = Field(default_factory=list)
+    blocks_removed: list[str] = Field(default_factory=list)
+    summary: str = ""
 
 
 class EditResponse(BaseModel):
@@ -70,6 +77,7 @@ class EditResponse(BaseModel):
     target_selector: str | None
     status: str
     preview_url: str | None = None
+    diff: EditDiff | None = None
     devin_session_id: str | None = None
     devin_session_url: str | None = None
     created_at: datetime

@@ -13,6 +13,7 @@ from src.api.v1.schemas.course import (
     CourseReportRow,
     CourseSummary,
     EditCreate,
+    EditDiff,
     EditResponse,
     JobResponse,
     PlanApproval,
@@ -216,6 +217,45 @@ async def get_course_jobs(
 
 
 # ── Devin edit-loop ──────────────────────────────────────────────────────────
+def _edit_diff_from_job(edit: EditRequest, db_result=None) -> EditDiff | None:
+    """Extract the diff from the edit's generation job result."""
+    # We look up the job inline if a preloaded result isn't passed
+    return None  # Will be populated async in the list/detail endpoints
+
+
+async def _edit_response_with_diff(
+    edit: EditRequest, db: AsyncSession
+) -> EditResponse:
+    """Build EditResponse with diff populated from the job result."""
+    diff: EditDiff | None = None
+    if edit.status == "preview_ready":
+        result = await db.execute(
+            select(GenerationJob)
+            .where(
+                GenerationJob.course_id == edit.course_id,
+                GenerationJob.type == "edit",
+                GenerationJob.payload["edit_request_id"].astext == str(edit.id),
+            )
+            .order_by(GenerationJob.created_at.desc())
+        )
+        edit_job = result.scalars().first()
+        if edit_job and edit_job.result and "diff" in edit_job.result:
+            diff = EditDiff(**edit_job.result["diff"])
+    return EditResponse(
+        id=edit.id,
+        prompt=edit.prompt,
+        target_selector=edit.target_selector,
+        status=edit.status,
+        preview_url=index_url(edit.preview_object_prefix)
+        if edit.preview_object_prefix
+        else None,
+        diff=diff,
+        devin_session_id=edit.devin_session_id,
+        devin_session_url=session_web_url(edit.devin_session_id),
+        created_at=edit.created_at,
+    )
+
+
 def _edit_response(edit: EditRequest) -> EditResponse:
     return EditResponse(
         id=edit.id,
@@ -225,6 +265,7 @@ def _edit_response(edit: EditRequest) -> EditResponse:
         preview_url=index_url(edit.preview_object_prefix)
         if edit.preview_object_prefix
         else None,
+        diff=None,
         devin_session_id=edit.devin_session_id,
         devin_session_url=session_web_url(edit.devin_session_id),
         created_at=edit.created_at,
@@ -278,7 +319,8 @@ async def list_edits(
         .where(EditRequest.course_id == course.id)
         .order_by(EditRequest.created_at.desc())
     )
-    return [_edit_response(e) for e in result.scalars().all()]
+    edits = result.scalars().all()
+    return [await _edit_response_with_diff(e, db) for e in edits]
 
 
 async def _get_edit(db: AsyncSession, course_id: uuid.UUID, edit_id: uuid.UUID) -> EditRequest:

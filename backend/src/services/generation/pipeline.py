@@ -90,16 +90,53 @@ async def process_edit_job(job_id: str) -> None:
 
         company = await get_company(db, course.company_id)
         slug = company.slug if company else "tenant"
+        company_name = company.name if company else ""
         target_text = payload.get("target_text")
+
+        # Gather context for enhanced editing
+        plan_summary = course.plan if course.plan else None
+        compliance_requirements: list[str] = []
+        audience = ""
+        if plan_summary:
+            compliance_requirements = plan_summary.get("compliance_requirements", [])
+            audience = plan_summary.get("audience", "")
+
+        # Collect edit history from previous EditRequests on the same course
+        edit_history_result = await db.execute(
+            select(EditRequest)
+            .where(
+                EditRequest.course_id == course.id,
+                EditRequest.id != edit.id,
+            )
+            .order_by(EditRequest.created_at.desc())
+            .limit(10)
+        )
+        previous_edits = edit_history_result.scalars().all()
+        edit_history = [
+            {"prompt": e.prompt, "status": e.status, "selector": e.target_selector}
+            for e in reversed(previous_edits)
+        ]
 
         try:
             # Phase-2-aware edit: rewrite the selected block (or the spec) and
             # re-render a real preview reusing the course's existing assets.
-            from src.services.agents.editor import generate_edited_spec
+            from src.services.agents.editor import compute_edit_diff, generate_edited_spec
 
             new_spec = await generate_edited_spec(
-                course.spec, edit.prompt, edit.target_selector, target_text
+                course.spec,
+                edit.prompt,
+                edit.target_selector,
+                target_text,
+                company_name=company_name,
+                plan_summary=plan_summary,
+                compliance_requirements=compliance_requirements,
+                audience=audience,
+                edit_history=edit_history,
             )
+
+            # Compute diff between old and new spec
+            diff = compute_edit_diff(course.spec, new_spec)
+
             preview = publish_built_course(
                 slug,
                 f"{course.id}/preview/{edit.id}",
@@ -113,6 +150,7 @@ async def process_edit_job(job_id: str) -> None:
             job.result = {
                 "spec": new_spec,
                 "preview_index_url": preview["course_url"],
+                "diff": diff,
             }
             await db.commit()
         except Exception as exc:  # noqa: BLE001

@@ -227,12 +227,20 @@ export interface CourseBriefInput {
   topics: string[];
 }
 
+export interface EditDiff {
+  blocks_changed: string[];
+  blocks_added: string[];
+  blocks_removed: string[];
+  summary: string;
+}
+
 export interface EditRecord {
   id: string;
   prompt: string;
   target_selector: string | null;
   status: string;
   preview_url: string | null;
+  diff: EditDiff | null;
   devin_session_id: string | null;
   created_at: string;
 }
