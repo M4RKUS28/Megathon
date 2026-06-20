@@ -1,6 +1,6 @@
 # Fullstack Template
 
-React + FastAPI + PostgreSQL + Keycloak + MinIO, served via Nginx — single Docker Compose setup.
+React + FastAPI + PostgreSQL + Keycloak + MinIO, routed by Traefik in production and Nginx for local dev.
 
 ## Stack
 
@@ -17,7 +17,7 @@ React + FastAPI + PostgreSQL + Keycloak + MinIO, served via Nginx — single Doc
 | Config | pydantic-settings |
 | Database | PostgreSQL 16 |
 | Object storage | MinIO |
-| Proxy | Nginx |
+| Proxy | Traefik (prod), Nginx (dev) |
 | Auth server | Keycloak 24 |
 
 ---
@@ -26,13 +26,12 @@ React + FastAPI + PostgreSQL + Keycloak + MinIO, served via Nginx — single Doc
 
 ```
 .
-├── docker-compose.yml            # production
+├── docker-compose.yml            # local/default Compose
 ├── docker-compose.override.yml   # dev (hot reload, exposed ports)
 ├── .env.example
-├── nginx/
+├── nginx/                        # local dev gateway config
 │   ├── nginx.conf
 │   └── conf.d/
-│       ├── default.conf          # prod routing
 │       └── dev.conf              # dev routing
 ├── backend/
 │   ├── Dockerfile
@@ -60,7 +59,7 @@ React + FastAPI + PostgreSQL + Keycloak + MinIO, served via Nginx — single Doc
 │               └── endpoints/    # route handlers
 └── frontend/
     ├── Dockerfile
-    ├── nginx.conf                # SPA fallback for prod container
+    ├── server.mjs                # production static file server
     ├── public/
     │   └── silent-check-sso.html # Keycloak silent SSO
     └── src/
@@ -94,16 +93,17 @@ React + FastAPI + PostgreSQL + Keycloak + MinIO, served via Nginx — single Doc
 | MinIO API | 9000 | 9000 |
 | MinIO Console | 9001 | 9001 |
 
-In production all traffic goes through Nginx on port 80/443. Keycloak runs on a separate subdomain (`auth.yourdomain.com`).
+In production all traffic goes through the host Traefik instance. Local development still uses the Compose `nginx` service for the one-command laptop setup.
 
 ---
 
-## Nginx routing (prod)
+## Traefik routing (prod)
 
 ```
-yourdomain.com/api/*   →  backend:8000
-yourdomain.com/        →  frontend:80  (SPA fallback)
-auth.yourdomain.com    →  keycloak:8080
+<server-ip>/api/*       →  backend:8000  (strip /api)
+<server-ip>/auth/*      →  keycloak:8080
+<server-ip>/storage/*   →  minio:9000    (strip /storage)
+<server-ip>/            →  frontend:4173 (SPA fallback)
 ```
 
 ---
@@ -112,13 +112,13 @@ auth.yourdomain.com    →  keycloak:8080
 
 ```bash
 cp .env.example .env
-# edit .env — set DOMAIN, AUTH_DOMAIN, passwords, secrets
+# edit .env — set passwords, secrets, and local dev domains if needed
 
 # Dev (hot reload)
 docker compose up
 
 # Production
-docker compose -f docker-compose.yml up -d
+./deploy/deploy.sh
 ```
 
 **Initial setup (first run):**

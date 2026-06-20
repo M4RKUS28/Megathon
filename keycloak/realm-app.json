@@ -35,9 +35,7 @@
         "${PLATFORM_PUBLIC_URL}/*"
       ],
       "webOrigins": [
-        "http://localhost",
-        "http://localhost:5173",
-        "${PLATFORM_PUBLIC_URL}"
+        "+"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",

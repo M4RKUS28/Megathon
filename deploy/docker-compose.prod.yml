@@ -66,6 +66,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-storage.rule=${TRAEFIK_STORAGE_RULE:-PathPrefix(`/storage`)}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-storage.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-storage.priority=${TRAEFIK_SYSTEM_PRIORITY:-100}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-storage.service=${COMPOSE_PROJECT_NAME:-megathon}-storage"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-storage.middlewares=${COMPOSE_PROJECT_NAME:-megathon}-storage-strip,${COMPOSE_PROJECT_NAME:-megathon}-storage-host"
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME:-megathon}-storage-strip.stripprefix.prefixes=/storage"
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME:-megathon}-storage-host.headers.customrequestheaders.Host=minio:9000"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-megathon}-storage.loadbalancer.server.port=9000"
+    networks:
+      - default
+      - traefik
 
   minio-init:
     image: minio/mc:latest
@@ -103,8 +117,9 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB:?KEYCLOAK_DB is required}
       KC_DB_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      KC_HOSTNAME: ${DOMAIN:?DOMAIN is required}
       KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_PROXY: edge
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
@@ -123,6 +138,17 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-auth.rule=${TRAEFIK_AUTH_RULE:-PathPrefix(`/auth`)}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-auth.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-auth.priority=${TRAEFIK_SYSTEM_PRIORITY:-100}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-auth.service=${COMPOSE_PROJECT_NAME:-megathon}-auth"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-megathon}-auth.loadbalancer.server.port=8080"
+    networks:
+      - default
+      - traefik
 
   backend:
     image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
@@ -138,6 +164,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-api.rule=${TRAEFIK_API_RULE:-PathPrefix(`/api`)}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-api.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-api.priority=${TRAEFIK_SYSTEM_PRIORITY:-100}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-api.service=${COMPOSE_PROJECT_NAME:-megathon}-api"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}-api.middlewares=${COMPOSE_PROJECT_NAME:-megathon}-api-strip"
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME:-megathon}-api-strip.stripprefix.prefixes=/api"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-megathon}-api.loadbalancer.server.port=8000"
+    networks:
+      - default
+      - traefik
 
   worker:
     image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
@@ -157,25 +196,24 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}:${IMAGE_TAG:-latest}
     restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/templates:/etc/nginx/templates:ro
-    environment:
-      DOMAIN: ${DOMAIN:?DOMAIN is required}
-      AUTH_DOMAIN: ${AUTH_DOMAIN:?AUTH_DOMAIN is required}
-      NGINX_ENVSUBST_FILTER: "^(DOMAIN|AUTH_DOMAIN)$"
-    depends_on:
-      - frontend
-      - backend
-      - keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}.rule=${TRAEFIK_ROUTER_RULE:-PathPrefix(`/`)}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}.priority=${TRAEFIK_PRIORITY:-1}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-megathon}.service=${COMPOSE_PROJECT_NAME:-megathon}"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-megathon}.loadbalancer.server.port=4173"
+    networks:
+      - default
+      - traefik
 
 volumes:
   postgres_data:
   minio_data:
+
+networks:
+  default:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
