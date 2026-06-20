@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Trust SSH host
+        env:
+          HOST: ${{ secrets.HOST }}
+        run: |
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Pull latest code and deploy
+        env:
+          HOST: ${{ secrets.HOST }}
+          SSH_USER: ${{ secrets.USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$HOST" <<'EOF'
+          set -euo pipefail
+          cd ~/Megathon
+          git pull --ff-only
+          bash ~/Megathon/deploy/deploy.sh
+          EOF
