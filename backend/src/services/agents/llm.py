@@ -14,7 +14,7 @@ from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 
 
 def gemini_api_key() -> str:

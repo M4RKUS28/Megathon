@@ -68,7 +68,7 @@ def _rate_from_mime(mime: str, default: int = 24000) -> int:
 
 
 class NanoBananaImageProvider(AssetProvider):
-    """Image generation via Gemini ("Nano-Banana", gemini-2.5-flash-image)."""
+    """Image generation via Gemini ("Nano-Banana", gemini-3.1-flash-image)."""
 
     def __init__(self, model: str | None = None, timeout: int = 120) -> None:
         self.model = model or settings.gemini_image_model
@@ -111,7 +111,7 @@ class NanoBananaImageProvider(AssetProvider):
 
 
 class GeminiTTSProvider(AssetProvider):
-    """Narration audio via Gemini TTS (gemini-2.5-flash-preview-tts)."""
+    """Narration audio via Gemini TTS (gemini-3.1-flash-tts-preview)."""
 
     def __init__(
         self, model: str | None = None, voice: str | None = None, timeout: int = 120
