@@ -6,8 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.schemas.course import (
+    AssignmentCreate,
+    AssignmentResponse,
     CourseCreate,
     CourseDetail,
+    CourseReportRow,
     CourseSummary,
     EditCreate,
     EditResponse,
@@ -15,6 +18,10 @@ from src.api.v1.schemas.course import (
 )
 from src.core.exceptions import AppError, NotFoundError
 from src.core.tenant import CompanyDep, require_app_role
+from src.db.crud.assignment import (
+    create_assignment,
+    list_assignments_for_course,
+)
 from src.db.crud.company import get_branding
 from src.db.crud.course import (
     create_course,
@@ -23,8 +30,10 @@ from src.db.crud.course import (
     list_courses,
     list_jobs_for_course,
 )
+from src.db.crud.enrollment import list_enrollments_for_course
+from src.db.crud.user import list_company_users
 from src.db.database import get_db
-from src.db.models.course import Course, EditRequest, GenerationJob
+from src.db.models.course import Course, CourseAssignment, EditRequest, GenerationJob
 from src.db.models.org import ROLE_ADMIN, ROLE_COURSE_CREATOR, User
 from src.services.generation.builder import index_url
 from src.services.queue.pool import get_pool
@@ -275,3 +284,110 @@ async def reject_edit(
     await db.commit()
     await db.refresh(edit)
     return _edit_response(edit)
+
+
+# ── Assignments & reporting ──────────────────────────────────────────────────
+@router.get("/{course_id}/assignments", response_model=list[AssignmentResponse])
+async def get_assignments(
+    course_id: uuid.UUID, company: CompanyDep, db: DbDep, _: StaffDep
+) -> list[AssignmentResponse]:
+    course = await get_course(db, company.id, course_id)
+    if course is None:
+        raise NotFoundError("Course")
+    rows = await list_assignments_for_course(db, course.id)
+    return [
+        AssignmentResponse(
+            id=a.id,
+            assignee_user_id=a.assignee_user_id,
+            assignee_department_id=a.assignee_department_id,
+            mandatory=a.mandatory,
+            due_date=a.due_date,
+            created_at=a.created_at,
+        )
+        for a in rows
+    ]
+
+
+@router.post("/{course_id}/assignments", response_model=AssignmentResponse, status_code=201)
+async def post_assignment(
+    course_id: uuid.UUID,
+    body: AssignmentCreate,
+    company: CompanyDep,
+    user: StaffDep,
+    db: DbDep,
+) -> AssignmentResponse:
+    course = await get_course(db, company.id, course_id)
+    if course is None:
+        raise NotFoundError("Course")
+    if body.user_id is None and body.department_id is None:
+        raise AppError(422, "Provide a user_id or department_id")
+    assignment = await create_assignment(
+        db,
+        course.id,
+        company.id,
+        assigned_by=user.id,
+        user_id=body.user_id,
+        department_id=body.department_id,
+        mandatory=body.mandatory,
+        due_date=body.due_date,
+    )
+    await db.commit()
+    await db.refresh(assignment)
+    return AssignmentResponse(
+        id=assignment.id,
+        assignee_user_id=assignment.assignee_user_id,
+        assignee_department_id=assignment.assignee_department_id,
+        mandatory=assignment.mandatory,
+        due_date=assignment.due_date,
+        created_at=assignment.created_at,
+    )
+
+
+@router.delete("/{course_id}/assignments/{assignment_id}", status_code=204)
+async def remove_assignment(
+    course_id: uuid.UUID,
+    assignment_id: uuid.UUID,
+    company: CompanyDep,
+    db: DbDep,
+    _: StaffDep,
+) -> None:
+    result = await db.execute(
+        select(CourseAssignment).where(
+            CourseAssignment.id == assignment_id,
+            CourseAssignment.course_id == course_id,
+            CourseAssignment.company_id == company.id,
+        )
+    )
+    assignment = result.scalar_one_or_none()
+    if assignment is None:
+        raise NotFoundError("Assignment")
+    await db.delete(assignment)
+    await db.commit()
+
+
+@router.get("/{course_id}/report", response_model=list[CourseReportRow])
+async def course_report(
+    course_id: uuid.UUID, company: CompanyDep, db: DbDep, _: StaffDep
+) -> list[CourseReportRow]:
+    course = await get_course(db, company.id, course_id)
+    if course is None:
+        raise NotFoundError("Course")
+    enrollments = {
+        e.user_id: e for e in await list_enrollments_for_course(db, course.id)
+    }
+    users = await list_company_users(db, company.id)
+    rows: list[CourseReportRow] = []
+    for u in users:
+        e = enrollments.get(u.id)
+        rows.append(
+            CourseReportRow(
+                user_id=u.id,
+                display_name=u.display_name,
+                email=u.email,
+                status=e.status if e else "not_started",
+                progress_pct=e.progress_pct if e else 0,
+                score=e.score if e else None,
+                completed_at=e.completed_at if e else None,
+            )
+        )
+    return rows

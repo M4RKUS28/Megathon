@@ -215,6 +215,68 @@ export const coursesApi = {
   },
 };
 
+// ── Learning / enrollment / assignments ─────────────────────────────────────
+
+export interface Enrollment {
+  status: string;
+  progress_pct: number;
+  current_chapter: number | null;
+  score: number | null;
+  completed_at: string | null;
+}
+
+export interface LearningCourse extends CourseSummary {
+  enrollment: Enrollment | null;
+}
+
+export interface LearningCourseDetail extends LearningCourse {
+  concept: CourseConcept | null;
+}
+
+export interface ProgressUpdate {
+  status?: string;
+  progress_pct?: number;
+  current_chapter?: number;
+  score?: number;
+}
+
+export interface AssignmentRecord {
+  id: string;
+  assignee_user_id: string | null;
+  assignee_department_id: string | null;
+  mandatory: boolean;
+  due_date: string | null;
+  created_at: string;
+}
+
+export interface CourseReportRow {
+  user_id: string;
+  display_name: string;
+  email: string;
+  status: string;
+  progress_pct: number;
+  score: number | null;
+  completed_at: string | null;
+}
+
+export const learningApi = {
+  list: () => api.get<LearningCourse[]>("/learning/courses"),
+  get: (id: string) => api.get<LearningCourseDetail>(`/learning/courses/${id}`),
+  progress: (id: string, body: ProgressUpdate) =>
+    api.post<Enrollment>(`/learning/courses/${id}/progress`, body),
+};
+
+export const assignmentsApi = {
+  list: (courseId: string) => api.get<AssignmentRecord[]>(`/courses/${courseId}/assignments`),
+  create: (
+    courseId: string,
+    body: { user_id?: string; department_id?: string; mandatory?: boolean },
+  ) => api.post<AssignmentRecord>(`/courses/${courseId}/assignments`, body),
+  remove: (courseId: string, id: string) =>
+    api.delete(`/courses/${courseId}/assignments/${id}`),
+  report: (courseId: string) => api.get<CourseReportRow[]>(`/courses/${courseId}/report`),
+};
+
 // ── File endpoints ─────────────────────────────────────────────────────────
 
 export interface FileRecord {

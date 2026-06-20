@@ -11,6 +11,7 @@ import {
   useRejectEdit,
 } from "@/hooks/useCourses";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CourseAssignPanel } from "@/components/CourseAssignPanel";
 import type { CourseConceptChapter } from "@/lib/api";
 
 function ConceptPreview({ chapters }: { chapters: CourseConceptChapter[] }) {
@@ -257,6 +258,14 @@ export function CourseDetailPage() {
             </div>
           </div>
         </section>
+      ) : null}
+
+      {/* Assign & report */}
+      {isReady ? (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Assign & track</h2>
+          <CourseAssignPanel courseId={course.id} />
+        </div>
       ) : null}
 
       {/* Job log */}

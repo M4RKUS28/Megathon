@@ -13,6 +13,8 @@ import { PeoplePage } from "@/pages/People";
 import { CompaniesPage } from "@/pages/Companies";
 import { CoursesPage } from "@/pages/Courses";
 import { CourseDetailPage } from "@/pages/CourseDetail";
+import { MyLearningPage } from "@/pages/MyLearning";
+import { CoursePlayerPage } from "@/pages/CoursePlayer";
 
 export const router = createBrowserRouter([
   {
@@ -55,6 +57,8 @@ export const router = createBrowserRouter([
           </RoleRoute>
         ),
       },
+      { path: "learn", element: <MyLearningPage /> },
+      { path: "learn/:id", element: <CoursePlayerPage /> },
       { path: "files", element: <FileManagerPage /> },
       {
         path: "people",

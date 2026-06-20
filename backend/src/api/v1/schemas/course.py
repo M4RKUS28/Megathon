@@ -58,3 +58,54 @@ class EditResponse(BaseModel):
     preview_url: str | None = None
     devin_session_id: str | None = None
     created_at: datetime
+
+
+# ── Learning / enrollment ────────────────────────────────────────────────────
+class EnrollmentResponse(BaseModel):
+    status: str
+    progress_pct: int
+    current_chapter: int | None = None
+    score: int | None = None
+    completed_at: datetime | None = None
+
+
+class ProgressUpdate(BaseModel):
+    status: str | None = None
+    progress_pct: int | None = None
+    current_chapter: int | None = None
+    score: int | None = None
+
+
+class LearningCourse(CourseSummary):
+    enrollment: EnrollmentResponse | None = None
+
+
+class LearningCourseDetail(LearningCourse):
+    concept: dict | None = None
+
+
+# ── Assignments / reporting ──────────────────────────────────────────────────
+class AssignmentCreate(BaseModel):
+    user_id: str | None = None
+    department_id: uuid.UUID | None = None
+    mandatory: bool = False
+    due_date: datetime | None = None
+
+
+class AssignmentResponse(BaseModel):
+    id: uuid.UUID
+    assignee_user_id: str | None
+    assignee_department_id: uuid.UUID | None
+    mandatory: bool
+    due_date: datetime | None
+    created_at: datetime
+
+
+class CourseReportRow(BaseModel):
+    user_id: str
+    display_name: str
+    email: str
+    status: str
+    progress_pct: int
+    score: int | None = None
+    completed_at: datetime | None = None
