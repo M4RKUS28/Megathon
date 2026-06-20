@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+courseforge.db
+backend/courseforge.db
+frontend/node_modules/
+frontend/dist/
+generated/assets/*
+!generated/assets/.gitkeep
