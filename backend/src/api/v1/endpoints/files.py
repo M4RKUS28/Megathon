@@ -4,6 +4,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.v1.schemas.file import (
+    ConfirmUploadRequest,
+    FileListResponse,
+    FileResponse,
+    InitiateUploadRequest,
+    UploadIntentResponse,
+)
 from src.core.auth import TokenData, get_current_user
 from src.db.database import get_db
 from src.services.file_service import (
@@ -12,13 +19,6 @@ from src.services.file_service import (
     initiate_upload,
     list_user_files,
     remove_file,
-)
-from src.api.v1.schemas.file import (
-    ConfirmUploadRequest,
-    FileListResponse,
-    FileResponse,
-    InitiateUploadRequest,
-    UploadIntentResponse,
 )
 
 router = APIRouter(prefix="/files", tags=["files"])

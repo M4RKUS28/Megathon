@@ -10,6 +10,10 @@ services:
       - "9000:9000"   # API
       - "9001:9001"   # Console UI
 
+  redis:
+    ports:
+      - "6379:6379"
+
   keycloak:
     command: start-dev --import-realm
     environment:
@@ -34,6 +38,17 @@ services:
       RELOAD: "true"
     ports:
       - "8000:8000"
+
+  worker:
+    build:
+      context: ./backend
+      target: development
+    command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings", "--watch", "src"]
+    entrypoint: []
+    volumes:
+      - ./backend/src:/app/src:rw
+    environment:
+      LOG_LEVEL: DEBUG
 
   frontend:
     build:

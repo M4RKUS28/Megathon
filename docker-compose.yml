@@ -1,3 +1,35 @@
+# Shared environment for the backend API and the Arq worker (same image/config).
+x-backend-env: &backend-env
+  POSTGRES_HOST: ${POSTGRES_HOST}
+  POSTGRES_PORT: ${POSTGRES_PORT}
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  MINIO_HOST: ${MINIO_HOST}
+  MINIO_PORT: ${MINIO_PORT}
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+  MINIO_BUCKET: ${MINIO_BUCKET}
+  COURSES_BUCKET: ${COURSES_BUCKET}
+  MINIO_PRESIGNED_EXPIRY: ${MINIO_PRESIGNED_EXPIRY}
+  MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
+  KEYCLOAK_HOST: ${KEYCLOAK_HOST}
+  KEYCLOAK_PORT: ${KEYCLOAK_PORT}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+  SECRET_KEY: ${SECRET_KEY}
+  LOG_LEVEL: ${LOG_LEVEL}
+  CORS_ORIGINS: ${CORS_ORIGINS}
+  REDIS_URL: ${REDIS_URL}
+  DEVIN_API_KEY: ${DEVIN_API_KEY}
+  DEVIN_API_BASE_URL: ${DEVIN_API_BASE_URL}
+  DEVIN_SNAPSHOT_ID: ${DEVIN_SNAPSHOT_ID}
+  DEVIN_PLAYBOOK_ID: ${DEVIN_PLAYBOOK_ID}
+  DEVIN_MAX_ACU_LIMIT: ${DEVIN_MAX_ACU_LIMIT}
+  DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG}
+  PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL}
+
 services:
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
@@ -45,10 +77,23 @@ services:
         mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
         mc mb --ignore-existing local/${MINIO_BUCKET};
         mc anonymous set none local/${MINIO_BUCKET};
+        mc mb --ignore-existing local/${COURSES_BUCKET};
+        mc anonymous set download local/${COURSES_BUCKET};
         exit 0;
       "
     environment:
       MINIO_BUCKET: ${MINIO_BUCKET}
+      COURSES_BUCKET: ${COURSES_BUCKET}
+
+  # ── Redis (queue broker for Arq) ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── Keycloak ─────────────────────────────────────────────────────────────────
   keycloak:
@@ -83,32 +128,33 @@ services:
       target: production
     restart: unless-stopped
     environment:
-      POSTGRES_HOST: ${POSTGRES_HOST}
-      POSTGRES_PORT: ${POSTGRES_PORT}
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      MINIO_HOST: ${MINIO_HOST}
-      MINIO_PORT: ${MINIO_PORT}
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BUCKET: ${MINIO_BUCKET}
-      MINIO_PRESIGNED_EXPIRY: ${MINIO_PRESIGNED_EXPIRY}
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
-      KEYCLOAK_HOST: ${KEYCLOAK_HOST}
-      KEYCLOAK_PORT: ${KEYCLOAK_PORT}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      SECRET_KEY: ${SECRET_KEY}
-      LOG_LEVEL: ${LOG_LEVEL}
-      CORS_ORIGINS: ${CORS_ORIGINS}
+      <<: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Worker (Arq queue consumer — Devin generation pipeline) ───────────────────
+  worker:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings"]
+    entrypoint: []
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # ── Frontend ──────────────────────────────────────────────────────────────────
