@@ -84,9 +84,13 @@ def test_placeholder_produces_svg_for_every_type():
             usage_context="test context",
         )
         content, ext, ctype = provider.produce(spec, "#FF0000")
-        assert ext == "svg"
-        assert ctype == "image/svg+xml"
-        assert b"<svg" in content
+        if atype == "audio":
+            assert ext == "wav"
+            assert ctype == "audio/wav"
+        else:
+            assert ext == "svg"
+            assert ctype == "image/svg+xml"
+            assert b"<svg" in content
 
 
 # ── fetch_assets mapping ────────────────────────────────────────────────────

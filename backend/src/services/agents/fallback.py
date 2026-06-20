@@ -141,18 +141,24 @@ def _chapter_pages(
             type="audio",
             description=intro_narration,
             purpose="Spoken narration for the introduction page",
+            alt_text=f"Audio narration for Introduction page in {chapter_title}",
+            usage_context=f"audio block on Introduction page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=concepts_audio,
             type="audio",
             description=concepts_narration,
             purpose="Spoken narration for the key concepts page",
+            alt_text=f"Audio narration for Key concepts page in {chapter_title}",
+            usage_context=f"audio block on Key concepts page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=practice_audio,
             type="audio",
             description=practice_narration,
             purpose="Spoken narration for the apply-it page",
+            alt_text=f"Audio narration for Apply it page in {chapter_title}",
+            usage_context=f"audio block on Apply it page in chapter '{chapter_title}'",
         ),
     ]
 
@@ -402,6 +408,7 @@ def _chapter_pages(
                     f"{company} works."
                 ),
             ),
+            Block(type="audio", asset=practice_audio, text=practice_narration),
         ],
         asset_needs=[
             AssetNeed(
@@ -409,7 +416,6 @@ def _chapter_pages(
                 type="image",
                 description=apply_desc,
             ),
-            Block(type="audio", asset=practice_audio, text=practice_narration),
         ],
     )
     return [intro_page, concepts_page, practice_page], assets
