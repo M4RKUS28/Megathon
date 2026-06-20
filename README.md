@@ -266,9 +266,9 @@ each provider degrades to a deterministic fallback when unset.
 
 | Capability | Env vars | Fallback if unset |
 |---|---|---|
-| Agentic planner + script writer | `GEMINI_API_KEY`, `GEMINI_MODEL` (`gemini-2.5-flash`) | deterministic plan/Lastenheft |
-| Image generation (Nano-Banana) | `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL` | branded SVG placeholder |
-| Audio narration (Gemini TTS) | `GEMINI_API_KEY`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | no audio / placeholder |
+| Agentic planner + script writer | `GEMINI_API_KEY`, `GEMINI_MODEL` (`gemini-3.5-flash`) | deterministic plan/Lastenheft |
+| Image generation (Nano-Banana) | `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL` (`gemini-3.1-flash-image`) | branded SVG placeholder |
+| Audio narration (Gemini TTS) | `GEMINI_API_KEY`, `GEMINI_TTS_MODEL` (`gemini-3.1-flash-tts-preview`), `GEMINI_TTS_VOICE` | no audio / placeholder |
 | Image/video generation (PixVerse) | `PIXVERSE_API_KEY` (`PIX_VERSE`) | branded SVG placeholder |
 | Company knowledge (Cala MCP) | `CALA_MCP_URL`, `CALA_API_KEY` (`CALA`) | placeholder knowledge snippets |
 | Per-course code-gen (Devin) | `DEVIN_API_KEY` (`DEVIN`), `COURSE_BUILD_USE_DEVIN=true`, `DEVIN_ORG_ID` | template-based Vite build |

@@ -73,10 +73,10 @@ class Settings(BaseSettings):
 
     # Google Gemini (agentic planner / script-writer pipeline + media)
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     # Nano-Banana image generation + Gemini TTS (reuse gemini_api_key).
-    gemini_image_model: str = "gemini-2.5-flash-image"
-    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    gemini_image_model: str = "gemini-3.1-flash-image"
+    gemini_tts_model: str = "gemini-3.1-flash-tts-preview"
     gemini_tts_voice: str = "Kore"
 
     # Cala MCP — company knowledge source for the planner agent (Phase 1).
