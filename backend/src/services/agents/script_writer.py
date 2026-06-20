@@ -54,12 +54,15 @@ specific explanatory prose AND be supported by media or interaction — never th
 also never a single undifferentiated wall of text. Use concrete examples, real data, scenarios,
 charts, and diagrams to carry the depth. Make it specific and real-world.
 
-## PROSE DEPTH (required)
-Every content page must contain AT LEAST 500 words of explanatory prose, split across MULTIPLE
-`paragraph` blocks (typically 2–4 paragraphs of ~150–250 words each) — never one giant block.
+## PROSE DEPTH (required, non-negotiable)
+Every content page must contain AT LEAST 500 words of explanatory prose — TARGET 600–800 words —
+split across 4–6 separate `paragraph` blocks of roughly 130–170 words each (never one giant
+block, never fewer than 4 paragraph blocks). Count only the words in `paragraph` blocks: they
+must sum to 500+ on EVERY page. Writing only 2–3 short paragraphs is a failure; if you are near
+the limit, add another full paragraph that teaches additional detail, examples, or edge cases.
 Break the prose up with `heading`/`callout`/`list` blocks and interactions so it reads as a
-well-structured lesson, not a wall of text. The 500-word minimum is the body copy a learner
-reads on that page; interactions, quizzes, and asset briefs do NOT count toward it.
+well-structured lesson, not a wall of text. Interactions, quizzes, and asset briefs do NOT count
+toward the word total.
 
 Chapter-level fields (populate for EVERY chapter):
   - `learning_points`: concrete things the learner will know/be able to do after this chapter.
@@ -96,11 +99,11 @@ For EACH page provide ALL of these fields:
    all 5 steps correctly; chart renders with live data; scenario reaches at least one ending").
 10. **blocks** — implementation-ready blocks. Types: heading, paragraph, list, callout,
     image, video, audio, dialogue, chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
-    accordion, scenario. Each page needs MULTIPLE `paragraph` blocks carrying ≥500 words of
-    prose total (see PROSE DEPTH), interleaved with at least one heading and at least one
-    interaction/media block. For every visual/media block set `asset` to a UNIQUE template link
-    ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions precisely
-    in the `data` field so Devin can implement without questions.
+    accordion, scenario. Each page needs 4–6 `paragraph` blocks carrying 600–800 words of
+    prose total (≥500 minimum; see PROSE DEPTH), interleaved with at least one heading and at
+    least one interaction/media block. For every visual/media block set `asset` to a UNIQUE
+    template link ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions
+    precisely in the `data` field so Devin can implement without questions.
 11. **asset_needs** — List every asset this page needs. Each entry: template_link, type
     (image/video/audio/diagram), and a detailed visual/audio brief.
 
@@ -174,9 +177,10 @@ def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
         f"- objective: {chapter.objective}\n"
         f"- key points: {kp}\n\n"
         f"Produce 3-5 content pages (each with blocks and asset_needs) and a quiz "
-        f"with 3-5 questions for chapter [{chapter.id}]. Every page must carry at least "
-        f"500 words of explanatory prose split across multiple paragraph blocks (never one "
-        f"giant block). Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
+        f"with 3-5 questions for chapter [{chapter.id}]. Every page MUST carry 600-800 words "
+        f"of explanatory prose (500 absolute minimum) split across 4-6 separate paragraph "
+        f"blocks of ~130-170 words each — never fewer than 4 paragraphs, never one giant "
+        f"block. Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
         f"{_CHAPTER_PARSER.get_format_instructions()}"
     )
 
