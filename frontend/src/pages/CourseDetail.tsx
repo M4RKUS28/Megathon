@@ -12,28 +12,95 @@ import {
 } from "@/hooks/useCourses";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
-import type { CourseConceptChapter } from "@/lib/api";
+import type { CourseConceptChapter, GenerationJobRecord } from "@/lib/api";
+
+const INTERACTIVE = new Set([
+  "dialogue",
+  "dragdrop",
+  "ordering",
+  "hotspot",
+  "flipcards",
+  "chart",
+  "image",
+  "video",
+  "audio",
+]);
+
+function chapterBlocks(ch: CourseConceptChapter) {
+  if (ch.pages && ch.pages.length) return ch.pages.flatMap((p) => p.blocks ?? []);
+  return ch.blocks ?? [];
+}
 
 function ConceptPreview({ chapters }: { chapters: CourseConceptChapter[] }) {
   return (
     <ol className="space-y-3">
-      {chapters.map((ch, i) => (
-        <li key={ch.id} className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2">
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {i + 1}
-            </span>
-            <h4 className="font-semibold">{ch.title}</h4>
-          </div>
-          {ch.objective ? (
-            <p className="mt-1.5 text-sm text-muted-foreground">{ch.objective}</p>
-          ) : null}
-          <p className="mt-2 text-xs text-muted-foreground">
-            {ch.blocks.length} content blocks · {ch.quiz.length} quiz question(s)
-          </p>
-        </li>
-      ))}
+      {chapters.map((ch, i) => {
+        const blocks = chapterBlocks(ch);
+        const pages = ch.pages?.length ?? 1;
+        const kinds = [...new Set(blocks.map((b) => b.type).filter((t) => INTERACTIVE.has(t)))];
+        return (
+          <li key={ch.id} className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {i + 1}
+              </span>
+              <h4 className="font-semibold">{ch.title}</h4>
+            </div>
+            {ch.objective ? (
+              <p className="mt-1.5 text-sm text-muted-foreground">{ch.objective}</p>
+            ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {pages} page(s) · {blocks.length} blocks · {ch.quiz.length} quiz Q ·{" "}
+              gate {ch.passingScore ?? 80}%
+            </p>
+            {kinds.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {kinds.map((k) => (
+                  <span
+                    key={k}
+                    className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                  >
+                    {k}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
     </ol>
+  );
+}
+
+function LiveProgress({ jobs }: { jobs?: GenerationJobRecord[] }) {
+  if (!jobs || jobs.length === 0) return null;
+  const active =
+    jobs.find((j) => j.status === "running") ??
+    [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const p = active?.progress;
+  if (!active || active.status !== "running" || !p) return null;
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        {p.message}
+      </div>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-secondary">
+        <div
+          className="h-full rounded-full bg-primary transition-all duration-500"
+          style={{ width: `${p.pct}%` }}
+        />
+      </div>
+      {p.steps && p.steps.length > 1 ? (
+        <ul className="mt-3 space-y-1">
+          {p.steps.slice(-5).map((s, i) => (
+            <li key={i} className="text-xs text-muted-foreground">
+              {s.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -43,10 +110,11 @@ export function CourseDetailPage() {
 
   const busyStatuses = new Set(["draft", "generating"]);
   const { data: course } = useCourse(id, true);
-  const poll = course ? busyStatuses.has(course.status) : true;
+  const { data: edits } = useCourseEdits(id, true);
+  const editBusy = edits?.some((e) => ["queued", "running"].includes(e.status)) ?? false;
+  const poll = (course ? busyStatuses.has(course.status) : true) || editBusy;
   useCourse(id, poll); // keep polling cadence while busy
   const { data: jobs } = useCourseJobs(id, poll);
-  const { data: edits } = useCourseEdits(id, true);
 
   const generate = useGenerateCourse(id!);
   const createEdit = useCreateEdit(id!);
@@ -123,7 +191,9 @@ export function CourseDetailPage() {
         <p className="mt-1 text-muted-foreground">{course.description}</p>
       </div>
 
-      {course.status === "draft" ? (
+      <LiveProgress jobs={jobs} />
+
+      {course.status === "draft" && !jobs?.some((j) => j.status === "running" && j.progress) ? (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Devin is drafting the course concept…
         </div>

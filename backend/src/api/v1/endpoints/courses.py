@@ -126,6 +126,7 @@ async def generate_course(
         error=job.error,
         devin_session_id=job.devin_session_id,
         result=job.result,
+        progress=job.progress,
         created_at=job.created_at,
     )
 
@@ -146,6 +147,7 @@ async def get_course_jobs(
             error=j.error,
             devin_session_id=j.devin_session_id,
             result=j.result,
+            progress=j.progress,
             created_at=j.created_at,
         )
         for j in jobs
@@ -268,6 +270,7 @@ async def accept_edit(
         error=job.error,
         devin_session_id=job.devin_session_id,
         result=job.result,
+        progress=job.progress,
         created_at=job.created_at,
     )
 

@@ -79,6 +79,8 @@ class GenerationJob(Base):
     devin_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Live progress feed: {"pct": int, "message": str, "steps": [{message, pct}]}.
+    progress: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(

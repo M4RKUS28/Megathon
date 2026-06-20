@@ -49,6 +49,28 @@ class Settings(BaseSettings):
     devin_playbook_id: str = ""
     devin_max_acu_limit: int = 20
 
+    # Media generation for interactive courses (images/video via Pixverse,
+    # narration via Google Cloud Text-to-Speech). All optional: when a key is
+    # unset the pipeline degrades to inline SVG placeholders / no audio.
+    pixverse_api_key: str = ""
+    pixverse_api_base_url: str = "https://app-api.pixverse.ai"
+    pixverse_image_model: str = "gpt-image-2.0"
+    pixverse_image_path: str = "/openapi/v2/image/generation"
+    pixverse_video_model: str = "v4.5"
+    google_tts_api_key: str = ""
+    google_tts_voice: str = "en-US-Studio-O"
+    google_tts_language: str = "en-US"
+    # Per-course generation caps to bound latency/cost.
+    media_max_images: int = 10
+    media_max_videos: int = 2
+    media_max_audio: int = 16
+    media_poll_timeout: int = 240
+
+    @computed_field
+    @property
+    def media_enabled(self) -> bool:
+        return bool(self.pixverse_api_key or self.google_tts_api_key)
+
     # Platform / multi-tenant
     demo_company_slug: str = "acme"
     platform_public_url: str = "http://localhost"

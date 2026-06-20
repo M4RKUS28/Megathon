@@ -1,13 +1,14 @@
 """Course-generation orchestration, executed by the Arq worker.
 
 Each entrypoint opens its own DB session (worker process), advances job/course
-state, and persists results.
+state, emits live progress messages, runs the media pass, and persists results.
 """
 
 import logging
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.db.crud.company import get_company
 from src.db.crud.course import get_course_by_id, get_job
@@ -22,9 +23,11 @@ from src.db.models.course import (
     JOB_RUNNING,
     JOB_SUCCEEDED,
     EditRequest,
+    GenerationJob,
 )
-from src.services.generation.builder import index_url, publish_course
+from src.services.generation.builder import course_prefix, index_url, publish_course
 from src.services.generation.concept import generate_concept, generate_edited_concept
+from src.services.generation.media import generate_media_for_concept
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,15 @@ async def _branding(db, company_id: uuid.UUID) -> tuple[str, str, dict]:
     primary = (branding.primary_color if branding else None) or "#5145E5"
     style_guide = (branding.style_guide if branding else {}) or {}
     return company_name, primary, style_guide
+
+
+async def _progress(db, job: GenerationJob, message: str, pct: int) -> None:
+    """Append a live progress step to the job and commit so the UI can poll it."""
+    steps = list((job.progress or {}).get("steps", []))
+    steps.append({"message": message, "pct": pct})
+    job.progress = {"pct": pct, "message": message, "steps": steps[-25:]}
+    await db.commit()
+    logger.info("job %s: %s (%s%%)", job.id, message, pct)
 
 
 async def process_concept_job(job_id: str) -> None:
@@ -57,22 +69,26 @@ async def process_concept_job(job_id: str) -> None:
         job.status = JOB_RUNNING
         job.attempts += 1
         await db.commit()
+        await _progress(db, job, "Reviewing your course brief…", 10)
 
         try:
             snapshot = course.style_guide_snapshot or {}
             brief = snapshot.get("brief", {"title": course.title})
             company_name, primary, style_guide = await _branding(db, course.company_id)
 
+            await _progress(db, job, "Devin is designing an interactive course…", 35)
             session_id, concept = await generate_concept(
                 brief, style_guide, company_name, primary
             )
 
+            n = len(concept.get("chapters", []))
+            await _progress(db, job, f"Concept ready — {n} interactive chapters drafted.", 100)
             course.concept = concept
             course.devin_session_id = session_id
             course.status = COURSE_CONCEPT_READY
             job.status = JOB_SUCCEEDED
             job.devin_session_id = session_id
-            job.result = {"chapters": len(concept.get("chapters", []))}
+            job.result = {"chapters": n}
             await db.commit()
             logger.info("concept ready for course %s", course.id)
         except Exception as exc:  # noqa: BLE001 — surface failure into job/course state
@@ -100,18 +116,33 @@ async def process_generate_job(job_id: str) -> None:
         job.attempts += 1
         course.status = COURSE_GENERATING
         await db.commit()
+        await _progress(db, job, "Preparing the interactive build…", 5)
 
         try:
             company = await get_company(db, course.company_id)
             slug = company.slug if company else "tenant"
-            prefix = publish_course(slug, str(course.id), course.version, course.concept)
+            prefix = course_prefix(slug, str(course.id), course.version)
 
-            course.dist_object_prefix = prefix
+            await _progress(db, job, "Generating images, narration and video…", 15)
+
+            async def cb(message: str, pct: int) -> None:
+                # Map media progress (0-100) into the 15-90 band.
+                await _progress(db, job, message, 15 + int(pct * 0.75))
+
+            concept = await generate_media_for_concept(course.concept, prefix, cb)
+            course.concept = concept
+            flag_modified(course, "concept")
+
+            await _progress(db, job, "Building and publishing the course…", 92)
+            published = publish_course(slug, str(course.id), course.version, concept)
+
+            await _progress(db, job, "Course ready.", 100)
+            course.dist_object_prefix = published
             course.status = COURSE_READY
             job.status = JOB_SUCCEEDED
-            job.result = {"prefix": prefix, "index_url": index_url(prefix)}
+            job.result = {"prefix": published, "index_url": index_url(published)}
             await db.commit()
-            logger.info("course %s built at %s", course.id, prefix)
+            logger.info("course %s built at %s", course.id, published)
         except Exception as exc:  # noqa: BLE001
             logger.exception("generate job %s failed", job_id)
             job.status = JOB_FAILED
@@ -141,6 +172,7 @@ async def process_edit_job(job_id: str) -> None:
         job.attempts += 1
         edit.status = "running"
         await db.commit()
+        await _progress(db, job, "Devin is applying your edit…", 20)
 
         try:
             session_id, new_concept = await generate_edited_concept(
@@ -148,11 +180,20 @@ async def process_edit_job(job_id: str) -> None:
             )
             company = await get_company(db, course.company_id)
             slug = company.slug if company else "tenant"
-            # Publish the proposed version under a per-edit preview path.
-            preview_prefix = publish_course(
-                slug, f"{course.id}/preview/{edit.id}", course.version, new_concept
-            )
+            preview_id = f"{course.id}/preview/{edit.id}"
+            prefix = course_prefix(slug, preview_id, course.version)
 
+            await _progress(db, job, "Refreshing media for changed sections…", 55)
+
+            async def cb(message: str, pct: int) -> None:
+                await _progress(db, job, message, 55 + int(pct * 0.35))
+
+            new_concept = await generate_media_for_concept(new_concept, prefix, cb)
+
+            await _progress(db, job, "Publishing preview…", 92)
+            preview_prefix = publish_course(slug, preview_id, course.version, new_concept)
+
+            await _progress(db, job, "Preview ready.", 100)
             edit.devin_session_id = session_id
             edit.preview_object_prefix = preview_prefix
             edit.status = "preview_ready"

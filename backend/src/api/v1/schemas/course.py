@@ -41,6 +41,7 @@ class JobResponse(BaseModel):
     error: str | None = None
     devin_session_id: str | None = None
     result: dict | None = None
+    progress: dict | None = None
     created_at: datetime
 
 

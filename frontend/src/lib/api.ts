@@ -143,16 +143,24 @@ export interface CourseSummary {
 }
 
 export interface CourseConceptBlock {
-  type: "heading" | "paragraph" | "list" | "callout" | "code";
+  type: string;
   text?: string;
   items?: string[];
+}
+
+export interface CourseConceptPage {
+  id?: string;
+  title?: string;
+  blocks: CourseConceptBlock[];
 }
 
 export interface CourseConceptChapter {
   id: string;
   title: string;
   objective?: string;
-  blocks: CourseConceptBlock[];
+  passingScore?: number;
+  pages?: CourseConceptPage[];
+  blocks?: CourseConceptBlock[];
   quiz: { question: string; options: string[]; answerIndex: number; explanation?: string }[];
 }
 
@@ -169,6 +177,12 @@ export interface CourseDetail extends CourseSummary {
   devin_session_id: string | null;
 }
 
+export interface JobProgress {
+  pct: number;
+  message: string;
+  steps?: { pct: number; message: string }[];
+}
+
 export interface GenerationJobRecord {
   id: string;
   type: string;
@@ -176,6 +190,7 @@ export interface GenerationJobRecord {
   error: string | null;
   devin_session_id: string | null;
   result: Record<string, unknown> | null;
+  progress: JobProgress | null;
   created_at: string;
 }
 

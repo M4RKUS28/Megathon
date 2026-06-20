@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Block, Concept } from "./types";
+import type { Concept, NormChapter, QuizQuestion } from "./types";
+import { BlockView } from "./blocks";
 import {
   announceReady,
   onInit,
@@ -8,35 +9,152 @@ import {
   setupSelectMode,
 } from "./progress";
 
-function BlockView({ block, id }: { block: Block; id: string }) {
-  switch (block.type) {
-    case "heading":
-      return <h2 data-block-id={id} style={{ marginTop: 28 }}>{block.text}</h2>;
-    case "paragraph":
-      return <p data-block-id={id} className="block-p">{block.text}</p>;
-    case "list":
-      return (
-        <ul data-block-id={id} className="block-list">
-          {block.items.map((it, i) => (
-            <li key={i}>{it}</li>
-          ))}
-        </ul>
-      );
-    case "callout":
-      return <div data-block-id={id} className="callout">{block.text}</div>;
-    case "code":
-      return <pre data-block-id={id} className="code">{block.text}</pre>;
-    default:
-      return null;
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
+  return a;
+}
+
+function normalize(concept: Concept): NormChapter[] {
+  return concept.chapters.map((ch) => ({
+    ...ch,
+    pages: ch.pages && ch.pages.length ? ch.pages : [{ blocks: ch.blocks || [] }],
+  }));
+}
+
+/** End-of-chapter quiz with an 80% gate and unlimited retries (options reshuffle
+ * on each attempt). Calls `onPass` with the score once the threshold is met. */
+function ChapterQuiz({
+  quiz,
+  passingScore,
+  onPass,
+  chapterIndex,
+}: {
+  quiz: QuizQuestion[];
+  passingScore: number;
+  onPass: (score: number) => void;
+  chapterIndex: number;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  // Reset when the chapter changes.
+  useEffect(() => {
+    setAttempt(0);
+    setAnswers({});
+    setSubmitted(false);
+  }, [chapterIndex]);
+
+  // Shuffle option order per attempt while tracking the original index.
+  const shuffled = useMemo(
+    () =>
+      quiz.map((q) => ({
+        q,
+        opts: shuffle(q.options.map((text, originalIndex) => ({ text, originalIndex }))),
+      })),
+    [quiz, attempt],
+  );
+
+  const answered = Object.keys(answers).length === quiz.length;
+  const score = useMemo(() => {
+    if (!quiz.length) return 100;
+    let correct = 0;
+    quiz.forEach((q, i) => {
+      if (answers[i] === q.answerIndex) correct += 1;
+    });
+    return Math.round((correct / quiz.length) * 100);
+  }, [answers, quiz]);
+
+  const passed = submitted && score >= passingScore;
+  const failed = submitted && score < passingScore;
+
+  const retry = () => {
+    setAttempt((a) => a + 1);
+    setAnswers({});
+    setSubmitted(false);
+  };
+
+  return (
+    <div className="quiz">
+      <div className="quiz-head">
+        <h3>Chapter checkpoint</h3>
+        <span className="quiz-gate">Pass {passingScore}% to continue</span>
+      </div>
+      {shuffled.map(({ q, opts }, qi) => {
+        const chosen = answers[qi];
+        return (
+          <div className="q" key={qi}>
+            <strong>{q.question}</strong>
+            <div className="q-opts">
+              {opts.map((opt, oi) => {
+                let cls = "q-opt";
+                if (submitted) {
+                  if (opt.originalIndex === q.answerIndex) cls += " correct";
+                  else if (opt.originalIndex === chosen) cls += " wrong";
+                } else if (chosen === opt.originalIndex) {
+                  cls += " selected";
+                }
+                return (
+                  <button
+                    key={oi}
+                    className={cls}
+                    disabled={submitted}
+                    onClick={() => setAnswers((a) => ({ ...a, [qi]: opt.originalIndex }))}
+                  >
+                    {opt.text}
+                  </button>
+                );
+              })}
+            </div>
+            {submitted && q.explanation ? <p className="explain">{q.explanation}</p> : null}
+          </div>
+        );
+      })}
+
+      {!submitted ? (
+        <button className="btn" disabled={!answered} onClick={() => setSubmitted(true)}>
+          Submit answers
+        </button>
+      ) : null}
+
+      {passed ? (
+        <div className="quiz-result pass">
+          <span>You scored {score}% — chapter unlocked! ✓</span>
+          <button className="btn" onClick={() => onPass(score)}>
+            Continue ›
+          </button>
+        </div>
+      ) : null}
+
+      {failed ? (
+        <div className="quiz-result fail">
+          <span>
+            You scored {score}%. You need {passingScore}% — review and try again.
+          </span>
+          <button className="btn" onClick={retry}>
+            Try again ↻
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function App() {
   const [concept, setConcept] = useState<Concept | null>(null);
+  const [chapters, setChapters] = useState<NormChapter[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState(0);
+
+  const [current, setCurrent] = useState(0); // chapter index
+  const [page, setPage] = useState(0); // page index within chapter
+  const [onQuiz, setOnQuiz] = useState(false);
+  const [unlocked, setUnlocked] = useState(0); // highest unlocked chapter
   const [completed, setCompleted] = useState<Set<number>>(new Set());
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [scores, setScores] = useState<Record<number, number>>({});
   const [selectMode, setSelectMode] = useState(false);
 
   useEffect(() => {
@@ -47,6 +165,7 @@ export function App() {
       })
       .then((data: Concept) => {
         setConcept(data);
+        setChapters(normalize(data));
         if (data.primaryColor) {
           document.documentElement.style.setProperty("--brand", data.primaryColor);
         }
@@ -55,38 +174,32 @@ export function App() {
       .catch((e) => setError(String(e)));
 
     onInit((state) => {
-      if (typeof state.current_chapter === "number") setCurrent(state.current_chapter);
+      if (typeof state.current_chapter === "number") {
+        setCurrent(state.current_chapter);
+        setUnlocked((u) => Math.max(u, state.current_chapter ?? 0));
+      }
     });
     setupSelectMode(setSelectMode);
     announceReady();
   }, []);
 
-  const total = concept?.chapters.length ?? 0;
+  const total = chapters.length;
+  const allDone = total > 0 && completed.size === total;
   const progressPct = total ? Math.round((completed.size / total) * 100) : 0;
-
-  const score = useMemo(() => {
-    if (!concept) return 0;
-    let correct = 0;
-    let asked = 0;
-    concept.chapters.forEach((ch, ci) =>
-      ch.quiz.forEach((q, qi) => {
-        asked += 1;
-        if (answers[`${ci}:${qi}`] === q.answerIndex) correct += 1;
-      }),
-    );
-    return asked ? Math.round((correct / asked) * 100) : 0;
-  }, [concept, answers]);
+  const avgScore = useMemo(() => {
+    const vals = Object.values(scores);
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+  }, [scores]);
 
   useEffect(() => {
     if (!concept) return;
-    const done = completed.size === total && total > 0;
     postProgress({
-      status: done ? "completed" : "in_progress",
+      status: allDone ? "completed" : "in_progress",
       progress_pct: progressPct,
       current_chapter: current,
-      score: done ? score : null,
+      score: allDone ? avgScore : null,
     });
-  }, [concept, completed, current, progressPct, score, total]);
+  }, [concept, completed, current, progressPct, avgScore, allDone]);
 
   if (error) {
     return (
@@ -100,16 +213,34 @@ export function App() {
     return <div className="done-card"><p>Loading course…</p></div>;
   }
 
-  const allDone = completed.size === total;
-  const chapter = concept.chapters[current];
+  const chapter = chapters[current];
+  const pages = chapter.pages;
+  const lastPage = page >= pages.length - 1;
 
-  const handleBlockClick = (blockId: string, text: string) => {
-    if (selectMode) reportElementSelected(blockId, text);
+  const goChapter = (i: number) => {
+    if (i > unlocked) return;
+    setCurrent(i);
+    setPage(0);
+    setOnQuiz(false);
   };
 
-  const completeChapter = () => {
+  const nextPage = () => {
+    if (!lastPage) setPage((p) => p + 1);
+    else setOnQuiz(true);
+  };
+
+  const onQuizPass = (score: number) => {
+    setScores((s) => ({ ...s, [current]: score }));
     setCompleted((prev) => new Set(prev).add(current));
-    if (current < total - 1) setCurrent(current + 1);
+    const next = current + 1;
+    setUnlocked((u) => Math.max(u, Math.min(next, total - 1)));
+    if (next < total) {
+      setCurrent(next);
+      setPage(0);
+      setOnQuiz(false);
+    } else {
+      setOnQuiz(false);
+    }
   };
 
   return (
@@ -126,19 +257,23 @@ export function App() {
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
         <ul className="chapter-nav">
-          {concept.chapters.map((ch, i) => (
-            <li key={ch.id}>
-              <button
-                className={i === current ? "active" : ""}
-                onClick={() => setCurrent(i)}
-              >
-                <span className={`dot${completed.has(i) ? " done" : ""}`}>
-                  {completed.has(i) ? "✓" : i + 1}
-                </span>
-                {ch.title}
-              </button>
-            </li>
-          ))}
+          {chapters.map((ch, i) => {
+            const locked = i > unlocked;
+            return (
+              <li key={ch.id}>
+                <button
+                  className={`${i === current ? "active" : ""}${locked ? " locked" : ""}`}
+                  onClick={() => goChapter(i)}
+                  disabled={locked}
+                >
+                  <span className={`dot${completed.has(i) ? " done" : ""}`}>
+                    {completed.has(i) ? "✓" : locked ? "🔒" : i + 1}
+                  </span>
+                  {ch.title}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </aside>
 
@@ -148,9 +283,9 @@ export function App() {
             <p className="eyebrow">Complete</p>
             <h1>{concept.title}</h1>
             <p className="objective">
-              You finished every chapter. Final score: <strong>{score}%</strong>.
+              You finished every chapter. Average quiz score: <strong>{avgScore}%</strong>.
             </p>
-            <button className="btn" onClick={() => setCurrent(0)}>
+            <button className="btn" onClick={() => { setCurrent(0); setPage(0); setOnQuiz(false); }}>
               Review from start
             </button>
           </div>
@@ -163,7 +298,7 @@ export function App() {
               if (el) {
                 e.preventDefault();
                 e.stopPropagation();
-                handleBlockClick(
+                reportElementSelected(
                   el.getAttribute("data-block-id") || "",
                   el.textContent || "",
                 );
@@ -172,61 +307,41 @@ export function App() {
           >
             <p className="eyebrow">
               Chapter {current + 1} of {total}
+              {!onQuiz ? ` · Page ${page + 1} of ${pages.length}` : " · Checkpoint"}
             </p>
             <h1 data-block-id={`${current}:title`}>{chapter.title}</h1>
-            {chapter.objective ? <p className="objective">{chapter.objective}</p> : null}
-
-            {chapter.blocks.map((b, i) => (
-              <BlockView key={i} block={b} id={`${current}:block:${i}`} />
-            ))}
-
-            {chapter.quiz.length > 0 ? (
-              <div className="quiz">
-                <h3>Check your understanding</h3>
-                {chapter.quiz.map((q, qi) => {
-                  const key = `${current}:${qi}`;
-                  const chosen = answers[key];
-                  return (
-                    <div className="q" key={qi}>
-                      <strong>{q.question}</strong>
-                      {q.options.map((opt, oi) => {
-                        let cls = "q-opt";
-                        if (chosen !== undefined) {
-                          if (oi === q.answerIndex) cls += " correct";
-                          else if (oi === chosen) cls += " wrong";
-                        }
-                        return (
-                          <button
-                            key={oi}
-                            className={cls}
-                            disabled={chosen !== undefined}
-                            onClick={() => setAnswers((a) => ({ ...a, [key]: oi }))}
-                          >
-                            {opt}
-                          </button>
-                        );
-                      })}
-                      {chosen !== undefined && q.explanation ? (
-                        <p className="explain">{q.explanation}</p>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
+            {chapter.objective && page === 0 && !onQuiz ? (
+              <p className="objective">{chapter.objective}</p>
             ) : null}
 
-            <div className="footer-nav">
-              <button
-                className="btn ghost"
-                disabled={current === 0}
-                onClick={() => setCurrent(current - 1)}
-              >
-                Back
-              </button>
-              <button className="btn" onClick={completeChapter}>
-                {current === total - 1 ? "Finish course" : "Mark complete & continue"}
-              </button>
-            </div>
+            {!onQuiz ? (
+              <>
+                {pages[page].title ? <h2 className="page-title">{pages[page].title}</h2> : null}
+                {pages[page].blocks.map((b, i) => (
+                  <BlockView key={`${current}:${page}:${i}`} block={b} id={`${current}:${page}:${i}`} />
+                ))}
+                <div className="footer-nav">
+                  <button
+                    className="btn ghost"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  >
+                    Back
+                  </button>
+                  <button className="btn" onClick={nextPage}>
+                    {lastPage ? "Take the checkpoint ›" : "Continue ›"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <ChapterQuiz
+                key={current}
+                chapterIndex={current}
+                quiz={chapter.quiz}
+                passingScore={chapter.passingScore || 80}
+                onPass={onQuizPass}
+              />
+            )}
           </div>
         )}
       </main>

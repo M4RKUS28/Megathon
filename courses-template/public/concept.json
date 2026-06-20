@@ -1,40 +1,615 @@
 {
-  "title": "Sample Onboarding Course",
-  "description": "A preview of the Coursive course player.",
+  "title": "Workplace Safety Essentials",
+  "description": "work safely",
   "companyName": "Acme",
   "primaryColor": "#5145E5",
   "chapters": [
     {
-      "id": "c1",
-      "title": "Welcome to Acme",
-      "objective": "Understand who we are and how we work.",
-      "blocks": [
-        { "type": "paragraph", "text": "Welcome aboard! This short course will get you oriented." },
-        { "type": "list", "items": ["Our mission", "How teams collaborate", "Where to find help"] },
-        { "type": "callout", "text": "Tip: you can revisit any chapter from the sidebar." }
+      "id": "0-welcome",
+      "title": "Welcome to Workplace Safety Essentials",
+      "objective": "Understand what this course covers and how it works at Acme.",
+      "passingScore": 80,
+      "pages": [
+        {
+          "title": "Your journey",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Welcome, new employees!"
+            },
+            {
+              "type": "audio",
+              "say": "Welcome to Workplace Safety Essentials. Over the next few chapters you'll learn by doing \u2014 dragging, clicking, and exploring, not just reading. Let's get started.",
+              "caption": "Intro narration"
+            },
+            {
+              "type": "image",
+              "prompt": "Friendly flat-vector illustration of a diverse team at Acme starting an online training course, bright brand colors, clean modern style",
+              "alt": "Team starting a course"
+            },
+            {
+              "type": "callout",
+              "variant": "tip",
+              "text": "Each chapter ends with a short quiz. Score 80% or higher to unlock the next chapter \u2014 you can retry as many times as you like."
+            }
+          ]
+        },
+        {
+          "title": "How you'll learn",
+          "blocks": [
+            {
+              "type": "flipcards",
+              "title": "What to expect",
+              "cards": [
+                {
+                  "front": "Dialogues",
+                  "back": "Click through real conversations."
+                },
+                {
+                  "front": "Drag & drop",
+                  "back": "Match concepts hands-on."
+                },
+                {
+                  "front": "Explore",
+                  "back": "Click hotspots on diagrams."
+                },
+                {
+                  "front": "Quizzes",
+                  "back": "Prove it before moving on."
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "title": "Meet your guides",
+              "speakers": [
+                {
+                  "name": "Maya",
+                  "role": "Mentor",
+                  "avatarPrompt": "friendly woman mentor portrait, flat vector avatar, warm smile"
+                },
+                {
+                  "name": "Sam",
+                  "role": "New hire",
+                  "avatarPrompt": "curious young man portrait, flat vector avatar, headphones"
+                }
+              ],
+              "steps": [
+                {
+                  "speaker": "Maya",
+                  "text": "Hi! I'll guide you through this course."
+                },
+                {
+                  "speaker": "Sam",
+                  "text": "Great \u2014 I learn best by doing."
+                },
+                {
+                  "speaker": "Maya",
+                  "text": "Perfect, because that's exactly how this works. Click Continue when you're ready."
+                }
+              ]
+            }
+          ]
+        }
       ],
       "quiz": [
         {
-          "question": "Where can you revisit chapters?",
-          "options": ["The sidebar", "Email", "Nowhere"],
+          "question": "How do you unlock the next chapter?",
+          "options": [
+            "Score at least 80% on the chapter quiz",
+            "Wait 24 hours",
+            "Email the admin"
+          ],
           "answerIndex": 0,
-          "explanation": "Use the chapter list in the sidebar."
+          "explanation": "Pass the quiz with 80%+ to continue; retries are unlimited."
+        },
+        {
+          "question": "What makes this course interactive?",
+          "options": [
+            "Dialogues, drag-and-drop, hotspots and quizzes",
+            "Only long text",
+            "Only videos"
+          ],
+          "answerIndex": 0,
+          "explanation": "You learn by doing across many interaction types."
         }
       ]
     },
     {
-      "id": "c2",
-      "title": "Tools & Security",
-      "objective": "Set up your accounts safely.",
-      "blocks": [
-        { "type": "paragraph", "text": "Use SSO for all internal tools and enable 2FA." },
-        { "type": "code", "text": "# request access\n$ coursive request-access --team platform" }
+      "id": "1-hazard-awareness",
+      "title": "Hazard awareness",
+      "objective": "Apply hazard awareness confidently in your day-to-day work at Acme.",
+      "passingScore": 80,
+      "pages": [
+        {
+          "title": "Concept",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Why Hazard awareness matters"
+            },
+            {
+              "type": "audio",
+              "say": "In this chapter we explore hazard awareness. Listen, then try the interactive exercises to lock it in.",
+              "caption": "Hazard awareness narration"
+            },
+            {
+              "type": "paragraph",
+              "text": "Hazard awareness is a core part of how Acme works. For new employees, getting this right early prevents mistakes and builds confidence."
+            },
+            {
+              "type": "image",
+              "prompt": "Clean flat-vector concept illustration representing 'Hazard awareness' in a corporate training context, modern brand colors",
+              "alt": "Illustration of Hazard awareness"
+            },
+            {
+              "type": "callout",
+              "variant": "info",
+              "text": "Key idea: Hazard awareness is a skill you practice, not a fact you memorize."
+            }
+          ]
+        },
+        {
+          "title": "Explore & practice",
+          "blocks": [
+            {
+              "type": "dialogue",
+              "title": "A day with Hazard awareness",
+              "speakers": [
+                {
+                  "name": "Maya",
+                  "role": "Mentor",
+                  "avatarPrompt": "friendly woman mentor flat vector avatar"
+                },
+                {
+                  "name": "Sam",
+                  "role": "New hire",
+                  "avatarPrompt": "curious young man flat vector avatar"
+                }
+              ],
+              "steps": [
+                {
+                  "speaker": "Sam",
+                  "text": "When does hazard awareness actually come up?"
+                },
+                {
+                  "speaker": "Maya",
+                  "text": "Almost daily. Let me show you how we handle hazard awareness here."
+                },
+                {
+                  "speaker": "Sam",
+                  "text": "That makes sense \u2014 let me try."
+                }
+              ]
+            },
+            {
+              "type": "dragdrop",
+              "instructions": "Match each hazard awareness term to its meaning.",
+              "pairs": [
+                {
+                  "term": "Hazard awareness basics",
+                  "match": "The foundational idea"
+                },
+                {
+                  "term": "Best practice",
+                  "match": "The recommended way to do it"
+                },
+                {
+                  "term": "Pitfall",
+                  "match": "A common mistake to avoid"
+                }
+              ]
+            },
+            {
+              "type": "hotspot",
+              "instructions": "Click the markers to explore the workflow.",
+              "imagePrompt": "labeled flat-vector workflow diagram for 'Hazard awareness' with three distinct stages, corporate infographic style",
+              "spots": [
+                {
+                  "x": 20,
+                  "y": 40,
+                  "label": "Start",
+                  "text": "Where hazard awareness begins."
+                },
+                {
+                  "x": 50,
+                  "y": 55,
+                  "label": "Apply",
+                  "text": "Putting hazard awareness into action."
+                },
+                {
+                  "x": 80,
+                  "y": 40,
+                  "label": "Review",
+                  "text": "Checking your hazard awareness results."
+                }
+              ]
+            },
+            {
+              "type": "chart",
+              "title": "Impact of strong hazard awareness",
+              "chartType": "bar",
+              "labels": [
+                "Before",
+                "Month 1",
+                "Month 3"
+              ],
+              "series": [
+                {
+                  "label": "Confidence",
+                  "data": [
+                    30,
+                    65,
+                    90
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       ],
       "quiz": [
         {
-          "question": "What should you enable on your accounts?",
-          "options": ["2FA", "Nothing", "Auto-login"],
-          "answerIndex": 0
+          "question": "What is the focus of the 'Hazard awareness' chapter?",
+          "options": [
+            "Hazard awareness",
+            "Payroll",
+            "Office snacks"
+          ],
+          "answerIndex": 0,
+          "explanation": "This chapter is about hazard awareness."
+        },
+        {
+          "question": "How is hazard awareness best learned?",
+          "options": [
+            "By practicing it",
+            "By ignoring it",
+            "Only on your first day"
+          ],
+          "answerIndex": 0,
+          "explanation": "Hazard awareness is a skill you build through practice."
+        },
+        {
+          "question": "What should you do if you make a mistake?",
+          "options": [
+            "Learn from it and ask for help",
+            "Hide it",
+            "Quit"
+          ],
+          "answerIndex": 0,
+          "explanation": "A growth mindset is part of the culture."
+        }
+      ]
+    },
+    {
+      "id": "2-emergency-response",
+      "title": "Emergency response",
+      "objective": "Apply emergency response confidently in your day-to-day work at Acme.",
+      "passingScore": 80,
+      "pages": [
+        {
+          "title": "Concept",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Why Emergency response matters"
+            },
+            {
+              "type": "audio",
+              "say": "In this chapter we explore emergency response. Listen, then try the interactive exercises to lock it in.",
+              "caption": "Emergency response narration"
+            },
+            {
+              "type": "paragraph",
+              "text": "Emergency response is a core part of how Acme works. For new employees, getting this right early prevents mistakes and builds confidence."
+            },
+            {
+              "type": "image",
+              "prompt": "Clean flat-vector concept illustration representing 'Emergency response' in a corporate training context, modern brand colors",
+              "alt": "Illustration of Emergency response"
+            },
+            {
+              "type": "callout",
+              "variant": "info",
+              "text": "Key idea: Emergency response is a skill you practice, not a fact you memorize."
+            }
+          ]
+        },
+        {
+          "title": "Explore & practice",
+          "blocks": [
+            {
+              "type": "dialogue",
+              "title": "A day with Emergency response",
+              "speakers": [
+                {
+                  "name": "Maya",
+                  "role": "Mentor",
+                  "avatarPrompt": "friendly woman mentor flat vector avatar"
+                },
+                {
+                  "name": "Sam",
+                  "role": "New hire",
+                  "avatarPrompt": "curious young man flat vector avatar"
+                }
+              ],
+              "steps": [
+                {
+                  "speaker": "Sam",
+                  "text": "When does emergency response actually come up?"
+                },
+                {
+                  "speaker": "Maya",
+                  "text": "Almost daily. Let me show you how we handle emergency response here."
+                },
+                {
+                  "speaker": "Sam",
+                  "text": "That makes sense \u2014 let me try."
+                }
+              ]
+            },
+            {
+              "type": "dragdrop",
+              "instructions": "Match each emergency response term to its meaning.",
+              "pairs": [
+                {
+                  "term": "Emergency response basics",
+                  "match": "The foundational idea"
+                },
+                {
+                  "term": "Best practice",
+                  "match": "The recommended way to do it"
+                },
+                {
+                  "term": "Pitfall",
+                  "match": "A common mistake to avoid"
+                }
+              ]
+            },
+            {
+              "type": "hotspot",
+              "instructions": "Click the markers to explore the workflow.",
+              "imagePrompt": "labeled flat-vector workflow diagram for 'Emergency response' with three distinct stages, corporate infographic style",
+              "spots": [
+                {
+                  "x": 20,
+                  "y": 40,
+                  "label": "Start",
+                  "text": "Where emergency response begins."
+                },
+                {
+                  "x": 50,
+                  "y": 55,
+                  "label": "Apply",
+                  "text": "Putting emergency response into action."
+                },
+                {
+                  "x": 80,
+                  "y": 40,
+                  "label": "Review",
+                  "text": "Checking your emergency response results."
+                }
+              ]
+            },
+            {
+              "type": "chart",
+              "title": "Impact of strong emergency response",
+              "chartType": "bar",
+              "labels": [
+                "Before",
+                "Month 1",
+                "Month 3"
+              ],
+              "series": [
+                {
+                  "label": "Confidence",
+                  "data": [
+                    30,
+                    65,
+                    90
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "quiz": [
+        {
+          "question": "What is the focus of the 'Emergency response' chapter?",
+          "options": [
+            "Emergency response",
+            "Payroll",
+            "Office snacks"
+          ],
+          "answerIndex": 0,
+          "explanation": "This chapter is about emergency response."
+        },
+        {
+          "question": "How is emergency response best learned?",
+          "options": [
+            "By practicing it",
+            "By ignoring it",
+            "Only on your first day"
+          ],
+          "answerIndex": 0,
+          "explanation": "Emergency response is a skill you build through practice."
+        },
+        {
+          "question": "What should you do if you make a mistake?",
+          "options": [
+            "Learn from it and ask for help",
+            "Hide it",
+            "Quit"
+          ],
+          "answerIndex": 0,
+          "explanation": "A growth mindset is part of the culture."
+        }
+      ]
+    },
+    {
+      "id": "3-reporting-incidents",
+      "title": "Reporting incidents",
+      "objective": "Apply reporting incidents confidently in your day-to-day work at Acme.",
+      "passingScore": 80,
+      "pages": [
+        {
+          "title": "Concept",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Why Reporting incidents matters"
+            },
+            {
+              "type": "audio",
+              "say": "In this chapter we explore reporting incidents. Listen, then try the interactive exercises to lock it in.",
+              "caption": "Reporting incidents narration"
+            },
+            {
+              "type": "paragraph",
+              "text": "Reporting incidents is a core part of how Acme works. For new employees, getting this right early prevents mistakes and builds confidence."
+            },
+            {
+              "type": "image",
+              "prompt": "Clean flat-vector concept illustration representing 'Reporting incidents' in a corporate training context, modern brand colors",
+              "alt": "Illustration of Reporting incidents"
+            },
+            {
+              "type": "callout",
+              "variant": "info",
+              "text": "Key idea: Reporting incidents is a skill you practice, not a fact you memorize."
+            }
+          ]
+        },
+        {
+          "title": "Explore & practice",
+          "blocks": [
+            {
+              "type": "dialogue",
+              "title": "A day with Reporting incidents",
+              "speakers": [
+                {
+                  "name": "Maya",
+                  "role": "Mentor",
+                  "avatarPrompt": "friendly woman mentor flat vector avatar"
+                },
+                {
+                  "name": "Sam",
+                  "role": "New hire",
+                  "avatarPrompt": "curious young man flat vector avatar"
+                }
+              ],
+              "steps": [
+                {
+                  "speaker": "Sam",
+                  "text": "When does reporting incidents actually come up?"
+                },
+                {
+                  "speaker": "Maya",
+                  "text": "Almost daily. Let me show you how we handle reporting incidents here."
+                },
+                {
+                  "speaker": "Sam",
+                  "text": "That makes sense \u2014 let me try."
+                }
+              ]
+            },
+            {
+              "type": "dragdrop",
+              "instructions": "Match each reporting incidents term to its meaning.",
+              "pairs": [
+                {
+                  "term": "Reporting incidents basics",
+                  "match": "The foundational idea"
+                },
+                {
+                  "term": "Best practice",
+                  "match": "The recommended way to do it"
+                },
+                {
+                  "term": "Pitfall",
+                  "match": "A common mistake to avoid"
+                }
+              ]
+            },
+            {
+              "type": "hotspot",
+              "instructions": "Click the markers to explore the workflow.",
+              "imagePrompt": "labeled flat-vector workflow diagram for 'Reporting incidents' with three distinct stages, corporate infographic style",
+              "spots": [
+                {
+                  "x": 20,
+                  "y": 40,
+                  "label": "Start",
+                  "text": "Where reporting incidents begins."
+                },
+                {
+                  "x": 50,
+                  "y": 55,
+                  "label": "Apply",
+                  "text": "Putting reporting incidents into action."
+                },
+                {
+                  "x": 80,
+                  "y": 40,
+                  "label": "Review",
+                  "text": "Checking your reporting incidents results."
+                }
+              ]
+            },
+            {
+              "type": "chart",
+              "title": "Impact of strong reporting incidents",
+              "chartType": "bar",
+              "labels": [
+                "Before",
+                "Month 1",
+                "Month 3"
+              ],
+              "series": [
+                {
+                  "label": "Confidence",
+                  "data": [
+                    30,
+                    65,
+                    90
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "quiz": [
+        {
+          "question": "What is the focus of the 'Reporting incidents' chapter?",
+          "options": [
+            "Reporting incidents",
+            "Payroll",
+            "Office snacks"
+          ],
+          "answerIndex": 0,
+          "explanation": "This chapter is about reporting incidents."
+        },
+        {
+          "question": "How is reporting incidents best learned?",
+          "options": [
+            "By practicing it",
+            "By ignoring it",
+            "Only on your first day"
+          ],
+          "answerIndex": 0,
+          "explanation": "Reporting incidents is a skill you build through practice."
+        },
+        {
+          "question": "What should you do if you make a mistake?",
+          "options": [
+            "Learn from it and ask for help",
+            "Hide it",
+            "Quit"
+          ],
+          "answerIndex": 0,
+          "explanation": "A growth mindset is part of the culture."
         }
       ]
     }
