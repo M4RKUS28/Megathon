@@ -171,7 +171,9 @@ def _chapter_pages(
                 description=text,
                 purpose="Conversation line narration",
                 alt_text=f"{name}: {text[:80]}",
-                usage_context=f"conversation turn on Introduction page in chapter '{chapter_title}'",
+                usage_context=(
+                    f"conversation turn on Introduction page in chapter '{chapter_title}'"
+                ),
                 voice="Puck" if pid == "you" else None,
             )
             for (pid, name, text), link in zip(convo_turns, convo_audio)
