@@ -21,6 +21,61 @@ api.interceptors.response.use(
   },
 );
 
+// Bare axios for unauthenticated calls (e.g. public branding before login).
+export const publicApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "/api/v1",
+});
+
+// ── Identity / tenant ──────────────────────────────────────────────────────
+
+export type AppRole = "admin" | "course_creator" | "user";
+
+export interface CompanySummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+}
+
+export interface Me {
+  id: string;
+  email: string;
+  display_name: string;
+  role: AppRole;
+  company: CompanySummary;
+}
+
+export const meApi = {
+  get: () => api.get<Me>("/me"),
+};
+
+// ── Branding (white-label) ─────────────────────────────────────────────────
+
+export interface StyleGuide {
+  companyName: string;
+  logoUrls: string[];
+  brandColors: string[];
+  fonts: string[];
+  imageUrls: string[];
+  websiteUrl: string;
+}
+
+export interface Branding {
+  company_id: string;
+  company_name: string;
+  slug: string;
+  primary_color: string | null;
+  logo_url: string | null;
+  style_guide: StyleGuide;
+}
+
+export const brandingApi = {
+  mine: () => api.get<Branding>("/branding"),
+  public: (slug: string) => publicApi.get<Branding>(`/public/branding/${slug}`),
+  update: (body: { style_guide: StyleGuide; primary_color: string | null; logo_url: string | null }) =>
+    api.put<Branding>("/branding", body),
+};
+
 // ── File endpoints ─────────────────────────────────────────────────────────
 
 export interface FileRecord {

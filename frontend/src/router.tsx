@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { LandingPage } from "@/pages/Landing";
+import { AboutPage } from "@/pages/About";
 import { SignInPage } from "@/pages/SignIn";
 import { SignUpPage } from "@/pages/SignUp";
 import { DashboardPage } from "@/pages/Dashboard";
@@ -11,6 +12,10 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <LandingPage />,
+  },
+  {
+    path: "/about",
+    element: <AboutPage />,
   },
   {
     path: "/signin",

@@ -1,0 +1,52 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { Link } from "react-router-dom";
+import { ArrowRight, Boxes, GaugeCircle, Wand2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { SiteHeader, SiteFooter } from "@/components/Site";
+const pipeline = [
+    {
+        n: "01",
+        title: "Describe the course",
+        body: "A team lead types what new hires need to learn — tools, processes, compliance, the org itself.",
+    },
+    {
+        n: "02",
+        title: "Devin builds it",
+        body: "An AI pipeline drafts the concept, then generates and tests a real interactive course app in your brand.",
+    },
+    {
+        n: "03",
+        title: "Embed & track",
+        body: "The course is hosted and embedded in your dashboard. Completion and scores stream back automatically.",
+    },
+];
+const roles = [
+    {
+        icon: Wand2,
+        label: "Course creators",
+        body: "HR and department leads generate courses, refine them by prompt, and assign mandatory training.",
+    },
+    {
+        icon: GaugeCircle,
+        label: "Employees",
+        body: "Learners get a personalized path with progress tracking, picking up exactly where they left off.",
+    },
+    {
+        icon: Boxes,
+        label: "Admins",
+        body: "Run the whole tenant — branding, people, departments — isolated from every other company.",
+    },
+];
+function AssemblyVisual() {
+    const cards = [
+        { tag: "BRIEF", title: "Onboarding · Engineering", tint: "bg-white/5", delay: "0ms", tilt: "-3deg" },
+        { tag: "CONCEPT", title: "6 chapters · 12 quiz items", tint: "bg-white/[0.07]", delay: "140ms", tilt: "2deg" },
+        { tag: "LIVE COURSE", title: "Hosted · brand-themed", tint: "bg-iris/20", delay: "280ms", tilt: "-1deg" },
+    ];
+    return (_jsxs("div", { className: "relative mx-auto w-full max-w-md", children: [_jsx("div", { className: "absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_30%,rgba(81,69,229,0.35),transparent_60%)] blur-2xl" }), _jsx("div", { className: "flex flex-col gap-4", children: cards.map((c) => (_jsxs("div", { style: { animationDelay: c.delay, ["--tilt"]: c.tilt }, className: `animate-assemble-in rounded-2xl border border-white/10 ${c.tint} p-5 backdrop-blur`, children: [_jsx("p", { className: "font-mono text-[11px] tracking-[0.2em] text-signal", children: c.tag }), _jsx("p", { className: "mt-2 font-display text-lg font-semibold text-paper", children: c.title }), _jsx("div", { className: "mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10", children: _jsx("div", { className: "h-full w-2/3 rounded-full bg-iris" }) })] }, c.tag))) })] }));
+}
+export function LandingPage() {
+    const { ready, authenticated } = useAuth();
+    const signedIn = ready && authenticated;
+    return (_jsxs("div", { className: "min-h-screen bg-paper text-ink", children: [_jsx(SiteHeader, { signedIn: signedIn }), _jsx("section", { className: "bg-ink text-paper", children: _jsxs("div", { className: "mx-auto grid max-w-7xl items-center gap-14 px-6 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:py-28", children: [_jsxs("div", { children: [_jsx("p", { className: "font-mono text-xs tracking-[0.3em] text-signal", children: "WHITE-LABEL COURSE ENGINE" }), _jsxs("h1", { className: "mt-5 font-display text-5xl font-extrabold leading-[1.02] tracking-tight sm:text-6xl", children: ["Onboarding that", _jsx("br", {}), "builds itself."] }), _jsx("p", { className: "mt-6 max-w-lg text-lg text-paper/70", children: "Coursive turns a short brief into a fully interactive training course \u2014 generated, tested, and hosted in your company's brand. No authoring tools, no slide decks." }), _jsxs("div", { className: "mt-9 flex flex-wrap items-center gap-3", children: [_jsxs(Link, { to: signedIn ? "/dashboard" : "/signup", className: "group inline-flex items-center gap-2 rounded-full bg-iris px-6 py-3 font-medium text-white transition hover:bg-iris/90", children: [signedIn ? "Open dashboard" : "Start building", _jsx(ArrowRight, { className: "h-4 w-4 transition group-hover:translate-x-0.5" })] }), _jsx(Link, { to: "/about", className: "inline-flex items-center rounded-full border border-white/15 px-6 py-3 font-medium text-paper/90 transition hover:bg-white/5", children: "How it works" })] }), _jsxs("p", { className: "mt-6 font-mono text-xs text-paper/40", children: ["Demo tenant: ", _jsx("span", { className: "text-paper/70", children: "acme" }), " \u00B7 creator / creator"] })] }), _jsx(AssemblyVisual, {})] }) }), _jsxs("section", { className: "mx-auto max-w-7xl px-6 py-20", children: [_jsxs("div", { className: "flex items-end justify-between gap-6", children: [_jsx("h2", { className: "max-w-md font-display text-3xl font-bold tracking-tight sm:text-4xl", children: "From sentence to shipped course." }), _jsx("p", { className: "hidden max-w-xs text-sm text-ink/60 sm:block", children: "Every course is a real, standalone web app \u2014 generated by Devin and embedded over a secure boundary." })] }), _jsx("div", { className: "mt-12 grid gap-px overflow-hidden rounded-2xl border border-mist bg-mist sm:grid-cols-3", children: pipeline.map((s) => (_jsxs("div", { className: "bg-paper p-8", children: [_jsx("span", { className: "font-mono text-sm text-signal", children: s.n }), _jsx("h3", { className: "mt-4 text-xl font-semibold", children: s.title }), _jsx("p", { className: "mt-3 text-sm leading-relaxed text-ink/60", children: s.body })] }, s.n))) })] }), _jsx("section", { className: "bg-ink text-paper", children: _jsxs("div", { className: "mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2", children: [_jsxs("div", { children: [_jsx("p", { className: "font-mono text-xs tracking-[0.3em] text-signal", children: "ONE PLATFORM \u00B7 EVERY BRAND" }), _jsx("h2", { className: "mt-5 font-display text-3xl font-bold tracking-tight sm:text-4xl", children: "Your company. Your colors. Your domain." }), _jsx("p", { className: "mt-5 max-w-md text-paper/70", children: "Each tenant defines a style guide once. Coursive re-skins the dashboard and every generated course to match \u2014 strictly isolated from all other companies." })] }), _jsxs("div", { className: "rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl", children: [_jsxs("div", { className: "flex items-center gap-1.5 px-2 py-2", children: [_jsx("span", { className: "h-3 w-3 rounded-full bg-signal/80" }), _jsx("span", { className: "h-3 w-3 rounded-full bg-amber-400/70" }), _jsx("span", { className: "h-3 w-3 rounded-full bg-emerald-400/70" }), _jsx("span", { className: "ml-3 font-mono text-xs text-paper/40", children: "acme.coursive.app" })] }), _jsxs("div", { className: "rounded-xl bg-paper p-5 text-ink", children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("span", { className: "grid h-7 w-7 place-items-center rounded-md bg-[#6d28d9] text-xs font-bold text-white", children: "A" }), _jsx("span", { className: "font-display font-semibold", children: "Acme Academy" })] }), _jsx("div", { className: "mt-4 grid grid-cols-3 gap-3", children: ["Security 101", "Git & CI", "Brand Voice"].map((t) => (_jsxs("div", { className: "rounded-lg border border-mist p-3", children: [_jsx("div", { className: "h-1.5 w-8 rounded-full bg-[#6d28d9]" }), _jsx("p", { className: "mt-2 text-xs font-medium", children: t })] }, t))) })] })] })] }) }), _jsxs("section", { className: "mx-auto max-w-7xl px-6 py-20", children: [_jsx("h2", { className: "font-display text-3xl font-bold tracking-tight sm:text-4xl", children: "Built for the whole org." }), _jsx("div", { className: "mt-10 grid gap-6 sm:grid-cols-3", children: roles.map(({ icon: Icon, label, body }) => (_jsxs("div", { className: "rounded-2xl border border-mist bg-white p-7", children: [_jsx(Icon, { className: "h-6 w-6 text-iris" }), _jsx("h3", { className: "mt-4 text-lg font-semibold", children: label }), _jsx("p", { className: "mt-2 text-sm leading-relaxed text-ink/60", children: body })] }, label))) })] }), _jsx(SiteFooter, {})] }));
+}
