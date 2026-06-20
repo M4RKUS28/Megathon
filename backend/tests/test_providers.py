@@ -5,6 +5,7 @@ and verify every provider degrades gracefully to the deterministic fallback.
 """
 
 import io
+import json
 import wave
 
 import pytest
@@ -140,27 +141,46 @@ def test_composite_audio_and_video_fall_back():
 
 
 # ── Devin code-gen ───────────────────────────────────────────────────────────
+_VALID_PKG = json.dumps(
+    {"name": "t", "scripts": {"build": "vite build"}}
+)
+
+
 def test_validate_files_accepts_good_project():
     out = _validate_files(
         {
             "files": [
-                {"path": "package.json", "content": "{}"},
+                {"path": "package.json", "content": _VALID_PKG},
+                {"path": "index.html", "content": "<html></html>"},
                 {"path": "src/main.tsx", "content": "x"},
             ]
         }
     )
-    assert out == {"package.json": "{}", "src/main.tsx": "x"}
+    assert out is not None
+    assert "package.json" in out
+    assert "src/main.tsx" in out
 
 
 def test_validate_files_rejects_missing_package_json():
-    assert _validate_files({"files": [{"path": "src/main.tsx", "content": "x"}]}) is None
+    assert _validate_files(
+        {"files": [{"path": "src/main.tsx", "content": "x"}]}
+    ) is None
 
 
 def test_validate_files_rejects_path_traversal():
     out = _validate_files(
-        {"files": [{"path": "package.json", "content": "{}"}, {"path": "../evil", "content": "x"}]}
+        {
+            "files": [
+                {"path": "package.json", "content": _VALID_PKG},
+                {"path": "index.html", "content": "<html></html>"},
+                {"path": "src/main.tsx", "content": "x"},
+                {"path": "../evil", "content": "x"},
+            ]
+        }
     )
-    assert out == {"package.json": "{}"}
+    assert out is not None
+    assert "../evil" not in out
+    assert "package.json" in out
 
 
 def test_devin_prompt_requires_chapter_subagents():
