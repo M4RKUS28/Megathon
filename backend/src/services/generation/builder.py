@@ -25,6 +25,15 @@ from src.db.minio import ensure_bucket_exists, public_object_url, put_bytes, put
 
 logger = logging.getLogger(__name__)
 
+
+class BuildError(Exception):
+    """Raised when a per-course build fails, carrying captured logs."""
+
+    def __init__(self, message: str, logs: str) -> None:
+        super().__init__(message)
+        self.logs = logs
+
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _APP_TEMPLATE_FALLBACK = _REPO_ROOT / "course-app-template"
 
@@ -114,14 +123,21 @@ def _build_vite_app(template: Path, course: dict, asset_map: dict) -> Path | Non
         return None
 
 
-def _build_from_sources(
-    source_files: dict[str, str], course: dict, asset_map: dict
-) -> Path | None:
-    """Build a Devin-authored project (path -> content) into a dist/."""
+def try_build_from_sources(
+    source_files: dict[str, str],
+    course: dict,
+    asset_map: dict,
+    *,
+    run_quality_checks: bool = True,
+) -> Path:
+    """Build a Devin-authored project; raise :class:`BuildError` on failure.
+
+    Unlike :func:`_build_from_sources` this captures *all* npm output so the
+    caller can feed exact error logs into a repair prompt.
+    """
     npm = _npm()
     if npm is None:
-        logger.info("npm not found — cannot build Devin-authored course app")
-        return None
+        raise BuildError("npm not found", "npm executable not found on PATH")
 
     work = Path(tempfile.mkdtemp(prefix="coursebuild-devin-"))
     try:
@@ -130,12 +146,99 @@ def _build_from_sources(
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_text(content, encoding="utf-8")
 
-        install = "ci" if (work / "package-lock.json").is_file() else "install"
-        subprocess.run(
-            [npm, install], cwd=work, check=True, timeout=settings.course_build_timeout
+        # ── npm install ────────────────────────────────────────────────
+        install_cmd = "ci" if (work / "package-lock.json").is_file() else "install"
+        result = subprocess.run(
+            [npm, install_cmd],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            timeout=settings.course_build_timeout,
         )
-        return _finish_build(work, npm, course, asset_map)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        if result.returncode != 0:
+            logs = (
+                f"=== npm {install_cmd} (exit {result.returncode}) ===\n"
+                f"STDOUT:\n{result.stdout[-4000:]}\n"
+                f"STDERR:\n{result.stderr[-4000:]}"
+            )
+            raise BuildError(f"npm {install_cmd} failed", logs)
+
+        # ── optional quality checks (typecheck / lint / test) ──────────
+        if run_quality_checks:
+            pkg_path = work / "package.json"
+            if pkg_path.is_file():
+                pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+                scripts = pkg.get("scripts", {})
+                check_failures: list[str] = []
+                for script_name in ("typecheck", "lint", "test"):
+                    if script_name not in scripts:
+                        continue
+                    qr = subprocess.run(
+                        [npm, "run", script_name],
+                        cwd=work,
+                        capture_output=True,
+                        text=True,
+                        timeout=settings.course_build_timeout,
+                    )
+                    if qr.returncode != 0:
+                        check_failures.append(
+                            f"=== npm run {script_name} (exit {qr.returncode}) ===\n"
+                            f"STDOUT:\n{qr.stdout[-4000:]}\n"
+                            f"STDERR:\n{qr.stderr[-4000:]}"
+                        )
+                if check_failures:
+                    raise BuildError(
+                        "quality checks failed", "\n\n".join(check_failures)
+                    )
+
+        # ── npm run build ──────────────────────────────────────────────
+        public = work / "public"
+        public.mkdir(exist_ok=True)
+        (public / "course.json").write_text(json.dumps(course), encoding="utf-8")
+        (public / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
+
+        build_result = subprocess.run(
+            [npm, "run", "build"],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            timeout=settings.course_build_timeout,
+        )
+        if build_result.returncode != 0:
+            logs = (
+                f"=== npm run build (exit {build_result.returncode}) ===\n"
+                f"STDOUT:\n{build_result.stdout[-4000:]}\n"
+                f"STDERR:\n{build_result.stderr[-4000:]}"
+            )
+            raise BuildError("npm run build failed", logs)
+
+        dist = work / "dist"
+        if not (dist / "index.html").is_file():
+            raise BuildError(
+                "build produced no index.html",
+                "npm run build completed but dist/index.html was not generated",
+            )
+        (dist / "course.json").write_text(json.dumps(course), encoding="utf-8")
+        (dist / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
+        return dist
+
+    except BuildError:
+        raise
+    except subprocess.TimeoutExpired as exc:
+        raise BuildError("build timed out", str(exc)) from exc
+    except OSError as exc:
+        raise BuildError(f"OS error during build: {exc}", str(exc)) from exc
+
+
+def _build_from_sources(
+    source_files: dict[str, str], course: dict, asset_map: dict
+) -> Path | None:
+    """Build a Devin-authored project (path -> content) into a dist/."""
+    try:
+        return try_build_from_sources(
+            source_files, course, asset_map, run_quality_checks=False
+        )
+    except BuildError as exc:
         logger.warning("Devin-authored build failed (%s); using template/static fallback", exc)
         return None
 

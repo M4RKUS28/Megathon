@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     # Phase 3: use a real Devin coding session to author the per-course Vite app
     # (it returns the project source files). Falls back to the template build.
     course_build_use_devin: bool = False
+    # Max repair iterations when a Devin-generated build fails. Each iteration
+    # sends the exact error logs back to a new Devin session for a fix attempt.
+    course_build_repair_max_retries: int = 2
 
     # Google Gemini (agentic planner / script-writer pipeline + media)
     gemini_api_key: str = ""
