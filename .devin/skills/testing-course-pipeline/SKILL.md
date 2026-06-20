@@ -26,6 +26,11 @@ docker compose exec -T backend uv run alembic upgrade head
 
 - Course creation / `/courses` / `/team` require role `admin` or `course_creator` → use `creator` or `admin`.
 - Roles come from the JWT `realm_access.roles` (`backend/src/core/auth.py`).
+- **Credential variation:** depending on how the realm/DB was seeded, the direct-grant
+  username/password may instead be **email-based** (`creator@acme.test` / `creator2026`,
+  `admin@acme.test` / `admin2026`). If `creator`/`creator` returns
+  `{"error":"invalid_grant"}`, try the email form (`backend/src/db/seed.py` is the source of
+  truth for the seeded values).
 
 ## Fast API smoke (de-risk before recording)
 Direct grant is enabled, so you can drive the whole pipeline headless:
@@ -98,14 +103,54 @@ The planner falls back **silently** on any agent exception (`planner.py` try/exc
 to be replayed on every multi-turn function call. The planner is a tool-using ReAct agent, so
 on `langchain-google-genai` 2.x it 400s on turn 2 (`Function call is missing a thought_signature
 …`) and silently falls back — every course came out as the deterministic plan. Fixed by bumping
-to `langchain-google-genai>=4.2` (+ `langgraph` 1.x, `langchain-core` 1.x). The script-writer
-uses single-turn `with_structured_output`, so it was unaffected — only the planner broke.
+to `langchain-google-genai>=4.2` (+ `langgraph` 1.x, `langchain-core` 1.x).
 If the planner always falls back despite a valid key, check the model name vs the lib version.
+
+### Script-writer / structured-output gotcha (empty pages & quizzes)
+The script-writer builds the Lastenheft `spec`. A **fully populated chapter** has
+`pages[]` (each with `blocks[]` + `asset_needs[]`) and `quiz.questions[]`. A course can reach
+`ready` with **empty** `pages`/`quiz` and still host an index.html — so **status alone is NOT
+proof**; always inspect content (see next bullet).
+- **Gemini structured-output trap:** `with_structured_output(SpecChapter)` resolves to Gemini's
+  *function-calling* path, which for this deeply nested schema (`Page`→`blocks`/`asset_needs`,
+  `Quiz`→`questions`) silently returns the chapter-level fields but **empty nested arrays**.
+  Raising `max_output_tokens` and `thinking_budget=0` do NOT help; `method="json_mode"` is
+  inconsistent. The reliable pattern is plain generation + `PydanticOutputParser`
+  (`get_format_instructions()` in the user msg, parse the text yourself). When testing this kind
+  of LLM-output change, reproduce with a **single** unit first (one chapter) — don't assume the
+  failure is about request size.
+- **Gemini-3 thinking content shape:** `gemini-3.5-flash` returns `message.content` as a **list
+  of parts** (text + thought-signature blocks), not a string. Flatten by joining only
+  `part['type']=='text'` parts before parsing.
+- **Verify content, not just status** — query the spec and assert non-empty arrays:
+  ```bash
+  curl -s http://localhost/api/v1/courses/$CID -H "Authorization: Bearer $TOKEN" | python3 -c "
+  import sys,json; s=json.load(sys.stdin)['spec']
+  for c in s['chapters']:
+    pg=c['pages']; print(c['id'], 'pages',len(pg), 'blocks',sum(len(p['blocks']) for p in pg),
+          'quiz',len((c['quiz'] or {}).get('questions',[])))
+  print('asset_manifest', len(s.get('asset_manifest') or []))"
+  ```
+  Or navigate the hosted course (below): a broken spec renders blank pages and no quiz.
+
+### Worker does NOT always hot-reload mid-session
+Pipeline jobs run in the `worker` container (arq, started with `--watch src`). In practice the
+long-running arq process may **not** pick up edits to `backend/src/**` — a course generated
+right after an edit can still run the OLD code. After editing backend source, **restart the
+worker** (`docker compose ... restart worker`) before generating a course to test, or run the
+graph directly in-container (`uv run python -c "...generate_lastenheft(...)"`) which always uses
+on-disk code.
 
 ## UI flow (status transitions are the key signal)
 1. `/courses` → "New course" → fill Title/Audience/Goals/Key topics → "Draft with Devin".
 2. Lands on `/courses/{id}`; status badge → **Plan review** (amber). The `PlanReview` component (`frontend/src/pages/CourseDetail.tsx`) shows editable objectives/duration and a chapters list (rename, Add chapter, up/down reorder, trash delete). (To prove the *real* planner ran vs the silent fallback, use the signals in "Real Gemini plan vs fallback" above — not just the presence of chapters.)
 3. "Approve & generate course" → `POST .../plan/approve` → status goes Authoring/Building → **Ready**. The Preview iframe renders the hosted course; edited chapter titles persist into it. Generation log lists plan/spec/build = Succeeded.
+   - **Inspecting rendered content directly:** the hosted Vite app embeds the spec at build time
+     (`builder.py` `__COURSE_DATA__`), so opening
+     `http://localhost/storage/courses/acme/{id}/v1/index.html` renders the full course
+     client-side. Use it to visually confirm pages have real content blocks and that the
+     end-of-chapter **Knowledge check** quiz shows real questions; answering ≥80% unlocks the
+     next (locked) chapter — a strong end-to-end signal that `pages`/`quiz` are populated.
 4. `/team` → manager dashboard: 5 stat cards + members table. Empty ("No direct reports yet.") unless the logged-in user manages direct reports — that empty state is correct, not a bug.
 
 ## Gotchas
