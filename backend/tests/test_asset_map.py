@@ -72,9 +72,9 @@ def test_fallback_manifest_populates_alt_text_and_usage_context():
 # ── Placeholder provider ────────────────────────────────────────────────────
 
 
-def test_placeholder_produces_svg_for_every_type():
+def test_placeholder_produces_correct_format_for_every_type():
     provider = PlaceholderAssetProvider()
-    for atype in ("image", "video", "audio", "diagram"):
+    for atype in ("image", "video", "diagram"):
         spec = AssetSpec(
             template_link=f"/resources/{atype}/test",
             type=atype,
@@ -87,6 +87,20 @@ def test_placeholder_produces_svg_for_every_type():
         assert ext == "svg"
         assert ctype == "image/svg+xml"
         assert b"<svg" in content
+
+    # Audio placeholder produces a silent WAV, not an SVG.
+    audio_spec = AssetSpec(
+        template_link="/resources/audio/test",
+        type="audio",
+        description="test narration",
+        purpose="unit test",
+        alt_text="test audio",
+        usage_context="test context",
+    )
+    content, ext, ctype = provider.produce(audio_spec, "#FF0000")
+    assert ext == "wav"
+    assert ctype == "audio/wav"
+    assert len(content) > 0
 
 
 # ── fetch_assets mapping ────────────────────────────────────────────────────
@@ -241,3 +255,53 @@ def test_all_manifest_links_appear_as_block_assets():
     }
     # Every block asset should be in the manifest.
     assert block_assets <= manifest_links, f"Missing from manifest: {block_assets - manifest_links}"
+
+
+# ── Audio assets in manifest ────────────────────────────────────────────────
+
+
+def test_fallback_manifest_includes_audio_assets():
+    """Audio narration assets must appear in the manifest with proper metadata."""
+    plan = fallback_plan(BRIEF, "Acme")
+    lh = fallback_lastenheft(plan, "Acme", "#5145E5")
+
+    audio_assets = [a for a in lh.asset_manifest if a.type == "audio"]
+    assert audio_assets, "manifest must include audio assets"
+    for a in audio_assets:
+        assert a.template_link.startswith("/resources/audio/")
+        assert a.description, f"{a.template_link} missing description (narration script)"
+        assert a.purpose, f"{a.template_link} missing purpose"
+        assert a.alt_text, f"{a.template_link} missing alt_text"
+        assert a.usage_context, f"{a.template_link} missing usage_context"
+
+
+def test_devin_prompt_mentions_audio_asset_strategy():
+    plan = fallback_plan(BRIEF, "Acme")
+    lh = fallback_lastenheft(plan, "Acme", "#5145E5")
+    spec = lh.model_dump()
+    asset_map = {a.template_link: "https://cdn/x" for a in lh.asset_manifest}
+    prompt = _build_prompt(spec, asset_map)
+
+    assert "Audio assets" in prompt
+    assert "/resources/audio/" in prompt
+
+
+# ── Empty / partial asset_map handling ──────────────────────────────────────
+
+
+def test_asset_map_empty_dict_is_valid():
+    """An empty asset_map is valid (all assets missing → placeholders)."""
+    spec = {"title": "Test", "chapters": [], "asset_manifest": []}
+    prompt = _build_prompt(spec, {})
+    assert "asset_map.json" in prompt
+
+
+def test_asset_map_partial_coverage_is_valid():
+    """asset_map may contain only a subset of manifest links."""
+    plan = fallback_plan(BRIEF, "Acme")
+    lh = fallback_lastenheft(plan, "Acme", "#5145E5")
+    # Only map the first asset.
+    first = lh.asset_manifest[0]
+    partial_map = {first.template_link: "https://cdn/only-one.svg"}
+    prompt = _build_prompt(lh.model_dump(), partial_map)
+    assert first.template_link in prompt
