@@ -86,6 +86,9 @@ class Settings(BaseSettings):
         default="auto",
         validation_alias=AliasChoices("COURSE_BUILD_MODE", "COURSE_BUILD_USE_DEVIN"),
     )
+    # Max repair iterations when a Devin-generated build fails. Each iteration
+    # sends the exact error logs back to a new Devin session for a fix attempt.
+    course_build_repair_max_retries: int = 2
 
     @field_validator("course_build_mode", mode="before")
     @classmethod
