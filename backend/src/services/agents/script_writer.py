@@ -27,29 +27,17 @@ from .schemas import AssetSpec, CoursePlan, Lastenheft, SpecChapter, StyleGuide
 
 logger = logging.getLogger(__name__)
 
-SCRIPT_SYSTEM = """You are a senior interactive learning designer. Turn the approved course
-plan into an implementation-ready Lastenheft (spec) for a bespoke Vite/React course app
-that a coding agent (Devin) will build from scratch.
+SCRIPT_SYSTEM = """You are a senior interactive learning designer creating an implementation-
+ready Lastenheft (specification) for a bespoke Vite/React course app. A coding agent (Devin)
+will build this from scratch — every page must be self-contained and unambiguous.
 
 The spec describes *behaviour and intent* — NOT a rigid renderer schema. Be specific enough
 that Devin can implement each interaction without follow-up questions.
 
-Rules:
-- The course must NEVER be plain text. Each topic block is supported by media or an interaction.
-- Split EVERY chapter into MULTIPLE pages (at least 3, ideally 3-5). Each `page` is one
-  digestible screen the learner steps through one at a time (e.g. "Introduction",
-  "Key concepts", "Apply it", "Recap"). NEVER put a whole chapter on a single page, and never
-  put the quiz inside a content page.
-- Give each page 2-4 blocks and a short, descriptive page `title`. Use a rich mix of block
-  types across the pages: heading, paragraph, list, callout, image, video, audio,
-  dialogue (speech-bubble conversation), chart (Chart.js), flashcards, dragdrop, hotspot,
-  timeline, accordion, scenario (branching), worked_example. Favour many visualisations and
-  conversations.
-- For every visual/media block set `asset` to a UNIQUE template link like
-  "/resources/images/01", "/resources/videos/02", "/resources/audio/03". Do NOT invent URLs.
-- Describe interactions precisely via the `data` field so a coding agent can implement them
-  without questions (e.g. chart: chartType/labels/datasets; dragdrop: pairs; dialogue: turns;
-  scenario: branches).
+## ANTI-BORING MANDATE
+Avoid generic text-heavy lessons. Prefer visual explanations, interaction, scenarios,
+simulations, charts, diagrams, and concrete examples. Every topic must be supported by media
+or interaction — never plain text walls. Make it engaging, specific, and real-world.
 
 Chapter-level fields (populate for EVERY chapter):
   - `learning_points`: concrete things the learner will know/be able to do after this chapter.
@@ -57,30 +45,60 @@ Chapter-level fields (populate for EVERY chapter):
   - `competency`: the competency this chapter targets.
   - `bloom_level`: Bloom's taxonomy level (remember/understand/apply/analyze/evaluate/create).
 
-Page-level fields (populate for EVERY page):
-  - `content_goal`: what this page aims to teach or achieve.
-  - `learner_action`: what the learner should *do* on this page.
-  - `ui_treatment`: visual/layout hint (e.g. "hero splash", "two-column sidebar", "immersive
-    scenario"). This guides Devin's React implementation — be creative, not generic.
-  - `estimated_minutes`: time budget for this page.
+## PAGE STRUCTURE
+Split EVERY chapter into 3–5 pages. Each page is one digestible screen (e.g. "Introduction",
+"Key concepts", "Apply it", "Recap"). NEVER put a whole chapter on one page, and never put
+the quiz inside a content page.
 
-Block-level intent fields (populate where the block has interaction or media):
-  - `interaction_goal`: what this interaction aims to achieve pedagogically.
-  - `suggested_interaction`: implementation hint (e.g. "animate bars on scroll").
-  - `required_behavior`: what the block MUST do behaviourally.
-  - `feedback_behavior`: how the block responds to user actions.
-  - `success_criterion`: how to tell the learner succeeded.
-  - `worked_example`: optional step-by-step worked example data.
+For EACH page provide ALL of these fields:
 
-Quiz fields:
-- Each chapter ends with ONE quiz (shown only after the last page):
-  passing_pct=80, retryable=true, 3-5 multiple-choice questions with the correct answerIndex
-  and an explanation. Learners must score >=80% to unlock the next chapter.
-- Set `assessment_id` (stable id), `chapter_ref` (chapter id), `competency_assessed`.
-- On each question set `bloom_level` and `learning_point_ref` (links to a chapter
-  learning_point).
+1. **learning_goal** — One clear sentence: what the learner can do after this page.
+2. **content_goals** — 2–4 bullet points of concrete, non-generic topics/facts to cover.
+   Use real data, real scenarios, real terminology. No “understand X” platitudes.
+3. **learner_action** — What the learner DOES (e.g. "reads a scenario and picks a branch",
+   "drags terms to definitions", "watches a worked example then answers reflection").
+4. **ui_treatment** — Expected visual layout (e.g. "hero image top, two-column text + diagram
+   below", "full-width interactive chart with annotation callouts", "speech-bubble dialogue
+   with avatar").
+5. **worked_example** — A CONCRETE scenario. Name people, give numbers, describe the situation.
+   Never say "for example, a situation". Instead: "Maria in the warehouse notices a leaking
+   drum near aisle 7. She checks the SDS, notifies the supervisor, and cordons the area."
+6. **recommended_interaction** — Which block type(s) best serve this page’s goal. Pick from:
+   dialogue, chart, flashcards, dragdrop, hotspot, timeline, accordion, scenario, image,
+   video, audio. Explain WHY this interaction fits.
+7. **required_behavior** — What the React component MUST do (e.g. "Drag-drop locks after
+   correct match; incorrect items bounce back with shake animation; completion unlocks Next").
+8. **feedback_behavior** — How the page responds to learner input (e.g. "Correct: green check +
+   explanation. Wrong: orange highlight + hint. After 2 wrong: show answer.").
+9. **success_criterion** — Observable condition proving this page works (e.g. "learner reorders
+   all 5 steps correctly; chart renders with live data; scenario reaches at least one ending").
+10. **blocks** — 2–4 implementation-ready blocks. Types: heading, paragraph, list, callout,
+    image, video, audio, dialogue, chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
+    accordion, scenario. For every visual/media block set `asset` to a UNIQUE template link
+    ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions precisely
+    in the `data` field so Devin can implement without questions.
+11. **asset_needs** — List every asset this page needs. Each entry: template_link, type
+    (image/video/audio/diagram), and a detailed visual/audio brief.
 
-Return structured output: a list of chapters covering EVERY chapter in the plan, in order."""
+## ASSESSMENT (per chapter, SEPARATE from explanation)
+Each chapter ends with ONE quiz (shown only after the last content page).
+Also provide `assessment_requirements` on each chapter:
+- **tested_goals**: Which learning goals from the chapter pages this quiz tests.
+- **question_types**: e.g. ["multiple-choice", "ordering", "true-false"].
+- **misconceptions_to_probe**: Common wrong beliefs the quiz should expose.
+- **minimum_questions**: At least 3, ideally 5.
+- **passing_pct**: 80.
+- **feedback_on_wrong**: How wrong answers are handled (e.g. "Show correct answer +
+  one-sentence explanation referencing the relevant page").
+
+Quiz rules:
+- passing_pct=80, retryable=true, 3–5 multiple-choice questions.
+- Each question has the correct answerIndex and an explanation.
+- Questions must test APPLICATION, not recall. Use scenarios in questions.
+- Distractors must be plausible (not jokes like "office snacks" or "parking").
+
+Return structured output: a list of chapters covering EVERY chapter in the plan, in order.
+"""
 
 
 class _ChaptersOut(BaseModel):
@@ -97,17 +115,31 @@ class _State(TypedDict, total=False):
 
 
 def _plan_text(plan: CoursePlan) -> str:
-    lines = [f"Title: {plan.title}", f"Audience: {plan.audience}", f"Language: {plan.language}"]
+    lines = [
+        f"Title: {plan.title}",
+        f"Audience: {plan.audience}",
+        f"Language: {plan.language}",
+        f"Difficulty: {plan.difficulty}",
+        f"Duration: ~{plan.estimated_minutes} min",
+    ]
     if plan.objectives:
         lines.append("Objectives:\n" + "\n".join(f"- {o}" for o in plan.objectives))
     if plan.compliance_requirements:
         lines.append(
             "Compliance:\n" + "\n".join(f"- {c}" for c in plan.compliance_requirements)
         )
+    if plan.mandatory_topics:
+        lines.append(
+            "Mandatory topics:\n" + "\n".join(f"- {t}" for t in plan.mandatory_topics)
+        )
     lines.append("Chapters:")
     for c in plan.chapters:
         kp = "; ".join(c.key_points)
-        lines.append(f"- [{c.id}] {c.title} — {c.objective} (key points: {kp})")
+        lines.append(
+            f"- [{c.id}] {c.title} (Bloom: {c.bloom_level}, ~{c.estimated_minutes} min)\n"
+            f"  Objective: {c.objective}\n"
+            f"  Key points: {kp}"
+        )
     return "\n".join(lines)
 
 
@@ -124,10 +156,26 @@ async def _design_interactions(state: _State) -> _State:
 
 
 def _build_manifest(state: _State) -> _State:
-    """Collect every referenced asset into the isolated manifest (dedup by link)."""
+    """Collect every referenced asset into the isolated manifest (dedup by link).
+
+    Sources (in priority order):
+    1. Per-page `asset_needs` (richest descriptions, preferred).
+    2. Block-level `asset` links (fallback for any the LLM missed in asset_needs).
+    """
     manifest: dict[str, AssetSpec] = {}
     for ch in state["chapters"]:
         for page in ch.pages:
+            # 1. Per-page asset_needs (preferred source)
+            for need in page.asset_needs:
+                if need.template_link and need.template_link not in manifest:
+                    manifest[need.template_link] = AssetSpec(
+                        template_link=need.template_link,
+                        type=need.type,
+                        dimensions="16:9",
+                        description=need.description,
+                        purpose=f"{need.type} on page '{page.title}' in chapter '{ch.title}'",
+                    )
+            # 2. Block-level asset links (catch anything not in asset_needs)
             for block in page.blocks:
                 link = block.asset
                 if not link or link in manifest:

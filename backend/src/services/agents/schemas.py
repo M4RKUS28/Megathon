@@ -6,6 +6,12 @@ graph (Phase 2), the asset pipeline (Phase 2.5 A) and the implementation/builder
 
 The Lastenheft (spec) is *not* a rigid renderer schema — it describes behaviour
 and intent clearly enough for Devin to implement bespoke React components.
+
+The Page schema carries a rich implementation brief so that Devin (or any
+coding agent) can build every page without follow-up questions. Each page
+specifies learning goals, concrete content, learner actions, UI treatment,
+worked examples, interactions, behaviours, feedback, success criteria, and
+asset needs.
 """
 
 from __future__ import annotations
@@ -89,6 +95,14 @@ class AssetSpec(BaseModel):
     style_hints: dict | None = None  # e.g. {"palette": "warm", "mood": "professional"}
 
 
+class AssetNeed(BaseModel):
+    """Per-page asset requirement (collected into the chapter-level manifest)."""
+
+    template_link: str
+    type: str  # image | video | audio | diagram
+    description: str = ""  # detailed visual/audio brief for the asset generator
+
+
 class Block(BaseModel):
     type: str
     text: str | None = None
@@ -110,10 +124,19 @@ class Block(BaseModel):
 class Page(BaseModel):
     id: str
     title: str = ""
+    # ── rich implementation brief (consumed by Devin) ─────────────────────
+    learning_goal: str = ""  # what the learner can do after this page
+    content_goals: list[str] = Field(default_factory=list)  # concrete topics
+    learner_action: str = ""  # what the learner DOES on this page
+    ui_treatment: str = ""  # expected visual layout / component style
+    worked_example: str = ""  # a concrete, named scenario or example
+    recommended_interaction: str = ""  # which interaction type(s) and why
+    required_behavior: str = ""  # what the React component MUST do
+    feedback_behavior: str = ""  # how the page responds to learner input
+    success_criterion: str = ""  # observable proof this page works
+    # ── implementation payload ────────────────────────────────────────────
     blocks: list[Block] = Field(default_factory=list)
-    content_goal: str = ""  # what this page aims to teach or achieve
-    learner_action: str = ""  # what the learner should *do* on this page
-    ui_treatment: str = ""  # visual hint, e.g. "hero splash", "two-column sidebar"
+    asset_needs: list[AssetNeed] = Field(default_factory=list)
     estimated_minutes: int = 0  # time budget for this page (0 = unspecified)
 
 
@@ -135,6 +158,17 @@ class Quiz(BaseModel):
     competency_assessed: str = ""  # competency being measured
 
 
+class AssessmentRequirement(BaseModel):
+    """Specification for a chapter's assessment, separate from content."""
+
+    tested_goals: list[str] = Field(default_factory=list)
+    question_types: list[str] = Field(default_factory=list)
+    misconceptions_to_probe: list[str] = Field(default_factory=list)
+    minimum_questions: int = 3
+    passing_pct: int = 80
+    feedback_on_wrong: str = ""
+
+
 class SpecChapter(BaseModel):
     id: str
     title: str
@@ -145,6 +179,9 @@ class SpecChapter(BaseModel):
     estimated_minutes: int = 0  # time budget (0 = unspecified)
     competency: str = ""  # competency this chapter targets
     bloom_level: str = ""  # Bloom's taxonomy level
+    assessment_requirements: AssessmentRequirement = Field(
+        default_factory=AssessmentRequirement
+    )
 
 
 class StyleGuide(BaseModel):
