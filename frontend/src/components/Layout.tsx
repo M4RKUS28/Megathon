@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useMe } from "@/hooks/useMe";
 import { useMyBranding } from "@/hooks/useBranding";
+import { useProviderDiagnostics } from "@/hooks/useProviderDiagnostics";
 import { BrandProvider, useBrand } from "@/theme/ThemeProvider";
 import type { AppRole } from "@/lib/api";
 
@@ -62,6 +63,7 @@ function Brandmark() {
 function Shell() {
   const { user, logout } = useAuth();
   const { data: me } = useMe();
+  useProviderDiagnostics();
   const role = (me?.role ?? "user") as AppRole;
   const items = NAV.filter((i) => i.roles.includes(role));
 
