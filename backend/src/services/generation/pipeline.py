@@ -311,11 +311,26 @@ async def process_build_job(job_id: str) -> None:
             asset_map = fetch_assets(manifest, prefix, primary)
             publish_asset_map(prefix, asset_map)
 
-            # Phase 3 + 4 — build per-course app and host it
-            hosting = publish_built_course(
-                slug, str(course.id), course.version, course.spec, asset_map
+            # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
+            # (optional; falls back to the template build inside the builder).
+            from src.services.generation.devin_codegen import generate_course_app
+
+            devin_session_id, source_files = await generate_course_app(
+                course.spec, asset_map
             )
 
+            # Phase 3 + 4 — build per-course app and host it
+            hosting = publish_built_course(
+                slug,
+                str(course.id),
+                course.version,
+                course.spec,
+                asset_map,
+                source_files=source_files,
+            )
+
+            if devin_session_id:
+                job.devin_session_id = devin_session_id
             course.asset_map = asset_map
             course.dist_object_prefix = hosting["prefix"]
             course.course_url = hosting["course_url"]

@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import logging
 
+from .cala import get_company_knowledge
 from .fallback import fallback_plan
-from .knowledge import CompanyKnowledge, build_knowledge_tools
+from .knowledge import build_knowledge_tools
 from .llm import gemini_available, get_chat_model
 from .schemas import CoursePlan
 
@@ -51,7 +52,7 @@ async def generate_plan(brief: dict, company_name: str, context: dict | None = N
     try:
         from langgraph.prebuilt import create_react_agent
 
-        knowledge = CompanyKnowledge(company_name=company_name, context=context)
+        knowledge = get_company_knowledge(company_name, context)
         tools = build_knowledge_tools(knowledge)
         model = get_chat_model(temperature=0.3)
         agent = create_react_agent(

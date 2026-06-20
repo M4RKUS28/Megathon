@@ -76,7 +76,10 @@ def fetch_assets(
     provider: AssetProvider | None = None,
 ) -> dict[str, str]:
     """Produce + upload every manifest asset; return template_link -> storage_url."""
-    provider = provider or PlaceholderAssetProvider()
+    if provider is None:
+        from .providers import build_asset_provider
+
+        provider = build_asset_provider()
     specs = [a if isinstance(a, AssetSpec) else AssetSpec(**a) for a in manifest]
     ensure_bucket_exists(settings.courses_bucket)
 

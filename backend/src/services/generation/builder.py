@@ -58,6 +58,29 @@ def _npm() -> str | None:
     return shutil.which("npm")
 
 
+def _finish_build(work: Path, npm: str, course: dict, asset_map: dict) -> Path | None:
+    """Bake runtime data, run `npm run build`, return the dist path or None."""
+    public = work / "public"
+    public.mkdir(exist_ok=True)
+    (public / "course.json").write_text(json.dumps(course), encoding="utf-8")
+    (public / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
+
+    subprocess.run(
+        [npm, "run", "build"],
+        cwd=work,
+        check=True,
+        timeout=settings.course_build_timeout,
+    )
+    dist = work / "dist"
+    if not (dist / "index.html").is_file():
+        logger.warning("per-course build produced no index.html")
+        return None
+    # Ensure runtime data ships in dist (vite copies public/, but be safe).
+    (dist / "course.json").write_text(json.dumps(course), encoding="utf-8")
+    (dist / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
+    return dist
+
+
 def _build_vite_app(template: Path, course: dict, asset_map: dict) -> Path | None:
     """Copy the template, bake data, run the build; return the dist path or None."""
     npm = _npm()
@@ -86,27 +109,35 @@ def _build_vite_app(template: Path, course: dict, asset_map: dict) -> Path | Non
         else:
             subprocess.run([npm, "ci"], cwd=work, check=True, timeout=settings.course_build_timeout)
 
-        public = work / "public"
-        public.mkdir(exist_ok=True)
-        (public / "course.json").write_text(json.dumps(course), encoding="utf-8")
-        (public / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
-
-        subprocess.run(
-            [npm, "run", "build"],
-            cwd=work,
-            check=True,
-            timeout=settings.course_build_timeout,
-        )
-        dist = work / "dist"
-        if not (dist / "index.html").is_file():
-            logger.warning("per-course build produced no index.html")
-            return None
-        # Ensure runtime data ships in dist (vite copies public/, but be safe).
-        (dist / "course.json").write_text(json.dumps(course), encoding="utf-8")
-        (dist / "asset_map.json").write_text(json.dumps(asset_map), encoding="utf-8")
-        return dist
+        return _finish_build(work, npm, course, asset_map)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("per-course Vite build failed (%s); using static fallback", exc)
+        return None
+
+
+def _build_from_sources(
+    source_files: dict[str, str], course: dict, asset_map: dict
+) -> Path | None:
+    """Build a Devin-authored project (path -> content) into a dist/."""
+    npm = _npm()
+    if npm is None:
+        logger.info("npm not found — cannot build Devin-authored course app")
+        return None
+
+    work = Path(tempfile.mkdtemp(prefix="coursebuild-devin-"))
+    try:
+        for rel, content in source_files.items():
+            dst = work / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(content, encoding="utf-8")
+
+        install = "ci" if (work / "package-lock.json").is_file() else "install"
+        subprocess.run(
+            [npm, install], cwd=work, check=True, timeout=settings.course_build_timeout
+        )
+        return _finish_build(work, npm, course, asset_map)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("Devin-authored build failed (%s); using template/static fallback", exc)
         return None
 
 
@@ -138,17 +169,25 @@ def publish_built_course(
     version: int,
     spec: dict,
     asset_map: dict | None = None,
+    source_files: dict[str, str] | None = None,
 ) -> dict:
-    """Build (or statically render) the course and upload it. Returns hosting info."""
+    """Build (or statically render) the course and upload it. Returns hosting info.
+
+    If `source_files` (a Devin-authored project) is supplied, it is built first;
+    otherwise the prebuilt app template is used, then a static fallback.
+    """
     ensure_bucket_exists(settings.courses_bucket)
     asset_map = asset_map or {}
     course = _course_json(spec)
     prefix = course_prefix(company_slug, course_id, version)
 
     dist: Path | None = None
-    template = _app_template_dir()
-    if settings.course_build_enabled and template is not None:
-        dist = _build_vite_app(template, course, asset_map)
+    if settings.course_build_enabled and source_files:
+        dist = _build_from_sources(source_files, course, asset_map)
+    if dist is None and settings.course_build_enabled:
+        template = _app_template_dir()
+        if template is not None:
+            dist = _build_vite_app(template, course, asset_map)
 
     if dist is not None:
         _upload_dir(dist, prefix)
