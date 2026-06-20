@@ -3,6 +3,12 @@
 These are the contracts between the planner agent (Phase 1), the script-writer
 graph (Phase 2), the asset pipeline (Phase 2.5 A) and the implementation/builder
 (Phase 2.5 B / Phase 3). They are also used for LLM structured output.
+
+The Page schema carries a rich implementation brief so that Devin (or any
+coding agent) can build every page without follow-up questions. Each page
+specifies learning goals, concrete content, learner actions, UI treatment,
+worked examples, interactions, behaviours, feedback, success criteria, and
+asset needs.
 """
 
 from __future__ import annotations
@@ -80,6 +86,14 @@ class AssetSpec(BaseModel):
     purpose: str = ""  # function in the course
 
 
+class AssetNeed(BaseModel):
+    """Per-page asset requirement (collected into the chapter-level manifest)."""
+
+    template_link: str
+    type: str  # image | video | audio | diagram
+    description: str = ""  # detailed visual/audio brief for the asset generator
+
+
 class Block(BaseModel):
     type: str
     text: str | None = None
@@ -94,7 +108,19 @@ class Block(BaseModel):
 class Page(BaseModel):
     id: str
     title: str = ""
+    # ── rich implementation brief (consumed by Devin) ─────────────────────
+    learning_goal: str = ""  # what the learner can do after this page
+    content_goals: list[str] = Field(default_factory=list)  # concrete topics
+    learner_action: str = ""  # what the learner DOES on this page
+    ui_treatment: str = ""  # expected visual layout / component style
+    worked_example: str = ""  # a concrete, named scenario or example
+    recommended_interaction: str = ""  # which interaction type(s) and why
+    required_behavior: str = ""  # what the React component MUST do
+    feedback_behavior: str = ""  # how the page responds to learner input
+    success_criterion: str = ""  # observable proof this page works
+    # ── implementation payload ────────────────────────────────────────────
     blocks: list[Block] = Field(default_factory=list)
+    asset_needs: list[AssetNeed] = Field(default_factory=list)
 
 
 class QuizQuestion(BaseModel):
@@ -110,12 +136,26 @@ class Quiz(BaseModel):
     questions: list[QuizQuestion] = Field(default_factory=list)
 
 
+class AssessmentRequirement(BaseModel):
+    """Specification for a chapter's assessment, separate from content."""
+
+    tested_goals: list[str] = Field(default_factory=list)
+    question_types: list[str] = Field(default_factory=list)
+    misconceptions_to_probe: list[str] = Field(default_factory=list)
+    minimum_questions: int = 3
+    passing_pct: int = 80
+    feedback_on_wrong: str = ""
+
+
 class SpecChapter(BaseModel):
     id: str
     title: str
     objective: str = ""
     pages: list[Page] = Field(default_factory=list)
     quiz: Quiz = Field(default_factory=Quiz)
+    assessment_requirements: AssessmentRequirement = Field(
+        default_factory=AssessmentRequirement
+    )
 
 
 class Lastenheft(BaseModel):
