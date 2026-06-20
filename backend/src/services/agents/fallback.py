@@ -83,6 +83,14 @@ def _chapter_pages(
         ("you", "You", "Sounds good. I'm ready when you are."),
     ]
     convo_audio = [f"/resources/audio/{idx:02d}-c{n}" for n in range(1, len(convo_turns) + 1)]
+    hero_desc = (
+        f"Illustrative hero image for '{chapter_title}' at {company}: modern, "
+        "friendly workplace scene, brand colors, soft lighting."
+    )
+    apply_desc = (
+        f"People applying {title_lc} in a real {company} workplace situation: "
+        "hands-on, step-by-step, brand colors."
+    )
     intro_narration = (
         f"Welcome to {chapter_title}. In this chapter you will learn what {title_lc} "
         f"means at {company} and why it matters for your day-to-day work. We will go "
@@ -109,39 +117,52 @@ def _chapter_pages(
             template_link=hero_link,
             type="image",
             dimensions="16:9",
-            description=(
-                f"Illustrative hero image for '{chapter_title}' at {company}: modern, "
-                "friendly workplace scene, brand colors, soft lighting."
-            ),
+            description=hero_desc,
             purpose="Chapter intro / context image",
+            alt_text=f"Hero image for {chapter_title}",
+            usage_context=f"image block on Introduction page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=apply_link,
             type="image",
             dimensions="16:9",
-            description=(
-                f"People applying {title_lc} in a real {company} workplace situation: "
-                "hands-on, step-by-step, brand colors."
-            ),
+            description=apply_desc,
             purpose="Applied example image",
+            alt_text=f"Applying {title_lc} at {company}",
+            usage_context=f"image block on Apply it page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=chart_link,
+            type="diagram",
+            dimensions="4:3",
+            description=f"Bar chart showing key metrics for {chapter_title} (Q1-Q4 adoption).",
+            purpose="Data visualisation for chapter metrics",
+            alt_text=f"{chapter_title} key metrics chart",
+            usage_context=f"chart block on Apply it page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=intro_audio,
             type="audio",
             description=intro_narration,
             purpose="Spoken narration for the introduction page",
+            alt_text=f"Narration: Introduction to {chapter_title}",
+            usage_context=f"audio block on Introduction page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=concepts_audio,
             type="audio",
             description=concepts_narration,
             purpose="Spoken narration for the key concepts page",
+            alt_text=f"Narration: Key concepts of {title_lc}",
+            usage_context=f"audio block on Key concepts page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=practice_audio,
             type="audio",
             description=practice_narration,
             purpose="Spoken narration for the apply-it page",
+            alt_text=f"Narration: Applying {title_lc}",
+            usage_context=f"audio block on Apply it page in chapter '{chapter_title}'",
         ),
         *(
             AssetSpec(
@@ -149,9 +170,13 @@ def _chapter_pages(
                 type="audio",
                 description=text,
                 purpose="Conversation line narration",
+                alt_text=f"{name}: {text[:80]}",
+                usage_context=(
+                    f"conversation turn on Introduction page in chapter '{chapter_title}'"
+                ),
                 voice="Puck" if pid == "you" else None,
             )
-            for (pid, _name, text), link in zip(convo_turns, convo_audio)
+            for (pid, name, text), link in zip(convo_turns, convo_audio)
         ),
     ]
     intro_page = Page(

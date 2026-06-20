@@ -196,12 +196,15 @@ def _conversation_audio_specs(block: Block, chapter_title: str) -> list[AssetSpe
             continue
         pid = str(turn.get("persona") or turn.get("speaker") or "")
         side = side_by_id.get(pid, "left")
+        name = str(turn.get("persona") or turn.get("speaker") or "speaker")
         specs.append(
             AssetSpec(
                 template_link=str(link),
                 type="audio",
                 description=text,
                 purpose=f"conversation line in chapter '{chapter_title}'",
+                alt_text=f"{name}: {text[:80]}",
+                usage_context=f"conversation turn in chapter '{chapter_title}'",
                 voice=_RIGHT_VOICE if side == "right" else _LEFT_VOICE,
             )
         )
@@ -228,13 +231,19 @@ def _build_manifest(state: _State) -> _State:
                     atype = block.type if block.type in {"image", "video", "audio"} else "image"
                     if block.type == "chart":
                         atype = "diagram"
+                    desc = (block.text or ch.title or "Course asset").strip()
                     add(
                         AssetSpec(
                             template_link=link,
                             type=atype,
                             dimensions="16:9",
-                            description=(block.text or ch.title or "Course asset").strip(),
+                            description=desc,
                             purpose=f"{block.type} in chapter '{ch.title}'",
+                            alt_text=desc[:120],
+                            usage_context=(
+                                f"{block.type} block on page '{page.title}'"
+                                f" in chapter '{ch.title}'"
+                            ),
                         )
                     )
                 if block.type in {"conversation", "dialogue"}:
