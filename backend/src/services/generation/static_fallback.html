@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__TITLE__</title>
+    <style>
+      :root {
+        --brand: __BRAND__;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        background: #f6f7fb;
+        color: #111827;
+      }
+      .wrap {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+      .eyebrow {
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .opt {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 6px 0;
+        background: #fff;
+        cursor: pointer;
+      }
+      .callout {
+        border-left: 4px solid var(--brand);
+        background: rgba(81, 69, 229, 0.06);
+        padding: 12px;
+        border-radius: 10px;
+      }
+      button.nav {
+        background: var(--brand);
+        color: #fff;
+        border: 0;
+        border-radius: 10px;
+        padding: 8px 16px;
+        cursor: pointer;
+      }
+      button.nav.ghost {
+        background: #fff;
+        color: #111827;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+      }
+      button.nav:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .nav-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 13px;
+        margin: 4px 0 12px;
+      }
+      .steps {
+        display: flex;
+        gap: 6px;
+        margin: 10px 0 14px;
+      }
+      .steps span {
+        height: 6px;
+        flex: 1;
+        border-radius: 999px;
+        background: #e5e7eb;
+      }
+      .steps span.done {
+        background: var(--brand);
+      }
+      .steps span.cur {
+        background: rgba(81, 69, 229, 0.55);
+      }
+      .ok {
+        color: #059669;
+        font-weight: 600;
+      }
+      .bad {
+        color: #dc2626;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap" id="app"></div>
+    <script id="data" type="application/json">
+      __COURSE_DATA__
+    </script>
+    <script>
+      const course = JSON.parse(document.getElementById("data").textContent);
+      let i = 0; // chapter index
+      let p = 0; // page index within the chapter
+      const passed = new Set();
+      let am = {};
+      let cur = {}; // quiz answers for the current chapter
+      function resolve(l) {
+        return l ? am[l] || l : "";
+      }
+      function block(b) {
+        if (b.type === "heading") return "<h3>" + (b.text || "") + "</h3>";
+        if (b.type === "paragraph") return "<p>" + (b.text || "") + "</p>";
+        if (b.type === "list")
+          return "<ul>" + (b.items || []).map((x) => "<li>" + x + "</li>").join("") + "</ul>";
+        if (b.type === "callout") return '<div class="callout">' + (b.text || "") + "</div>";
+        if (b.type === "image" && resolve(b.asset))
+          return '<img style="width:100%;border-radius:12px" src="' + resolve(b.asset) + '"/>';
+        if (b.type === "dialogue")
+          return ((b.data && b.data.turns) || [])
+            .map((t) => "<p><b>" + t.speaker + ":</b> " + t.text + "</p>")
+            .join("");
+        return b.text ? "<p>" + b.text + "</p>" : "";
+      }
+      function steps(pages, onQuiz) {
+        let s = '<div class="steps">';
+        pages.forEach((_, pi) => {
+          const cls = pi < p ? "done" : pi === p && !onQuiz ? "cur" : "";
+          s += '<span class="' + cls + '"></span>';
+        });
+        s += '<span class="' + (onQuiz ? "cur" : "") + '"></span></div>';
+        return s;
+      }
+      function render() {
+        const c = course.chapters[i];
+        const app = document.getElementById("app");
+        if (!c) {
+          app.innerHTML = '<div class="card">Course complete.</div>';
+          return;
+        }
+        const pages = c.pages || [];
+        const onQuiz = p >= pages.length;
+        const last = course.chapters.length - 1;
+        let h =
+          '<div class="card"><div class="eyebrow">Chapter ' +
+          (i + 1) +
+          " of " +
+          course.chapters.length +
+          "</div><h1>" +
+          c.title +
+          "</h1>" +
+          steps(pages, onQuiz);
+        if (!onQuiz) {
+          const pg = pages[p] || { blocks: [] };
+          h +=
+            '<div class="muted">Page ' +
+            (p + 1) +
+            " of " +
+            pages.length +
+            (pg.title ? " — " + pg.title : "") +
+            "</div>";
+          (pg.blocks || []).forEach((b) => (h += block(b)));
+          h += '</div><div class="card nav-row">';
+          h +=
+            '<button class="nav ghost" ' +
+            (i === 0 && p === 0 ? "disabled" : "") +
+            ' onclick="prev()">Back</button>';
+          h +=
+            '<button class="nav" onclick="nextPage()">' +
+            (p === pages.length - 1 ? "Go to knowledge check" : "Continue") +
+            "</button>";
+          h += "</div>";
+          app.innerHTML = h;
+          return;
+        }
+        const pass_pct = (c.quiz && c.quiz.passing_pct) || 80;
+        h += '<div class="muted">Knowledge check — need ' + pass_pct + "% to continue</div></div>";
+        h += '<div class="card"><h3>Knowledge check</h3>';
+        ((c.quiz && c.quiz.questions) || []).forEach((q, qi) => {
+          h += "<p><b>" + q.question + "</b></p>";
+          q.options.forEach((o, oi) => {
+            const sel = cur[qi] === oi ? ' style="border-color:var(--brand)"' : "";
+            h +=
+              '<button class="opt"' + sel + ' onclick="ans(' + qi + "," + oi + ')">' + o + "</button>";
+          });
+        });
+        h += '<div id="qr"></div><div class="nav-row">';
+        h += '<button class="nav ghost" onclick="prev()">Back</button>';
+        h += '<button class="nav" onclick="grade()">Submit</button>';
+        if (passed.has(i) && i < last)
+          h += '<button class="nav" onclick="nextChapter()">Next chapter</button>';
+        h += "</div></div>";
+        app.innerHTML = h;
+      }
+      function ans(q, o) {
+        cur[q] = o;
+        render();
+      }
+      function nextPage() {
+        p++;
+        render();
+      }
+      function prev() {
+        if (p > 0) p--;
+        else if (i > 0) {
+          i--;
+          p = 0;
+          cur = {};
+        }
+        render();
+      }
+      function grade() {
+        const c = course.chapters[i];
+        const qs = (c.quiz && c.quiz.questions) || [];
+        let ok = 0;
+        qs.forEach((q, qi) => {
+          if (cur[qi] === q.answerIndex) ok++;
+        });
+        const pct = qs.length ? Math.round((ok / qs.length) * 100) : 100;
+        const pass = pct >= ((c.quiz && c.quiz.passing_pct) || 80);
+        if (pass) passed.add(i);
+        render();
+        const qr = document.getElementById("qr");
+        if (qr)
+          qr.innerHTML =
+            '<p class="' +
+            (pass ? "ok" : "bad") +
+            '">' +
+            pct +
+            "% — " +
+            (pass ? "passed" : "below " + ((c.quiz && c.quiz.passing_pct) || 80) + "% — try again") +
+            "</p>";
+      }
+      function nextChapter() {
+        i++;
+        p = 0;
+        cur = {};
+        render();
+      }
+      fetch("./asset_map.json")
+        .then((r) => (r.ok ? r.json() : {}))
+        .then((m) => {
+          am = m || {};
+          render();
+        })
+        .catch(() => render());
+    </script>
+  </body>
+</html>

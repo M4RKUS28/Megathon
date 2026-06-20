@@ -1,0 +1,181 @@
+name: ${COMPOSE_PROJECT_NAME:-megathon}
+
+x-backend-env: &backend-env
+  POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST is required}
+  POSTGRES_PORT: "${POSTGRES_PORT:?POSTGRES_PORT is required}"
+  POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+  POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  MINIO_HOST: ${MINIO_HOST:?MINIO_HOST is required}
+  MINIO_PORT: "${MINIO_PORT:?MINIO_PORT is required}"
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+  MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+  COURSES_BUCKET: ${COURSES_BUCKET:?COURSES_BUCKET is required}
+  MINIO_PRESIGNED_EXPIRY: "${MINIO_PRESIGNED_EXPIRY:?MINIO_PRESIGNED_EXPIRY is required}"
+  MINIO_SECURE: "${MINIO_SECURE:-false}"
+  MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL is required}
+  KEYCLOAK_HOST: ${KEYCLOAK_HOST:?KEYCLOAK_HOST is required}
+  KEYCLOAK_PORT: "${KEYCLOAK_PORT:?KEYCLOAK_PORT is required}"
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:?KEYCLOAK_REALM is required}
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:?KEYCLOAK_CLIENT_ID is required}
+  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET is required}
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+  REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+  DEVIN_API_KEY: ${DEVIN_API_KEY:-}
+  DEVIN_ORG_ID: ${DEVIN_ORG_ID:-}
+  DEVIN_API_BASE_URL: ${DEVIN_API_BASE_URL:-https://api.devin.ai/v3}
+  DEVIN_SNAPSHOT_ID: ${DEVIN_SNAPSHOT_ID:-}
+  DEVIN_PLAYBOOK_ID: ${DEVIN_PLAYBOOK_ID:-}
+  DEVIN_MAX_ACU_LIMIT: "${DEVIN_MAX_ACU_LIMIT:-20}"
+  DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG:-acme}
+  PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:?PLATFORM_PUBLIC_URL is required}
+  COURSE_TEMPLATE_DIST: ${COURSE_TEMPLATE_DIST:-/app/course_template_dist}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      KEYCLOAK_DB: ${KEYCLOAK_DB:?KEYCLOAK_DB is required}
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?POSTGRES_USER is required} -d ${POSTGRES_DB:?POSTGRES_DB is required}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required} ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required};
+        mc mb --ignore-existing local/${MINIO_BUCKET:?MINIO_BUCKET is required};
+        mc anonymous set none local/${MINIO_BUCKET:?MINIO_BUCKET is required};
+        mc mb --ignore-existing local/${COURSES_BUCKET:?COURSES_BUCKET is required};
+        mc anonymous set download local/${COURSES_BUCKET:?COURSES_BUCKET is required};
+        exit 0;
+      "
+    environment:
+      MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+      COURSES_BUCKET: ${COURSES_BUCKET:?COURSES_BUCKET is required}
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    restart: unless-stopped
+    command: start --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB:?KEYCLOAK_DB is required}
+      KC_DB_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      KC_HOSTNAME: ${DOMAIN:?DOMAIN is required}
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN is required}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
+      PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:?PLATFORM_PUBLIC_URL is required}
+    volumes:
+      - ./keycloak/realm-app.json:/opt/keycloak/data/import/realm-app.json:ro
+      - ./keycloak/themes/coursive:/opt/keycloak/themes/coursive:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080; printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '200 OK'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings"]
+    entrypoint: []
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:?AUTH_DOMAIN is required}
+      NGINX_ENVSUBST_FILTER: "^(DOMAIN|AUTH_DOMAIN)$"
+    depends_on:
+      - frontend
+      - backend
+      - keycloak
+
+volumes:
+  postgres_data:
+  minio_data:

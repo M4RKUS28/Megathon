@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Runs only on first initialization of an empty Postgres data directory.
 # Creates a dedicated database for Keycloak so it doesn't share the
 # application's database (KEYCLOAK_DB is passed via the postgres service env).
