@@ -23,12 +23,16 @@ from pydantic import BaseModel, Field
 
 from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
-from .schemas import AssetSpec, CoursePlan, Lastenheft, SpecChapter
+from .schemas import AssetSpec, CoursePlan, Lastenheft, SpecChapter, StyleGuide
 
 logger = logging.getLogger(__name__)
 
 SCRIPT_SYSTEM = """You are a senior interactive learning designer. Turn the approved course
-plan into implementation-ready chapters for a Vite/React course app.
+plan into an implementation-ready Lastenheft (spec) for a bespoke Vite/React course app
+that a coding agent (Devin) will build from scratch.
+
+The spec describes *behaviour and intent* — NOT a rigid renderer schema. Be specific enough
+that Devin can implement each interaction without follow-up questions.
 
 Rules:
 - The course must NEVER be plain text. Each topic block is supported by media or an interaction.
@@ -39,15 +43,42 @@ Rules:
 - Give each page 2-4 blocks and a short, descriptive page `title`. Use a rich mix of block
   types across the pages: heading, paragraph, list, callout, image, video, audio,
   dialogue (speech-bubble conversation), chart (Chart.js), flashcards, dragdrop, hotspot,
-  timeline, accordion, scenario (branching). Favour many visualisations and conversations.
+  timeline, accordion, scenario (branching), worked_example. Favour many visualisations and
+  conversations.
 - For every visual/media block set `asset` to a UNIQUE template link like
   "/resources/images/01", "/resources/videos/02", "/resources/audio/03". Do NOT invent URLs.
 - Describe interactions precisely via the `data` field so a coding agent can implement them
   without questions (e.g. chart: chartType/labels/datasets; dragdrop: pairs; dialogue: turns;
   scenario: branches).
-- Each chapter ends with ONE quiz (the validation section, shown only after the last page):
+
+Chapter-level fields (populate for EVERY chapter):
+  - `learning_points`: concrete things the learner will know/be able to do after this chapter.
+  - `estimated_minutes`: realistic time budget.
+  - `competency`: the competency this chapter targets.
+  - `bloom_level`: Bloom's taxonomy level (remember/understand/apply/analyze/evaluate/create).
+
+Page-level fields (populate for EVERY page):
+  - `content_goal`: what this page aims to teach or achieve.
+  - `learner_action`: what the learner should *do* on this page.
+  - `ui_treatment`: visual/layout hint (e.g. "hero splash", "two-column sidebar", "immersive
+    scenario"). This guides Devin's React implementation — be creative, not generic.
+  - `estimated_minutes`: time budget for this page.
+
+Block-level intent fields (populate where the block has interaction or media):
+  - `interaction_goal`: what this interaction aims to achieve pedagogically.
+  - `suggested_interaction`: implementation hint (e.g. "animate bars on scroll").
+  - `required_behavior`: what the block MUST do behaviourally.
+  - `feedback_behavior`: how the block responds to user actions.
+  - `success_criterion`: how to tell the learner succeeded.
+  - `worked_example`: optional step-by-step worked example data.
+
+Quiz fields:
+- Each chapter ends with ONE quiz (shown only after the last page):
   passing_pct=80, retryable=true, 3-5 multiple-choice questions with the correct answerIndex
   and an explanation. Learners must score >=80% to unlock the next chapter.
+- Set `assessment_id` (stable id), `chapter_ref` (chapter id), `competency_assessed`.
+- On each question set `bloom_level` and `learning_point_ref` (links to a chapter
+  learning_point).
 
 Return structured output: a list of chapters covering EVERY chapter in the plan, in order."""
 
@@ -126,6 +157,10 @@ def _assemble(state: _State) -> _State:
             passing_pct=80,
             chapters=state["chapters"],
             asset_manifest=state["asset_manifest"],
+            target_audience=plan.audience,
+            difficulty=plan.difficulty,
+            estimated_minutes=plan.estimated_minutes,
+            style_guide=StyleGuide(tone="friendly and professional"),
         )
     }
 
