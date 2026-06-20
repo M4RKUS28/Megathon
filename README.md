@@ -342,5 +342,4 @@ cd course-app-template && npm run build
 (`api/v1/endpoints/`) registered in `api/v1/router.py` → migration
 (`uv run alembic revision --autogenerate -m "..."` then `upgrade head`).
 
-CI (`.github/workflows/prod-build.yml`) builds the frontend, the course template, and the
-production Docker images on every PR.
+hi matthias here
