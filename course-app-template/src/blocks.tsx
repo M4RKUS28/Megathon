@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
@@ -12,7 +12,7 @@ import {
   PointElement,
   Tooltip,
 } from "chart.js";
-import type { Block } from "./types";
+import type { Block, ConversationTurn, Persona } from "./types";
 
 ChartJS.register(
   CategoryScale,
@@ -40,31 +40,278 @@ function MediaImage({ src, alt }: { src?: string; alt?: string }) {
   );
 }
 
-function Dialogue({ data }: { data?: Record<string, unknown> }) {
-  const turns = (data?.turns as { speaker: string; text: string }[]) ?? [];
+// ── Conversation (avatars left/right, click-through bubbles, per-bubble TTS) ──
+
+// Local "cartoon avatar library": a parametric flat-illustration person, drawn
+// deterministically from a seed string so each persona keeps the same face. A
+// persona `avatar` like "f-2"/"m-5" is the seed; a "/..." or "http..." value is
+// treated as a real image instead.
+const SKIN = ["#F8D2B0", "#F0C09A", "#E0A878", "#C68A5E", "#9C6B43", "#6F4A2E"];
+const HAIR = ["#2B1B12", "#5A3825", "#8A5A2B", "#C99B4B", "#9AA0A6", "#1F2937", "#D14B3D", "#E6E0D4"];
+const SHIRT = ["#5145E5", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#8b5cf6", "#ec4899", "#0ea5e9"];
+
+function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function isAssetRef(v?: string): boolean {
+  return !!v && (v.startsWith("/") || v.startsWith("http"));
+}
+
+function HairStyle({ kind, hair }: { kind: number; hair: string }) {
+  // A crown/cap that covers the forehead, plus per-style extras.
+  const cap = "M27,42 Q27,16 50,16 Q73,16 73,42 Q73,28 50,28 Q27,28 27,42 Z";
+  switch (kind) {
+    case 1: // long: side panels down to the shoulders
+      return (
+        <>
+          <rect x="26" y="34" width="9" height="34" rx="4" fill={hair} />
+          <rect x="65" y="34" width="9" height="34" rx="4" fill={hair} />
+          <path d={cap} fill={hair} />
+        </>
+      );
+    case 2: // bun on top
+      return (
+        <>
+          <circle cx="50" cy="14" r="7" fill={hair} />
+          <path d={cap} fill={hair} />
+        </>
+      );
+    case 3: // short / buzz: thinner cap
+      return <path d="M29,40 Q29,22 50,22 Q71,22 71,40 Q71,31 50,31 Q29,31 29,40 Z" fill={hair} />;
+    default: // tidy short
+      return <path d={cap} fill={hair} />;
+  }
+}
+
+function Avatar({ seed, size = 56 }: { seed: string; size?: number }) {
+  const clip = useId();
+  const h = hashSeed(seed || "x");
+  const skin = SKIN[h % SKIN.length];
+  const hair = HAIR[(h >> 3) % HAIR.length];
+  const shirt = SHIRT[(h >> 6) % SHIRT.length];
+  const style = (h >> 9) % 4;
   return (
-    <div className="space-y-3">
-      {turns.map((t, i) => {
-        const mine = /you|du|ich/i.test(t.speaker);
-        return (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, x: mine ? 20 : -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.08 }}
-            className={`flex ${mine ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
-                mine ? "bg-[var(--brand)] text-white" : "bg-white border border-black/5"
-              }`}
+    <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label="avatar">
+      <defs>
+        <clipPath id={clip}>
+          <circle cx="50" cy="50" r="50" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clip})`}>
+        <rect width="100" height="100" fill="#eef2f7" />
+        <path d="M12,100 Q14,68 50,68 Q86,68 88,100 Z" fill={shirt} />
+        <rect x="44" y="56" width="12" height="14" rx="5" fill={skin} />
+        <circle cx="50" cy="40" r="22" fill={skin} />
+        <HairStyle kind={style} hair={hair} />
+        <circle cx="42.5" cy="41" r="2.1" fill="#1f2937" />
+        <circle cx="57.5" cy="41" r="2.1" fill="#1f2937" />
+        <path
+          d="M43,48 Q50,53 57,48"
+          stroke="#1f2937"
+          strokeWidth="1.7"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+function PersonaAvatar({
+  persona,
+  size,
+  resolve,
+}: {
+  persona?: Persona;
+  size: number;
+  resolve: Resolve;
+}) {
+  const av = persona?.avatar;
+  if (isAssetRef(av)) {
+    const src = resolve(av);
+    if (src)
+      return (
+        <img
+          src={src}
+          alt={persona?.name ?? ""}
+          style={{ width: size, height: size }}
+          className="rounded-full object-cover"
+        />
+      );
+  }
+  return <Avatar seed={av || persona?.id || persona?.name || "x"} size={size} />;
+}
+
+function PersonaStage({
+  persona,
+  active,
+  resolve,
+}: {
+  persona?: Persona;
+  active: boolean;
+  resolve: Resolve;
+}) {
+  return (
+    <div
+      className={`flex flex-col items-center text-center transition-all duration-300 ${
+        active ? "opacity-100" : "opacity-40 grayscale"
+      }`}
+    >
+      <motion.div
+        animate={{ scale: active ? 1.06 : 0.94 }}
+        className={`rounded-full ${active ? "ring-4 ring-[var(--brand)]/30" : ""}`}
+      >
+        <PersonaAvatar persona={persona} size={64} resolve={resolve} />
+      </motion.div>
+      <div className="mt-1.5 text-xs font-semibold">{persona?.name}</div>
+      {persona?.role ? <div className="text-[10px] text-gray-400">{persona.role}</div> : null}
+    </div>
+  );
+}
+
+function normalizeConversation(data?: Record<string, unknown>): {
+  personas: Persona[];
+  turns: ConversationTurn[];
+} {
+  const turns = (data?.turns as ConversationTurn[]) ?? [];
+  let personas = (data?.personas as Persona[]) ?? [];
+  if (!personas.length) {
+    // Legacy `dialogue` shape: derive personas from distinct speakers.
+    const names = Array.from(
+      new Set(turns.map((t) => t.speaker || t.persona || "Speaker")),
+    );
+    personas = names.map((n, i): Persona => ({
+      id: n,
+      name: n,
+      side: i % 2 === 0 ? "left" : "right",
+    }));
+  }
+  return { personas, turns };
+}
+
+function personaOf(turn: ConversationTurn, personas: Persona[]): Persona {
+  const key = turn.persona ?? turn.speaker;
+  return (
+    personas.find((p) => p.id === key || p.name === key) ??
+    personas[0] ?? { name: turn.speaker, side: "left" }
+  );
+}
+
+function Conversation({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
+  const { personas, turns } = useMemo(() => normalizeConversation(data), [data]);
+  const [shown, setShown] = useState(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const left = personas.find((p) => p.side !== "right") ?? personas[0];
+  const right = personas.find((p) => p.side === "right") ?? personas[1] ?? personas[0];
+
+  const play = useCallback(
+    (link?: string) => {
+      const src = resolve(link);
+      const el = audioRef.current;
+      if (!src || !el) return;
+      el.src = src;
+      el.currentTime = 0;
+      void el.play().catch(() => {});
+    },
+    [resolve],
+  );
+
+  // Auto-play the most recently revealed bubble.
+  useEffect(() => {
+    if (!turns.length) return;
+    play(turns[shown - 1]?.audio);
+  }, [shown, turns, play]);
+
+  if (!turns.length) return null;
+
+  const active = personaOf(turns[shown - 1] ?? {}, personas);
+  const done = shown >= turns.length;
+  const advance = () => setShown((s) => Math.min(s + 1, turns.length));
+
+  return (
+    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4">
+      <audio ref={audioRef} className="hidden" />
+      <div className="mb-4 flex items-end justify-between gap-2">
+        <PersonaStage persona={left} active={left === active} resolve={resolve} />
+        <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Conversation
+        </span>
+        <PersonaStage persona={right} active={right === active} resolve={resolve} />
+      </div>
+
+      <div className="space-y-2.5">
+        {turns.slice(0, shown).map((t, i) => {
+          const p = personaOf(t, personas);
+          const mine = p?.side === "right";
+          const isLast = i === shown - 1;
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}
             >
-              <div className="mb-0.5 text-[11px] font-semibold opacity-70">{t.speaker}</div>
-              {t.text}
-            </div>
-          </motion.div>
-        );
-      })}
+              <PersonaAvatar persona={p} size={30} resolve={resolve} />
+              <div
+                className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
+                  mine ? "bg-[var(--brand)] text-white" : "border border-black/5 bg-white"
+                } ${isLast ? "ring-2 ring-[var(--brand)]/30" : ""}`}
+              >
+                <div
+                  className={`mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold ${
+                    mine ? "text-white/85" : "opacity-70"
+                  }`}
+                >
+                  {p?.name}
+                  {p?.role ? <span className="font-normal opacity-70">· {p.role}</span> : null}
+                </div>
+                <div>{t.text}</div>
+                {t.audio ? (
+                  <button
+                    type="button"
+                    onClick={() => play(t.audio)}
+                    className={`mt-1 inline-flex items-center gap-1 text-[11px] ${
+                      mine ? "text-white/85" : "text-[var(--brand)]"
+                    }`}
+                  >
+                    <span aria-hidden="true">🔊</span> Replay
+                  </button>
+                ) : null}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-xs text-gray-400">
+          {Math.min(shown, turns.length)} / {turns.length}
+        </span>
+        {done ? (
+          <button
+            type="button"
+            onClick={() => setShown(1)}
+            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+          >
+            ↻ Replay conversation
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={advance}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white"
+          >
+            Next ▶
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -290,8 +537,9 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
         </div>
       );
     }
+    case "conversation":
     case "dialogue":
-      return <Dialogue data={block.data} />;
+      return <Conversation data={block.data} resolve={resolve} />;
     case "flashcards":
       return <Flashcards data={block.data} />;
     case "dragdrop":

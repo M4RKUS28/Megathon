@@ -71,7 +71,14 @@ BLOCK_TYPES = [
     "image",
     "video",
     "audio",
-    "dialogue",  # speech-bubble conversation between personas
+    "conversation",  # two personas talking: avatars left/right, click through each
+    # speech bubble, every line narrated (per-bubble TTS). Ideal for behavioural /
+    # soft-skill / "how to act" topics. data shape:
+    #   personas: [{id, name, role, side: "left"|"right", avatar}]
+    #   turns:    [{persona: <persona id>, text, audio: "/resources/audio/NN"}]
+    # `avatar` is a stable seed/key for the local cartoon-avatar library (or an
+    # asset link to a real image); each `turn.audio` is a unique TTS asset link.
+    "dialogue",  # legacy alias for `conversation` (turns: [{speaker, text}])
     "chart",  # Chart.js interactive chart
     "flashcards",
     "dragdrop",
@@ -103,6 +110,9 @@ class AssetSpec(BaseModel):
     alt_text: str = ""  # accessible alt text for screen readers
     style_hints: dict | None = None  # e.g. {"palette": "warm", "mood": "professional"}
     usage_context: str = ""  # where/how this asset appears (e.g. "hero image on intro page")
+    # Optional TTS voice override for audio assets (e.g. distinct voices for the
+    # two sides of a conversation). Falls back to the configured default voice.
+    voice: str | None = None
 
 
 class AssetNeed(BaseModel):

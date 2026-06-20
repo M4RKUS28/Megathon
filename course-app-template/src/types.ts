@@ -6,6 +6,23 @@ export interface Block {
   data?: Record<string, unknown>;
 }
 
+// `conversation` block payload (data). Avatars come from the local cartoon
+// library keyed by `avatar` (e.g. "f-2"/"m-5"), or an asset link to a real image.
+export interface Persona {
+  id?: string;
+  name?: string;
+  role?: string;
+  side?: "left" | "right";
+  avatar?: string;
+}
+
+export interface ConversationTurn {
+  persona?: string; // persona id
+  speaker?: string; // legacy `dialogue` shape
+  text?: string;
+  audio?: string; // per-bubble TTS asset link
+}
+
 export interface Page {
   id: string;
   title?: string;
