@@ -41,9 +41,9 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 # Every content page must carry at least this many words of `paragraph` prose.
-# The prompt asks for 750–900; this is the hard floor we deterministically top
+# The prompt asks for 200–300; this is the hard floor we deterministically top
 # up to if a page comes back short.
-_PROSE_FLOOR_WORDS = 500
+_PROSE_FLOOR_WORDS = 200
 
 # Gemini's function-calling structured output silently returns empty nested
 # arrays for this deeply nested schema (pages/blocks/asset_needs/quiz come back
@@ -64,14 +64,12 @@ also never a single undifferentiated wall of text. Use concrete examples, real d
 charts, and diagrams to carry the depth. Make it specific and real-world.
 
 ## PROSE DEPTH (required, non-negotiable)
-Every content page must contain AT LEAST 500 words of explanatory prose — TARGET 750–900 words —
-split across 5–7 separate `paragraph` blocks of roughly 150 words each (never one giant block,
-NEVER fewer than 5 paragraph blocks). Count only the words in `paragraph` blocks: they must sum
-to 500+ on EVERY page, and you should comfortably exceed that. Writing 3–4 short paragraphs is a
-failure; if you are anywhere near the limit, add another full ~150-word paragraph that teaches
-additional detail, a worked example, or an edge case. Break the prose up with
-`heading`/`callout`/`list` blocks and interactions so it reads as a well-structured lesson, not
-a wall of text. Interactions, quizzes, and asset briefs do NOT count toward the word total.
+Every content page must contain 200–300 words of explanatory prose, split across 2–3 separate
+`paragraph` blocks of roughly 100 words each (never one giant block). Count only the words in
+`paragraph` blocks: they must sum to AT LEAST 200 on EVERY page, and should stay within ~300 —
+keep it tight and high-signal, not padded. Break the prose up with `heading`/`callout`/`list`
+blocks and interactions so it reads as a well-structured lesson, not a wall of text.
+Interactions, quizzes, and asset briefs do NOT count toward the word total.
 
 Chapter-level fields (populate for EVERY chapter):
   - `learning_points`: concrete things the learner will know/be able to do after this chapter.
@@ -108,8 +106,8 @@ For EACH page provide ALL of these fields:
    all 5 steps correctly; chart renders with live data; scenario reaches at least one ending").
 10. **blocks** — implementation-ready blocks. Types: heading, paragraph, list, callout,
     image, video, audio, dialogue, chart (Chart.js), flashcards, dragdrop, hotspot, timeline,
-    accordion, scenario. Each page needs 5–7 `paragraph` blocks carrying 750–900 words of
-    prose total (≥500 hard minimum; see PROSE DEPTH), interleaved with at least one heading and
+    accordion, scenario. Each page needs 2–3 `paragraph` blocks carrying 200–300 words of
+    prose total (≥200 hard minimum; see PROSE DEPTH), interleaved with at least one heading and
     at least one interaction/media block. For every visual/media block set `asset` to a UNIQUE
     template link ("/resources/images/01", "/resources/videos/02", etc.). Describe interactions
     precisely in the `data` field so Devin can implement without questions.
@@ -186,10 +184,10 @@ def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
         f"- objective: {chapter.objective}\n"
         f"- key points: {kp}\n\n"
         f"Produce 3-5 content pages (each with blocks and asset_needs) and a quiz "
-        f"with 3-5 questions for chapter [{chapter.id}]. Every page MUST carry 750-900 words "
-        f"of explanatory prose (500 absolute minimum) split across 5-7 separate paragraph "
-        f"blocks of ~150 words each — NEVER fewer than 5 paragraphs, never one giant "
-        f"block. Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
+        f"with 3-5 questions for chapter [{chapter.id}]. Every page MUST carry 200-300 words "
+        f"of explanatory prose (200 absolute minimum) split across 2-3 separate paragraph "
+        f"blocks of ~100 words each — never one giant block. Keep it tight and high-signal. "
+        f"Keep id='{chapter.id}' and title='{chapter.title}'.\n\n"
         f"{_CHAPTER_PARSER.get_format_instructions()}"
     )
 
@@ -251,14 +249,14 @@ async def _expand_page_prose(
         existing = "\n\n".join(
             b.text or "" for b in page.blocks if b.type == "paragraph"
         )
-        needed = _PROSE_FLOOR_WORDS - have + 150
+        needed = _PROSE_FLOOR_WORDS - have + 50
         user = (
             f"Course: {plan.title}. Chapter: {chapter.title}. "
             f"Page: {page.title or page.id}.\n"
             f"Learning goal: {page.learning_goal}\n\n"
             f"Existing paragraphs on this page:\n{existing or '(none)'}\n\n"
             f"Write about {needed} more words of NEW teaching prose for this page as "
-            "2–4 standalone paragraphs (~150 words each). Add fresh detail, a worked "
+            "1–2 standalone paragraphs (~100 words each). Add fresh detail, a worked "
             "example, or an edge case — do NOT repeat what's above, and do NOT add "
             "headings, lists, or interactions. Return ONLY a JSON array of paragraph "
             "strings."
