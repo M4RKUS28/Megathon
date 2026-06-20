@@ -21,10 +21,9 @@ async def create_course(
         created_by=created_by,
         title=title,
         description=description,
-        concept=None,
         style_guide_snapshot=style_guide_snapshot,
     )
-    # Stash the raw brief so the worker can build the concept prompt.
+    # Stash the raw brief so the worker can build the planner prompt.
     course.style_guide_snapshot = {
         "brief": brief,
         "style_guide": style_guide_snapshot or {},

@@ -27,10 +27,6 @@ COURSE_READY = "ready"  # Phase 4: built dist published
 COURSE_PUBLISHED = "published"
 COURSE_FAILED = "failed"
 
-# Backwards-compatible alias (old single-shot concept stage).
-COURSE_CONCEPT_READY = "concept_ready"
-COURSE_GENERATING = "generating"
-
 # Generation job lifecycle
 JOB_QUEUED = "queued"
 JOB_RUNNING = "running"
@@ -42,7 +38,7 @@ JOB_PLAN = "plan"  # Phase 1 planner agent (LangGraph states 1-3)
 JOB_SPEC = "spec"  # Phase 2 script writer (LangGraph states 4-5)
 JOB_ASSETS = "assets"  # Phase 2.5 process A — resource fetch
 JOB_BUILD = "build"  # Phase 2.5/3 process B — implementation + hosting
-JOB_EDIT = "edit"  # Devin-assisted edit loop (legacy/optional)
+JOB_EDIT = "edit"  # Devin-assisted edit loop
 
 
 class Course(Base):
@@ -58,9 +54,6 @@ class Course(Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=COURSE_DRAFT)
-    # AI-generated concept: chapters, learning objectives, quiz questions.
-    # (Legacy single-shot output; retained for backwards compatibility.)
-    concept: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # Phase 1 — Course Plan (planner agent output, shown at the approval gate).
     plan: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # Phase 2 — Lastenheft (full interactive spec from the script writer).
@@ -87,7 +80,7 @@ class Course(Base):
 
 
 class GenerationJob(Base):
-    """Queue record for the async Devin pipeline (concept | generate | edit)."""
+    """Queue record for the async generation pipeline (plan | spec | build | edit)."""
 
     __tablename__ = "generation_jobs"
 
@@ -100,7 +93,7 @@ class GenerationJob(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    type: Mapped[str] = mapped_column(String(32), nullable=False)  # concept|generate|edit
+    type: Mapped[str] = mapped_column(String(32), nullable=False)  # plan|spec|build|edit
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=JOB_QUEUED)
     devin_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

@@ -89,7 +89,6 @@ def _host_url(course: Course) -> str | None:
 def _detail(course: Course) -> CourseDetail:
     return CourseDetail(
         **_summary(course).model_dump(),
-        concept=course.concept,
         plan=course.plan,
         spec=course.spec,
         asset_manifest=course.asset_manifest,
@@ -193,32 +192,6 @@ async def approve_plan(
     )
 
 
-@router.post("/{course_id}/generate", response_model=JobResponse, status_code=202)
-async def generate_course(
-    course_id: uuid.UUID, company: CompanyDep, db: DbDep, _: StaffDep
-) -> JobResponse:
-    course = await get_course(db, company.id, course_id)
-    if course is None:
-        raise NotFoundError("Course")
-    if course.concept is None:
-        raise AppError(409, "Concept not ready yet")
-    job = await create_job(db, course.id, company.id, "generate")
-    await db.commit()
-    await db.refresh(job)
-
-    pool = await get_pool()
-    await pool.enqueue_job("run_generate_job", str(job.id))
-    return JobResponse(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        error=job.error,
-        devin_session_id=job.devin_session_id,
-        result=job.result,
-        created_at=job.created_at,
-    )
-
-
 @router.get("/{course_id}/jobs", response_model=list[JobResponse])
 async def get_course_jobs(
     course_id: uuid.UUID, company: CompanyDep, db: DbDep, _: StaffDep
@@ -263,7 +236,7 @@ async def create_edit(
     course = await get_course(db, company.id, course_id)
     if course is None:
         raise NotFoundError("Course")
-    if course.spec is None and course.concept is None:
+    if course.spec is None:
         raise AppError(409, "Course has nothing to edit yet")
 
     edit = EditRequest(
@@ -327,7 +300,7 @@ async def accept_edit(
         raise NotFoundError("Course")
     edit = await _get_edit(db, course.id, edit_id)
 
-    # The proposed concept was stored on the edit's generation job result.
+    # The proposed spec was stored on the edit's generation job result.
     result = await db.execute(
         select(GenerationJob)
         .where(
@@ -338,34 +311,23 @@ async def accept_edit(
         .order_by(GenerationJob.created_at.desc())
     )
     edit_job = result.scalars().first()
-    if edit_job is None or not edit_job.result:
+    if edit_job is None or not edit_job.result or "spec" not in edit_job.result:
         raise AppError(409, "No previewed version to accept")
 
     edit.status = "accepted"
     course.version += 1
 
-    if "spec" in edit_job.result:
-        # Phase-2 course: promote the edited spec and rebuild, reusing the
-        # already-fetched assets (no re-generation), then re-host the new version.
-        course.spec = edit_job.result["spec"]
-        course.status = COURSE_BUILDING
-        job = await create_job(
-            db, course.id, company.id, "build", payload={"reuse_assets": True}
-        )
-        await db.commit()
-        await db.refresh(job)
-        pool = await get_pool()
-        await pool.enqueue_job("run_build_job", str(job.id))
-    elif "concept" in edit_job.result:
-        # Legacy concept course.
-        course.concept = edit_job.result["concept"]
-        job = await create_job(db, course.id, company.id, "generate")
-        await db.commit()
-        await db.refresh(job)
-        pool = await get_pool()
-        await pool.enqueue_job("run_generate_job", str(job.id))
-    else:
-        raise AppError(409, "No previewed version to accept")
+    # Promote the edited spec and rebuild, reusing the already-fetched assets
+    # (no re-generation), then re-host the new version.
+    course.spec = edit_job.result["spec"]
+    course.status = COURSE_BUILDING
+    job = await create_job(
+        db, course.id, company.id, "build", payload={"reuse_assets": True}
+    )
+    await db.commit()
+    await db.refresh(job)
+    pool = await get_pool()
+    await pool.enqueue_job("run_build_job", str(job.id))
 
     return JobResponse(
         id=job.id,

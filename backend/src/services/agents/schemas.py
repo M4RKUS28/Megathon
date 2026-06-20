@@ -48,8 +48,12 @@ class CoursePlan(BaseModel):
 
 # ── Phase 2 — Lastenheft (full interactive spec) ─────────────────────────────
 
-# Rich, implementation-ready block/interaction types. The renderer (per-course
-# Vite app) implements one component per type.
+# A *suggested*, non-exhaustive palette of content/interaction types. The
+# Lastenheft defines WHAT to teach and WHICH resources (assets) to use — it
+# deliberately does NOT lock down the visual design. The implementation agent
+# (and the per-course renderer) are free to use these, combine them, or invent
+# richer custom types: `Block.type` is an open string and the renderer degrades
+# gracefully for unknown types. Treat this list as inspiration, not a hard limit.
 BLOCK_TYPES = [
     "heading",
     "paragraph",
@@ -81,6 +85,10 @@ class AssetSpec(BaseModel):
 
 
 class Block(BaseModel):
+    # Intentionally free-form: `type` is any string (see BLOCK_TYPES for a
+    # suggested palette, but custom types are allowed). A block captures a unit
+    # of CONTENT or a resource reference; the actual visual design is the
+    # implementation agent's job, not the spec's.
     type: str
     text: str | None = None
     items: list[str] | None = None

@@ -17,9 +17,7 @@ from src.db.models.company import CompanyBranding
 from src.db.models.course import (
     COURSE_AUTHORING,
     COURSE_BUILDING,
-    COURSE_CONCEPT_READY,
     COURSE_FAILED,
-    COURSE_GENERATING,
     COURSE_PLAN_REVIEW,
     COURSE_READY,
     COURSE_SPEC_READY,
@@ -29,12 +27,7 @@ from src.db.models.course import (
     JOB_SUCCEEDED,
     EditRequest,
 )
-from src.services.generation.builder import (
-    index_url,
-    publish_built_course,
-    publish_course,
-)
-from src.services.generation.concept import generate_concept, generate_edited_concept
+from src.services.generation.builder import publish_built_course
 
 logger = logging.getLogger(__name__)
 
@@ -72,85 +65,6 @@ async def _branding(db, company_id: uuid.UUID) -> tuple[str, str, dict]:
     return company_name, primary, style_guide
 
 
-async def process_concept_job(job_id: str) -> None:
-    async with AsyncSessionLocal() as db:
-        job = await get_job(db, uuid.UUID(job_id))
-        if job is None:
-            logger.error("concept job %s not found", job_id)
-            return
-        course = await get_course_by_id(db, job.course_id)
-        if course is None:
-            job.status = JOB_FAILED
-            job.error = "course not found"
-            await db.commit()
-            return
-
-        job.status = JOB_RUNNING
-        job.attempts += 1
-        await db.commit()
-
-        try:
-            snapshot = course.style_guide_snapshot or {}
-            brief = snapshot.get("brief", {"title": course.title})
-            company_name, primary, style_guide = await _branding(db, course.company_id)
-
-            session_id, concept = await generate_concept(
-                brief, style_guide, company_name, primary
-            )
-
-            course.concept = concept
-            course.devin_session_id = session_id
-            course.status = COURSE_CONCEPT_READY
-            job.status = JOB_SUCCEEDED
-            job.devin_session_id = session_id
-            job.result = {"chapters": len(concept.get("chapters", []))}
-            await db.commit()
-            logger.info("concept ready for course %s", course.id)
-        except Exception as exc:  # noqa: BLE001 — surface failure into job/course state
-            logger.exception("concept job %s failed", job_id)
-            job.status = JOB_FAILED
-            job.error = str(exc)
-            course.status = COURSE_FAILED
-            await db.commit()
-
-
-async def process_generate_job(job_id: str) -> None:
-    async with AsyncSessionLocal() as db:
-        job = await get_job(db, uuid.UUID(job_id))
-        if job is None:
-            logger.error("generate job %s not found", job_id)
-            return
-        course = await get_course_by_id(db, job.course_id)
-        if course is None or course.concept is None:
-            job.status = JOB_FAILED
-            job.error = "course or concept missing"
-            await db.commit()
-            return
-
-        job.status = JOB_RUNNING
-        job.attempts += 1
-        course.status = COURSE_GENERATING
-        await db.commit()
-
-        try:
-            company = await get_company(db, course.company_id)
-            slug = company.slug if company else "tenant"
-            prefix = publish_course(slug, str(course.id), course.version, course.concept)
-
-            course.dist_object_prefix = prefix
-            course.status = COURSE_READY
-            job.status = JOB_SUCCEEDED
-            job.result = {"prefix": prefix, "index_url": index_url(prefix)}
-            await db.commit()
-            logger.info("course %s built at %s", course.id, prefix)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("generate job %s failed", job_id)
-            job.status = JOB_FAILED
-            job.error = str(exc)
-            course.status = COURSE_FAILED
-            await db.commit()
-
-
 async def process_edit_job(job_id: str) -> None:
     async with AsyncSessionLocal() as db:
         job = await get_job(db, uuid.UUID(job_id))
@@ -162,7 +76,7 @@ async def process_edit_job(job_id: str) -> None:
         result = await db.execute(select(EditRequest).where(EditRequest.id == uuid.UUID(edit_id)))
         edit = result.scalar_one_or_none()
         course = await get_course_by_id(db, job.course_id)
-        if edit is None or course is None or (course.spec is None and course.concept is None):
+        if edit is None or course is None or course.spec is None:
             job.status = JOB_FAILED
             job.error = "edit request / course / spec missing"
             await db.commit()
@@ -178,46 +92,26 @@ async def process_edit_job(job_id: str) -> None:
         target_text = payload.get("target_text")
 
         try:
-            if course.spec is not None:
-                # Phase-2-aware edit: rewrite the selected block (or the spec) and
-                # re-render a real preview reusing the course's existing assets.
-                from src.services.agents.editor import generate_edited_spec
+            # Phase-2-aware edit: rewrite the selected block (or the spec) and
+            # re-render a real preview reusing the course's existing assets.
+            from src.services.agents.editor import generate_edited_spec
 
-                new_spec = await generate_edited_spec(
-                    course.spec, edit.prompt, edit.target_selector, target_text
-                )
-                preview = publish_built_course(
-                    slug,
-                    f"{course.id}/preview/{edit.id}",
-                    course.version,
-                    new_spec,
-                    course.asset_map or {},
-                )
-                edit.preview_object_prefix = preview["prefix"]
-                edit.status = "preview_ready"
-                job.status = JOB_SUCCEEDED
-                job.result = {
-                    "spec": new_spec,
-                    "preview_index_url": preview["course_url"],
-                }
-                await db.commit()
-                return
-
-            # Legacy concept-based edit path.
-            session_id, new_concept = await generate_edited_concept(
-                course.concept, edit.prompt, target_text
+            new_spec = await generate_edited_spec(
+                course.spec, edit.prompt, edit.target_selector, target_text
             )
-            preview_prefix = publish_course(
-                slug, f"{course.id}/preview/{edit.id}", course.version, new_concept
+            preview = publish_built_course(
+                slug,
+                f"{course.id}/preview/{edit.id}",
+                course.version,
+                new_spec,
+                course.asset_map or {},
             )
-            edit.devin_session_id = session_id
-            edit.preview_object_prefix = preview_prefix
+            edit.preview_object_prefix = preview["prefix"]
             edit.status = "preview_ready"
             job.status = JOB_SUCCEEDED
-            job.devin_session_id = session_id
             job.result = {
-                "concept": new_concept,
-                "preview_index_url": index_url(preview_prefix),
+                "spec": new_spec,
+                "preview_index_url": preview["course_url"],
             }
             await db.commit()
         except Exception as exc:  # noqa: BLE001

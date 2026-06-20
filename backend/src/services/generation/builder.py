@@ -8,7 +8,7 @@ versioned prefix. Nginx proxies `/storage/courses/...` for iframe embedding.
 
 If the Node build toolchain is unavailable (or the build fails), a self-contained
 static renderer is published instead so the pipeline always yields a hostable
-artifact. A `concept` dict (legacy shape) is still accepted for compatibility.
+artifact.
 """
 
 import json
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _APP_TEMPLATE_FALLBACK = _REPO_ROOT / "course-app-template"
-_LEGACY_DIST_FALLBACK = _REPO_ROOT / "courses-template" / "dist"
 
 
 def course_prefix(company_slug: str, course_id: str, version: int) -> str:
@@ -216,32 +215,3 @@ def publish_built_course(
     url = index_url(prefix)
     logger.info("published course %s v%s -> %s (built=%s)", course_id, version, prefix, built)
     return {"prefix": prefix, "course_url": url, "iframe_url": url, "built": built}
-
-
-# ── Legacy single-renderer path (kept for backwards compatibility) ────────────
-def _template_dist() -> Path:
-    configured = Path(settings.course_template_dist)
-    if configured.is_dir():
-        return configured
-    if _LEGACY_DIST_FALLBACK.is_dir():
-        return _LEGACY_DIST_FALLBACK
-    raise FileNotFoundError(
-        f"Course template dist not found at {configured} or {_LEGACY_DIST_FALLBACK}."
-    )
-
-
-def publish_course(company_slug: str, course_id: str, version: int, concept: dict) -> str:
-    """Legacy: copy the shared prebuilt template + concept.json. Prefer
-    `publish_built_course`."""
-    ensure_bucket_exists(settings.courses_bucket)
-    dist = _template_dist()
-    prefix = course_prefix(company_slug, course_id, version)
-    _upload_dir(dist, prefix)
-    put_bytes(
-        json.dumps(concept).encode("utf-8"),
-        f"{prefix}/concept.json",
-        settings.courses_bucket,
-        "application/json",
-    )
-    logger.info("Published (legacy) course %s v%s -> %s", course_id, version, prefix)
-    return prefix

@@ -65,11 +65,6 @@ class Settings(BaseSettings):
     demo_company_slug: str = "acme"
     platform_public_url: str = "http://localhost"
 
-    # Course hosting: path to the prebuilt Vite course-template dist/ that the
-    # worker publishes per course. Built into the image; overridable locally.
-    # (Legacy single-renderer path — retained for backwards compatibility.)
-    course_template_dist: str = "/app/course_template_dist"
-
     # Phase 3: per-course Vite/React/TS app template. The builder copies this
     # source, bakes in course.json/asset_map.json and runs `npm run build` to
     # produce each course's OWN dist/. Falls back to a static renderer if the

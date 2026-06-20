@@ -35,17 +35,6 @@ export function useCreateCourse() {
   });
 }
 
-export function useGenerateCourse(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => coursesApi.generate(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["course", id] });
-      qc.invalidateQueries({ queryKey: ["course-jobs", id] });
-    },
-  });
-}
-
 export function useApprovePlan(id: string) {
   const qc = useQueryClient();
   return useMutation({

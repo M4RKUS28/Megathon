@@ -7,5 +7,4 @@
 **/*.tsbuildinfo
 .git
 frontend/dist
-courses-template/dist
 .env

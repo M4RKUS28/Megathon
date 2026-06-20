@@ -191,7 +191,6 @@ change in natural language:
 │           ├── queue/               # Arq pool + worker
 │           └── standards.py         # SCORM / xAPI export
 ├── course-app-template/             # per-course Vite/React renderer (built per course)
-├── courses-template/                # legacy shared renderer
 └── frontend/
     ├── Dockerfile
     ├── server.mjs                   # production static file server
