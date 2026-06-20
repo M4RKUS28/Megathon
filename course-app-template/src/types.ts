@@ -60,4 +60,27 @@ export interface Course {
   chapters: Chapter[];
 }
 
+// ── New interactive block data shapes ─────────────────────────────────────────
+
+export interface MatchingGameData {
+  pairs: { term: string; definition: string }[];
+}
+
+export interface SortingChallengeData {
+  prompt: string;
+  items: string[];
+  correctOrder: number[];
+}
+
+export interface FillInBlankData {
+  sentences: {
+    text: string;
+    blanks: { position: number; answer: string; options: string[] }[];
+  }[];
+}
+
+export interface WordCloudData {
+  words: { text: string; weight: number }[];
+}
+
 export type AssetMap = Record<string, string>;
