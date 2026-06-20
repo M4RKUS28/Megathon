@@ -85,6 +85,24 @@ prepare_env_file() {
   fi
 }
 
+normalize_image_values() {
+  local changed="false"
+  if [[ "$(env_value BACKEND_IMAGE)" == "docker.io/your-dockerhub-user/megathon-backend" ]]; then
+    set_env_value BACKEND_IMAGE "coursive-backend"
+    changed="true"
+  fi
+  if [[ "$(env_value FRONTEND_IMAGE)" == "docker.io/your-dockerhub-user/megathon-frontend" ]]; then
+    set_env_value FRONTEND_IMAGE "coursive-frontend"
+    changed="true"
+  fi
+  if [[ "$changed" == "true" && "$(env_value IMAGE_TAG)" == "latest" ]]; then
+    set_env_value IMAGE_TAG "local"
+  fi
+  if [[ "$changed" == "true" ]]; then
+    echo "Updated placeholder image names in $ENV_FILE to local build image names."
+  fi
+}
+
 require_command docker
 require_command grep
 require_command awk
@@ -98,6 +116,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 prepare_env_file
+normalize_image_values
 
 TRAEFIK_NETWORK="$(env_value TRAEFIK_NETWORK)"
 TRAEFIK_NETWORK="${TRAEFIK_NETWORK:-traefik}"
