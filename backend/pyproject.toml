@@ -18,6 +18,9 @@ dependencies = [
     "tenacity>=8.3.0",
     "arq>=0.26.0",
     "redis>=5.0.0",
+    "langgraph>=0.2.0,<0.4.0",
+    "langchain-core>=0.3.0,<0.4.0",
+    "langchain-google-genai>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -37,3 +40,5 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]

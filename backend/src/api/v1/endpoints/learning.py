@@ -102,6 +102,11 @@ async def report_progress(
         status=body.status,
         progress_pct=body.progress_pct,
         current_chapter=body.current_chapter,
+        current_page=body.current_page,
         score=body.score,
+        time_spent_seconds=body.time_spent_seconds,
+        quiz_attempts=body.quiz_attempts,
+        drop_off_point=body.drop_off_point,
+        engagement_score=body.engagement_score,
     )
     return _enrollment_response(enrollment)  # type: ignore[return-value]

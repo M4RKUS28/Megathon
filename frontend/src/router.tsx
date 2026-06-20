@@ -14,6 +14,7 @@ import { CompaniesPage } from "@/pages/Companies";
 import { CoursesPage } from "@/pages/Courses";
 import { CourseDetailPage } from "@/pages/CourseDetail";
 import { MyLearningPage } from "@/pages/MyLearning";
+import { ManagerDashboardPage } from "@/pages/ManagerDashboard";
 import { CoursePlayerPage } from "@/pages/CoursePlayer";
 
 export const router = createBrowserRouter([
@@ -54,6 +55,14 @@ export const router = createBrowserRouter([
         element: (
           <RoleRoute roles={["admin", "course_creator"]}>
             <CourseDetailPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "team",
+        element: (
+          <RoleRoute roles={["admin", "course_creator"]}>
+            <ManagerDashboardPage />
           </RoleRoute>
         ),
       },
