@@ -32,6 +32,20 @@ x-backend-env: &backend-env
   DEMO_COMPANY_SLUG: ${DEMO_COMPANY_SLUG:-acme}
   PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://localhost}
   COURSE_TEMPLATE_DIST: ${COURSE_TEMPLATE_DIST:-/app/course_template_dist}
+  COURSE_BUILD_USE_DEVIN: ${COURSE_BUILD_USE_DEVIN:-false}
+  # Google Gemini — agentic planner/script-writer + Nano-Banana image + TTS.
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+  GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-3.1-flash-image}
+  GEMINI_TTS_MODEL: ${GEMINI_TTS_MODEL:-gemini-3.1-flash-tts-preview}
+  GEMINI_TTS_VOICE: ${GEMINI_TTS_VOICE:-Kore}
+  # PixVerse (image/video) and Cala MCP (company knowledge) providers.
+  PIXVERSE_API_KEY: ${PIXVERSE_API_KEY:-${PIX_VERSE:-}}
+  CALA_API_KEY: ${CALA_API_KEY:-${CALA:-}}
+  CALA_MCP_URL: ${CALA_MCP_URL:-}
+  ASSET_IMAGE_PROVIDER: ${ASSET_IMAGE_PROVIDER:-auto}
+  ASSET_VIDEO_PROVIDER: ${ASSET_VIDEO_PROVIDER:-auto}
+  ASSET_AUDIO_PROVIDER: ${ASSET_AUDIO_PROVIDER:-auto}
 
 services:
 
