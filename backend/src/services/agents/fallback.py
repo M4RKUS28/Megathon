@@ -73,26 +73,41 @@ def _chapter_pages(
     hero_link = f"/resources/images/{idx:02d}-a"
     apply_link = f"/resources/images/{idx:02d}-b"
     chart_link = f"/resources/charts/{idx:02d}"
+    hero_desc = (
+        f"Illustrative hero image for '{chapter_title}' at {company}: modern, "
+        "friendly workplace scene, brand colors, soft lighting."
+    )
+    apply_desc = (
+        f"People applying {title_lc} in a real {company} workplace situation: "
+        "hands-on, step-by-step, brand colors."
+    )
     assets = [
         AssetSpec(
             template_link=hero_link,
             type="image",
             dimensions="16:9",
-            description=(
-                f"Illustrative hero image for '{chapter_title}' at {company}: modern, "
-                "friendly workplace scene, brand colors, soft lighting."
-            ),
+            description=hero_desc,
             purpose="Chapter intro / context image",
+            alt_text=f"Hero image for {chapter_title}",
+            usage_context=f"image block on Introduction page in chapter '{chapter_title}'",
         ),
         AssetSpec(
             template_link=apply_link,
             type="image",
             dimensions="16:9",
-            description=(
-                f"People applying {title_lc} in a real {company} workplace situation: "
-                "hands-on, step-by-step, brand colors."
-            ),
+            description=apply_desc,
             purpose="Applied example image",
+            alt_text=f"Applying {title_lc} at {company}",
+            usage_context=f"image block on Apply it page in chapter '{chapter_title}'",
+        ),
+        AssetSpec(
+            template_link=chart_link,
+            type="diagram",
+            dimensions="4:3",
+            description=f"Bar chart showing key metrics for {chapter_title} (Q1-Q4 adoption).",
+            purpose="Data visualisation for chapter metrics",
+            alt_text=f"{chapter_title} key metrics chart",
+            usage_context=f"chart block on Apply it page in chapter '{chapter_title}'",
         ),
     ]
     intro_page = Page(

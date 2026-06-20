@@ -45,6 +45,7 @@ COURSE_APP_SCHEMA: dict[str, Any] = {
 
 def _build_prompt(spec: dict, asset_map: dict) -> str:
     course = {k: v for k, v in spec.items() if k != "asset_manifest"}
+    manifest = spec.get("asset_manifest", [])
     return (
         "You are the Devin Implementation Agent. Build a COMPLETE, self-contained "
         "Vite + React + TypeScript single-page application that renders the "
@@ -56,10 +57,30 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "callout, image, video, audio, dialogue, chart, flashcards, dragdrop, "
         "hotspot, timeline, accordion, scenario).\n"
         "- A chapter-end quiz is mandatory; require >=80% to unlock the next chapter, "
-        "and allow retry below 80%.\n"
-        "- Reference assets STRICTLY by their template_link (e.g. "
-        '<img src="/resources/images/01" />); a build step maps them to real URLs '
-        "via /asset_map.json which is loaded at runtime.\n"
+        "and allow retry below 80%.\n\n"
+        "## Asset strategy (CRITICAL — follow exactly)\n\n"
+        "The asset manifest below lists every media asset the course needs. Each\n"
+        "entry carries a `template_link` (e.g. `/resources/images/01`), a `type`,\n"
+        "`dimensions`, a human-readable `description`, `alt_text` and\n"
+        "`usage_context`.\n\n"
+        "1. **Use template_links verbatim.** In your JSX/TSX source code, reference\n"
+        "   every asset ONLY by its `template_link` string — never invent, hard-code,\n"
+        "   or fetch real URLs yourself.\n"
+        "2. **Load asset_map.json at runtime.** On app init, fetch `/asset_map.json`\n"
+        "   (served alongside the app in `public/`). It is a flat\n"
+        "   `{ \"/resources/images/01\": \"https://…/storage_url\" }` mapping.\n"
+        "3. **Resolve final URLs through asset_map.** Create a helper like\n"
+        "   `resolveAsset(templateLink: string): string` that looks up the\n"
+        "   template_link in the loaded map and returns the resolved URL.\n"
+        "4. **Gracefully handle missing assets.** If a template_link has no entry in\n"
+        "   asset_map (provider failed, asset not yet generated, etc.) render a\n"
+        "   tasteful placeholder (e.g. a grey box with the alt_text) instead of\n"
+        "   crashing or showing a broken image. Log a warning to the console.\n"
+        "5. **Use alt_text from the manifest** for `<img alt>`, `aria-label`, etc.\n"
+        "   to keep the course accessible.\n\n"
+        "Do NOT fetch, generate, or embed any external media yourself. The asset\n"
+        "pipeline has already produced all assets and written them to asset_map.json;\n"
+        "your job is only to consume the map at runtime.\n\n"
         "- The app must build to static files with `npm run build` (output dir dist/). "
         "Read /course.json and /asset_map.json from the public/ root at runtime.\n"
         "- Include package.json, vite.config.ts, tsconfig.json, index.html, and all "
@@ -67,6 +88,7 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "Return ONLY structured output: a `files` array of {path, content} covering "
         "the whole project. Use forward-slash relative paths.\n\n"
         f"=== Lastenheft (course.json) ===\n{json.dumps(course)[:120000]}\n\n"
+        f"=== asset_manifest ===\n{json.dumps(manifest)[:30000]}\n\n"
         f"=== asset_map.json ===\n{json.dumps(asset_map)[:20000]}\n"
     )
 
