@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Maximize,
+  Minimize,
   MousePointerClick,
   Plus,
   Sparkles,
@@ -22,6 +24,7 @@ import {
   useGenerateCourse,
   useRejectEdit,
 } from "@/hooks/useCourses";
+import { useFullscreen } from "@/hooks/useFullscreen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
 import type { CourseConceptChapter, CoursePlan, PlanChapter } from "@/lib/api";
@@ -276,6 +279,8 @@ const BUSY_MESSAGES: Record<string, string> = {
 export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { ref: frameWrapRef, isFullscreen, toggle: toggleFullscreen } =
+    useFullscreen<HTMLDivElement>();
 
   const { data: course } = useCourse(id, true);
   const poll = course ? BUSY_STATUSES.has(course.status) : true;
@@ -405,24 +410,51 @@ export function CourseDetailPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Preview</h2>
-              <button
-                onClick={toggleSelect}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                  selectMode
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <MousePointerClick className="h-4 w-4" />
-                {selectMode ? "Click an element…" : "Select element to edit"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleFullscreen}
+                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-4 w-4" />
+                  ) : (
+                    <Maximize className="h-4 w-4" />
+                  )}
+                  {isFullscreen ? "Exit" : "Fullscreen"}
+                </button>
+                <button
+                  onClick={toggleSelect}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                    selectMode
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <MousePointerClick className="h-4 w-4" />
+                  {selectMode ? "Click an element…" : "Select element to edit"}
+                </button>
+              </div>
             </div>
-            <iframe
-              ref={iframeRef}
-              src={course.host_url}
-              title={course.title}
-              className="h-[640px] w-full rounded-xl border border-border bg-white"
-            />
+            <div ref={frameWrapRef} className="relative bg-background">
+              {isFullscreen ? (
+                <button
+                  onClick={toggleFullscreen}
+                  title="Exit fullscreen"
+                  className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/90 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+                >
+                  <Minimize className="h-4 w-4" /> Exit
+                </button>
+              ) : null}
+              <iframe
+                ref={iframeRef}
+                src={course.host_url}
+                title={course.title}
+                className={`w-full bg-white ${
+                  isFullscreen ? "h-screen" : "h-[640px] rounded-xl border border-border"
+                }`}
+              />
+            </div>
           </div>
 
           <div className="space-y-5">

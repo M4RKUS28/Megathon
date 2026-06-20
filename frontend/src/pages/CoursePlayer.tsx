@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Maximize, Minimize } from "lucide-react";
 import { useLearningCourse, useReportProgress } from "@/hooks/useLearning";
+import { useFullscreen } from "@/hooks/useFullscreen";
 
 export function CoursePlayerPage() {
   const { id } = useParams<{ id: string }>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { ref: frameWrapRef, isFullscreen, toggle: toggleFullscreen } =
+    useFullscreen<HTMLDivElement>();
   const { data: course } = useLearningCourse(id);
   const reportProgress = useReportProgress(id!);
 
@@ -76,12 +79,24 @@ export function CoursePlayerPage() {
       <h1 className="text-xl font-bold tracking-tight">{course.title}</h1>
 
       {course.host_url ? (
-        <iframe
-          ref={iframeRef}
-          src={course.host_url}
-          title={course.title}
-          className="h-[78vh] w-full rounded-xl border border-border bg-white"
-        />
+        <div ref={frameWrapRef} className="relative bg-background">
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/90 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+          >
+            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+            {isFullscreen ? "Exit" : "Fullscreen"}
+          </button>
+          <iframe
+            ref={iframeRef}
+            src={course.host_url}
+            title={course.title}
+            className={`w-full bg-white ${
+              isFullscreen ? "h-screen" : "h-[78vh] rounded-xl border border-border"
+            }`}
+          />
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">This course is not available yet.</p>
       )}
