@@ -81,7 +81,7 @@ async def my_course_detail(
         raise NotFoundError("Course")
     enrollment = await get_enrollment(db, course.id, user.id)
     base = _learning_course(course, enrollment)
-    return LearningCourseDetail(**base.model_dump(), concept=course.concept)
+    return LearningCourseDetail(**base.model_dump())
 
 
 @router.post("/courses/{course_id}/progress", response_model=EnrollmentResponse)

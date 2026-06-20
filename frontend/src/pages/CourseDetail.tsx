@@ -26,7 +26,6 @@ import {
   useCourseEdits,
   useCourseJobs,
   useCreateEdit,
-  useGenerateCourse,
   useRejectEdit,
 } from "@/hooks/useCourses";
 import { useFullscreen } from "@/hooks/useFullscreen";
@@ -462,7 +461,6 @@ const BUSY_STATUSES = new Set([
   "authoring",
   "spec_ready",
   "building",
-  "generating",
 ]);
 
 const BUSY_MESSAGES: Record<string, string> = {
@@ -471,7 +469,6 @@ const BUSY_MESSAGES: Record<string, string> = {
   authoring: "The script writer is producing the Lastenheft…",
   spec_ready: "Spec ready — fetching assets and building the course app…",
   building: "Building the per-course application and publishing it…",
-  generating: "Generating…",
 };
 
 export function CourseDetailPage() {
@@ -486,7 +483,6 @@ export function CourseDetailPage() {
   const { data: jobs } = useCourseJobs(id, poll);
   const { data: edits } = useCourseEdits(id, true);
 
-  const generate = useGenerateCourse(id!);
   const createEdit = useCreateEdit(id!);
   const acceptEdit = useAcceptEdit(id!);
   const rejectEdit = useRejectEdit(id!);
@@ -580,28 +576,6 @@ export function CourseDetailPage() {
       {/* Phase 1 — plan approval gate */}
       {course.status === "plan_review" && course.plan ? (
         <PlanReview plan={course.plan} courseId={course.id} />
-      ) : null}
-
-      {/* Legacy concept review + generate */}
-      {course.concept && !isReady ? (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Concept</h2>
-            <button
-              onClick={() => generate.mutate()}
-              disabled={generate.isPending || course.status === "generating"}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
-            >
-              {generate.isPending || course.status === "generating" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {course.status === "generating" ? "Building…" : "Generate course"}
-            </button>
-          </div>
-          <ConceptPreview chapters={course.concept.chapters} />
-        </section>
       ) : null}
 
       {/* Built course preview + edit-loop */}

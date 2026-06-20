@@ -2,7 +2,7 @@
 
 Run with: `uv run arq src.services.queue.worker.WorkerSettings`
 
-Generation tasks (concept / generate / edit) are registered here. The concrete
+Generation tasks (plan / spec / build / edit) are registered here. The concrete
 task implementations live in `src.services.generation.tasks`.
 """
 
@@ -11,9 +11,7 @@ import logging
 from src.config.settings import settings
 from src.services.generation.tasks import (
     run_build_job,
-    run_concept_job,
     run_edit_job,
-    run_generate_job,
     run_plan_job,
     run_spec_job,
 )
@@ -28,8 +26,6 @@ async def ping(ctx: dict) -> str:
 
 class WorkerSettings:
     functions = [
-        run_concept_job,
-        run_generate_job,
         run_edit_job,
         run_plan_job,
         run_spec_job,

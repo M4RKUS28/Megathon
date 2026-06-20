@@ -279,7 +279,16 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     }
     case "audio": {
       const src = resolve(block.asset);
-      return src ? <audio controls className="w-full" src={src} /> : null;
+      if (!src) return null;
+      return (
+        <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
+            <span aria-hidden="true">🔊</span>
+            Listen to this page
+          </div>
+          <audio controls className="w-full" src={src} />
+        </div>
+      );
     }
     case "dialogue":
       return <Dialogue data={block.data} />;
@@ -297,7 +306,28 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return <Scenario data={block.data} />;
     case "chart":
       return <ChartBlock data={block.data} />;
-    default:
-      return block.text ? <p className="text-sm text-gray-700">{block.text}</p> : null;
+    default: {
+      // Unknown / custom block type. The design is intentionally free, so rather
+      // than dropping the block, surface whatever content it carries (text, list
+      // items and any referenced image). This is the fallback renderer used when
+      // the implementation agent isn't building a bespoke app.
+      const img = resolve(block.asset);
+      if (!block.text && !(block.items && block.items.length) && !img) return null;
+      return (
+        <div className="space-y-2">
+          {block.text ? (
+            <p className="text-[15px] leading-relaxed text-gray-700">{block.text}</p>
+          ) : null}
+          {block.items && block.items.length ? (
+            <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
+              {block.items.map((it, i) => (
+                <li key={i}>{it}</li>
+              ))}
+            </ul>
+          ) : null}
+          {img ? <MediaImage src={img} alt={block.text} /> : null}
+        </div>
+      );
+    }
   }
 }
