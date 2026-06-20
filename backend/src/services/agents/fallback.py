@@ -64,104 +64,138 @@ def fallback_plan(brief: dict, company_name: str) -> CoursePlan:
     )
 
 
-def _interaction_blocks(
-    chapter_title: str, idx: int, company: str
-) -> tuple[list[Block], list[AssetSpec]]:
-    """Build a rich, mixed-media page for a chapter (never plain text)."""
-    img_link = f"/resources/images/{idx:02d}"
+def _chapter_pages(
+    chapter_title: str, ch_id: str, idx: int, company: str
+) -> tuple[list[Page], list[AssetSpec]]:
+    """Build several mixed-media pages for a chapter (never plain text, never a
+    single long page). The end-of-chapter quiz is added by the caller."""
+    title_lc = chapter_title.lower()
+    hero_link = f"/resources/images/{idx:02d}-a"
+    apply_link = f"/resources/images/{idx:02d}-b"
     chart_link = f"/resources/charts/{idx:02d}"
     assets = [
         AssetSpec(
-            template_link=img_link,
+            template_link=hero_link,
             type="image",
             dimensions="16:9",
             description=(
                 f"Illustrative hero image for '{chapter_title}' at {company}: modern, "
                 "friendly workplace scene, brand colors, soft lighting."
             ),
-            purpose="Chapter hero / context image",
+            purpose="Chapter intro / context image",
         ),
-    ]
-    blocks = [
-        Block(type="image", asset=img_link, text=chapter_title),
-        Block(
-            type="paragraph",
-            text=(
-                f"This chapter introduces {chapter_title.lower()} at {company}. "
-                "Work through the interactions below — you'll need them for the quiz."
+        AssetSpec(
+            template_link=apply_link,
+            type="image",
+            dimensions="16:9",
+            description=(
+                f"People applying {title_lc} in a real {company} workplace situation: "
+                "hands-on, step-by-step, brand colors."
             ),
-        ),
-        Block(
-            type="dialogue",
-            data={
-                "turns": [
-                    {"speaker": "Mentor", "text": f"Welcome! Let's cover {chapter_title.lower()}."},
-                    {"speaker": "You", "text": "Great — where do I start?"},
-                    {
-                        "speaker": "Mentor",
-                        "text": "Start with the key points, then try the exercise.",
-                    },
-                ]
-            },
-        ),
-        Block(
-            type="list",
-            items=[
-                f"Why {chapter_title.lower()} matters",
-                "What you need to get started",
-                "Where to ask for help",
-            ],
-        ),
-        Block(
-            type="flashcards",
-            data={
-                "cards": [
-                    {"front": "Key term", "back": f"A concept central to {chapter_title.lower()}."},
-                    {"front": "Best practice", "back": "Follow the documented SOP."},
-                ]
-            },
-        ),
-        Block(
-            type="dragdrop",
-            data={
-                "prompt": "Match each step to its description.",
-                "pairs": [
-                    {"left": "Step 1", "right": "Prepare"},
-                    {"left": "Step 2", "right": "Execute"},
-                    {"left": "Step 3", "right": "Review"},
-                ],
-            },
-        ),
-        Block(
-            type="chart",
-            asset=chart_link,
-            data={
-                "chartType": "bar",
-                "title": f"{chapter_title}: key metrics",
-                "labels": ["Q1", "Q2", "Q3", "Q4"],
-                "datasets": [{"label": "Adoption", "data": [20, 45, 70, 90]}],
-            },
-        ),
-        Block(
-            type="callout",
-            text=f"Key takeaway: {chapter_title} is part of how {company} works.",
+            purpose="Applied example image",
         ),
     ]
-    return blocks, assets
+    intro_page = Page(
+        id=f"{ch_id}-p1",
+        title="Introduction",
+        blocks=[
+            Block(type="image", asset=hero_link, text=chapter_title),
+            Block(
+                type="paragraph",
+                text=(
+                    f"This chapter introduces {title_lc} at {company}. "
+                    "Work through each page, then pass the knowledge check to continue."
+                ),
+            ),
+            Block(
+                type="dialogue",
+                data={
+                    "turns": [
+                        {"speaker": "Mentor", "text": f"Welcome! Let's cover {title_lc}."},
+                        {"speaker": "You", "text": "Great — where do I start?"},
+                        {
+                            "speaker": "Mentor",
+                            "text": "We'll go page by page: concepts first, then practice.",
+                        },
+                    ]
+                },
+            ),
+        ],
+    )
+    concepts_page = Page(
+        id=f"{ch_id}-p2",
+        title="Key concepts",
+        blocks=[
+            Block(
+                type="list",
+                items=[
+                    f"Why {title_lc} matters",
+                    "What you need to get started",
+                    "Common pitfalls and how to avoid them",
+                ],
+            ),
+            Block(
+                type="flashcards",
+                data={
+                    "cards": [
+                        {"front": "Key term", "back": f"A concept central to {title_lc}."},
+                        {"front": "Best practice", "back": "Follow the documented SOP."},
+                    ]
+                },
+            ),
+            Block(
+                type="callout",
+                text="Tip: revisit these concepts before the knowledge check.",
+            ),
+        ],
+    )
+    practice_page = Page(
+        id=f"{ch_id}-p3",
+        title="Apply it",
+        blocks=[
+            Block(type="image", asset=apply_link, text=f"Applying {title_lc}"),
+            Block(
+                type="dragdrop",
+                data={
+                    "prompt": "Match each step to its description.",
+                    "pairs": [
+                        {"left": "Step 1", "right": "Prepare"},
+                        {"left": "Step 2", "right": "Execute"},
+                        {"left": "Step 3", "right": "Review"},
+                    ],
+                },
+            ),
+            Block(
+                type="chart",
+                asset=chart_link,
+                data={
+                    "chartType": "bar",
+                    "title": f"{chapter_title}: key metrics",
+                    "labels": ["Q1", "Q2", "Q3", "Q4"],
+                    "datasets": [{"label": "Adoption", "data": [20, 45, 70, 90]}],
+                },
+            ),
+            Block(
+                type="callout",
+                text=f"Key takeaway: {chapter_title} is part of how {company} works.",
+            ),
+        ],
+    )
+    return [intro_page, concepts_page, practice_page], assets
 
 
 def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str) -> Lastenheft:
     chapters: list[SpecChapter] = []
     manifest: list[AssetSpec] = []
     for i, ch in enumerate(plan.chapters):
-        blocks, assets = _interaction_blocks(ch.title, i, company_name)
+        pages, assets = _chapter_pages(ch.title, ch.id, i, company_name)
         manifest.extend(assets)
         chapters.append(
             SpecChapter(
                 id=ch.id,
                 title=ch.title,
                 objective=ch.objective,
-                pages=[Page(id=f"{ch.id}-p1", title=ch.title, blocks=blocks)],
+                pages=pages,
                 quiz=Quiz(
                     passing_pct=80,
                     retryable=True,

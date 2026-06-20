@@ -58,6 +58,22 @@ def test_fallback_lastenheft_has_rich_blocks_and_quiz():
         assert a.type and a.description and a.purpose
 
 
+def test_fallback_chapters_are_split_into_multiple_pages():
+    plan = fallback_plan(BRIEF, "Acme")
+    spec = fallback_lastenheft(plan, "Acme", "#123456")
+    for ch in spec.chapters:
+        # Each chapter is paged (not one long page) and the quiz is separate.
+        assert len(ch.pages) >= 2, ch.id
+        # Page ids are unique within a chapter and pages carry blocks + a title.
+        assert len({p.id for p in ch.pages}) == len(ch.pages)
+        for page in ch.pages:
+            assert page.title
+            assert page.blocks
+        # The quiz lives on the chapter, never inside a content page.
+        page_types = {b.type for p in ch.pages for b in p.blocks}
+        assert "quiz" not in page_types
+
+
 async def test_generate_lastenheft_offline_falls_back():
     plan = fallback_plan(BRIEF, "Acme")
     spec = await generate_lastenheft(plan, "Acme", "#5145E5")
