@@ -47,11 +47,11 @@ random_hex() {
 
 detect_public_url() {
   local ip=""
-  if command -v hostname >/dev/null 2>&1; then
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-  fi
-  if [[ -z "$ip" ]] && command -v ip >/dev/null 2>&1; then
+  if command -v ip >/dev/null 2>&1; then
     ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "src") {print $(i+1); exit}}' || true)"
+  fi
+  if [[ -z "$ip" ]] && command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   fi
   if [[ -z "$ip" ]] && command -v ipconfig >/dev/null 2>&1; then
     ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
@@ -82,6 +82,37 @@ prepare_env_file() {
     set_env_value SECRET_KEY "$(random_hex)"
     echo "Created $ENV_FILE from .env.example.prod"
     echo "Review $ENV_FILE before exposing this server publicly."
+  fi
+}
+
+normalize_public_url_values() {
+  local public_url
+  local minio_public_url
+  local cors_origins
+  local changed="false"
+
+  public_url="$(env_value PLATFORM_PUBLIC_URL)"
+  if [[ -z "$public_url" || "$public_url" == "http://203.0.113.10" || "$public_url" == "https://203.0.113.10" ]]; then
+    public_url="$(detect_public_url)"
+    set_env_value PLATFORM_PUBLIC_URL "$public_url"
+    changed="true"
+  fi
+  public_url="${public_url%/}"
+
+  minio_public_url="$(env_value MINIO_PUBLIC_URL)"
+  if [[ -z "$minio_public_url" || "$minio_public_url" == "http://203.0.113.10/storage" || "$minio_public_url" == "https://203.0.113.10/storage" ]]; then
+    set_env_value MINIO_PUBLIC_URL "$public_url/storage"
+    changed="true"
+  fi
+
+  cors_origins="$(env_value CORS_ORIGINS)"
+  if [[ -z "$cors_origins" || "$cors_origins" == '["http://203.0.113.10"]' || "$cors_origins" == '["https://203.0.113.10"]' ]]; then
+    set_env_value CORS_ORIGINS "[\"$public_url\"]"
+    changed="true"
+  fi
+
+  if [[ "$changed" == "true" ]]; then
+    echo "Updated placeholder public URLs in $ENV_FILE to $public_url."
   fi
 }
 
@@ -145,6 +176,65 @@ connect_traefik_to_network() {
   fi
 }
 
+sync_keycloak_client_redirects() {
+  local public_url
+  local realm
+  local client_id
+  local admin_user
+  local admin_password
+  local client_uuid
+  local attempt
+  local redirect_uris
+  local logout_redirect_uris
+
+  public_url="$(env_value PLATFORM_PUBLIC_URL)"
+  public_url="${public_url%/}"
+  realm="$(env_value KEYCLOAK_REALM)"
+  realm="${realm:-app}"
+  client_id="$(env_value VITE_KEYCLOAK_CLIENT_ID)"
+  client_id="${client_id:-$(env_value KEYCLOAK_CLIENT_ID)}"
+  client_id="${client_id:-app-frontend}"
+  admin_user="$(env_value KEYCLOAK_ADMIN)"
+  admin_password="$(env_value KEYCLOAK_ADMIN_PASSWORD)"
+
+  if [[ -z "$public_url" || -z "$admin_user" || -z "$admin_password" ]]; then
+    echo "Skipping Keycloak redirect URI sync because PLATFORM_PUBLIC_URL, KEYCLOAK_ADMIN or KEYCLOAK_ADMIN_PASSWORD is empty." >&2
+    return
+  fi
+
+  for attempt in {1..36}; do
+    if "${compose[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/auth --realm master --user "$admin_user" --password "$admin_password" >/dev/null 2>&1; then
+      break
+    fi
+    if [[ "$attempt" == "36" ]]; then
+      echo "Skipping Keycloak redirect URI sync because Keycloak admin login did not become ready." >&2
+      return
+    fi
+    sleep 5
+  done
+
+  client_uuid="$(
+    "${compose[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh get clients -r "$realm" -q "clientId=$client_id" --fields id --format csv 2>/dev/null \
+      | awk -F, '{ gsub(/\r|"/, "", $1); if ($1 != "" && $1 != "id") { print $1; exit } }'
+  )"
+
+  if [[ -z "$client_uuid" ]]; then
+    echo "Skipping Keycloak redirect URI sync because client '$client_id' was not found in realm '$realm'." >&2
+    return
+  fi
+
+  redirect_uris="[\"http://localhost/*\",\"http://localhost:5173/*\",\"$public_url/*\"]"
+  logout_redirect_uris="http://localhost/*##http://localhost:5173/*##$public_url/*"
+
+  "${compose[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh update "clients/$client_uuid" -r "$realm" \
+    -s "redirectUris=$redirect_uris" \
+    -s 'webOrigins=["+"]' \
+    -s 'attributes."pkce.code.challenge.method"=S256' \
+    -s "attributes.\"post.logout.redirect.uris\"=$logout_redirect_uris" >/dev/null
+
+  echo "Updated Keycloak client '$client_id' redirect URIs for $public_url."
+}
+
 require_command docker
 require_command grep
 require_command awk
@@ -158,6 +248,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 prepare_env_file
+normalize_public_url_values
 normalize_image_values
 
 TRAEFIK_NETWORK="$(env_value TRAEFIK_NETWORK)"
@@ -176,4 +267,5 @@ compose=(docker compose --env-file "$ENV_FILE" --project-directory "$PROJECT_ROO
 
 "${compose[@]}" config >/dev/null
 "${compose[@]}" up -d --build --remove-orphans
+sync_keycloak_client_redirects
 "${compose[@]}" ps
