@@ -184,39 +184,48 @@ def _chapter_pages(
     return [intro_page, concepts_page, practice_page], assets
 
 
+def fallback_chapter(
+    ch: PlanChapter, idx: int, company_name: str
+) -> tuple[SpecChapter, list[AssetSpec]]:
+    """Build a single schema-valid SpecChapter (mixed-media pages + quiz) for one
+    plan chapter. Used by the deterministic fallback and as the script writer's
+    per-chapter safety net so a course never ships empty `pages`."""
+    pages, assets = _chapter_pages(ch.title, ch.id, idx, company_name)
+    chapter = SpecChapter(
+        id=ch.id,
+        title=ch.title,
+        objective=ch.objective,
+        pages=pages,
+        quiz=Quiz(
+            passing_pct=80,
+            retryable=True,
+            questions=[
+                QuizQuestion(
+                    question=f"What is the focus of '{ch.title}'?",
+                    options=[ch.title, "Payroll", "Office snacks", "Parking"],
+                    answerIndex=0,
+                    explanation=f"This chapter is about {ch.title.lower()}.",
+                ),
+                QuizQuestion(
+                    question=f"Which is a key point for {ch.title.lower()}?",
+                    options=(ch.key_points or ["It matters"])[:1]
+                    + ["Ignore the SOP", "Skip onboarding", "Guess"],
+                    answerIndex=0,
+                    explanation="Refer to the key points covered in this chapter.",
+                ),
+            ],
+        ),
+    )
+    return chapter, assets
+
+
 def fallback_lastenheft(plan: CoursePlan, company_name: str, primary_color: str) -> Lastenheft:
     chapters: list[SpecChapter] = []
     manifest: list[AssetSpec] = []
     for i, ch in enumerate(plan.chapters):
-        pages, assets = _chapter_pages(ch.title, ch.id, i, company_name)
+        chapter, assets = fallback_chapter(ch, i, company_name)
         manifest.extend(assets)
-        chapters.append(
-            SpecChapter(
-                id=ch.id,
-                title=ch.title,
-                objective=ch.objective,
-                pages=pages,
-                quiz=Quiz(
-                    passing_pct=80,
-                    retryable=True,
-                    questions=[
-                        QuizQuestion(
-                            question=f"What is the focus of '{ch.title}'?",
-                            options=[ch.title, "Payroll", "Office snacks", "Parking"],
-                            answerIndex=0,
-                            explanation=f"This chapter is about {ch.title.lower()}.",
-                        ),
-                        QuizQuestion(
-                            question=f"Which is a key point for {ch.title.lower()}?",
-                            options=(ch.key_points or ["It matters"])[:1]
-                            + ["Ignore the SOP", "Skip onboarding", "Guess"],
-                            answerIndex=0,
-                            explanation="Refer to the key points covered in this chapter.",
-                        ),
-                    ],
-                ),
-            )
-        )
+        chapters.append(chapter)
     return Lastenheft(
         title=plan.title,
         description=plan.description,
