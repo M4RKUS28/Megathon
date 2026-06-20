@@ -1,11 +1,12 @@
-"""Composite asset provider — dispatches per asset type to the configured real
+﻿"""Composite asset provider â€” dispatches per asset type to the configured real
 provider, with deterministic placeholder fallback.
 
 Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_VIDEO_PROVIDER`,
 `ASSET_AUDIO_PROVIDER`). "auto" picks the best configured provider for the type:
 images -> Nano-Banana (Gemini), else PixVerse; videos -> PixVerse; audio ->
-Gemini TTS. If the selected provider is unconfigured or raises, the branded SVG
-placeholder is used so the pipeline always yields a hostable asset.
+Gemini TTS. Visual assets can fall back to branded SVG placeholders. Audio does
+not fall back to silence; if TTS is unavailable, the renderer can use the
+transcript/browser voice instead.
 """
 
 from __future__ import annotations
@@ -87,13 +88,23 @@ class CompositeAssetProvider(AssetProvider):
         if provider is not None:
             try:
                 return provider.produce(spec, primary_color)
-            except Exception as exc:  # noqa: BLE001 — fall back, never fail the batch
+            except Exception as exc:  # noqa: BLE001
+                if spec.type in _AUDIO_TYPES:
+                    logger.warning(
+                        "audio provider %s failed for %s (%s); skipping audio asset",
+                        type(provider).__name__,
+                        spec.template_link,
+                        exc,
+                    )
+                    raise
                 logger.warning(
                     "provider %s failed for %s (%s); using placeholder",
                     type(provider).__name__,
                     spec.template_link,
                     exc,
                 )
+        if spec.type in _AUDIO_TYPES:
+            raise RuntimeError("no audio provider configured")
         return self.placeholder.produce(spec, primary_color)
 
 

@@ -7,6 +7,8 @@ and verify every provider degrades gracefully to the deterministic fallback.
 import io
 import wave
 
+import pytest
+
 from src.services.agents.cala import (
     CalaKnowledge,
     _extract_snippets,
@@ -128,10 +130,13 @@ def test_composite_falls_back_to_placeholder_svg():
 
 def test_composite_audio_and_video_fall_back():
     provider = CompositeAssetProvider()
-    for atype in ("audio", "video"):
-        spec = AssetSpec(template_link=f"/resources/{atype}/01", type=atype, description="x")
-        _content, ext, _ctype = provider.produce(spec, "#000000")
-        assert ext == "svg"  # placeholder when providers unconfigured
+    video = AssetSpec(template_link="/resources/video/01", type="video", description="x")
+    _content, ext, _ctype = provider.produce(video, "#000000")
+    assert ext == "svg"  # visual placeholder when providers are unconfigured
+
+    audio = AssetSpec(template_link="/resources/audio/01", type="audio", description="x")
+    with pytest.raises(RuntimeError, match="audio provider|no audio provider"):
+        provider.produce(audio, "#000000")
 
 
 # ── Devin code-gen ───────────────────────────────────────────────────────────
