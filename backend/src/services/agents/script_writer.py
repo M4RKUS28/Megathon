@@ -20,18 +20,41 @@ import asyncio
 import logging
 from typing import TypedDict
 
+from pydantic import BaseModel, Field
+
 from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
 from .schemas import (
     AssetSpec,
     CoursePlan,
     Lastenheft,
+    Page,
     PlanChapter,
+    Quiz,
     SpecChapter,
     StyleGuide,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _ChapterPages(BaseModel):
+    """Wrapper so the model targets a shallow `list[Page]` schema.
+
+    The combined `SpecChapter` schema (pages[].blocks[] + quiz.questions[]) is too
+    deeply nested for the model's structured output: it fills the shallow scaffold
+    fields and returns empty `pages`/`quiz` arrays. Generating pages on their own
+    keeps the target schema shallow enough that the content arrays get populated.
+    """
+
+    pages: list[Page] = Field(default_factory=list)
+
+
+class _ChapterQuiz(BaseModel):
+    """Wrapper so the model targets just the end-of-chapter quiz."""
+
+    quiz: Quiz = Field(default_factory=Quiz)
+
 
 SCRIPT_SYSTEM = """You are a senior interactive learning designer creating an implementation-
 ready Lastenheft (specification) for a bespoke Vite/React course app. A coding agent (Devin)
@@ -161,12 +184,75 @@ def _chapter_text(plan: CoursePlan, chapter: PlanChapter) -> str:
     )
 
 
-async def _design_one_chapter(
+def _pages_text(plan: CoursePlan, chapter: PlanChapter, scaffold: SpecChapter) -> str:
+    """Focused prompt: write ONLY the content pages for one chapter."""
+    kp = "; ".join(chapter.key_points)
+    lp = "; ".join(scaffold.learning_points)
+    return (
+        f"{_course_context(plan)}\n\n"
+        f'Write the CONTENT PAGES for chapter [{chapter.id}] "{chapter.title}".\n'
+        f"- objective: {chapter.objective}\n"
+        f"- key points: {kp}\n"
+        + (f"- learning points: {lp}\n" if lp else "")
+        + "\nReturn 3-5 pages. Each page MUST have a non-empty id, the rich brief "
+        "fields, and 2-4 implementation-ready blocks plus asset_needs. Do NOT "
+        "include any quiz here — content pages only."
+    )
+
+
+def _quiz_text(
+    plan: CoursePlan, chapter: PlanChapter, scaffold: SpecChapter, pages: list[Page]
+) -> str:
+    """Focused prompt: write ONLY the end-of-chapter quiz."""
+    reqs = scaffold.assessment_requirements
+    goals = "; ".join(reqs.tested_goals) or chapter.objective
+    page_topics = "; ".join(g for p in pages for g in (p.content_goals or []))
+    misconceptions = "; ".join(reqs.misconceptions_to_probe)
+    return (
+        f'Course: {plan.title}. Chapter [{chapter.id}] "{chapter.title}".\n'
+        f"Tested goals: {goals}\n"
+        + (f"Page topics covered: {page_topics}\n" if page_topics else "")
+        + (f"Misconceptions to probe: {misconceptions}\n" if misconceptions else "")
+        + "Write the end-of-chapter quiz: 3-5 application-focused multiple-choice "
+        "questions. Each question needs plausible options, the correct answerIndex, "
+        "and an explanation. Set passing_pct=80 and retryable=true. Questions must "
+        "test APPLICATION via realistic scenarios, not recall."
+    )
+
+
+# Attempts per focused structured-output call. Gemini occasionally emits a
+# pathologically long integer literal (json parsing then raises) or an empty
+# array; a couple of retries with temperature variation almost always recovers.
+_MAX_ATTEMPTS = 3
+
+
+def _scaffold_from_plan(chapter: PlanChapter) -> SpecChapter:
+    """Cheap, LLM-free chapter scaffold derived from the approved plan."""
+    return SpecChapter(
+        id=chapter.id,
+        title=chapter.title,
+        objective=chapter.objective,
+        competency=chapter.competency,
+        bloom_level=chapter.bloom_level,
+        estimated_minutes=chapter.estimated_minutes,
+        learning_points=list(chapter.key_points),
+    )
+
+
+async def _scaffold_chapter(
     model, plan: CoursePlan, chapter: PlanChapter
 ) -> SpecChapter:
-    spec: SpecChapter = await model.ainvoke(
-        [("system", SCRIPT_SYSTEM), ("user", _chapter_text(plan, chapter))]
-    )
+    try:
+        spec: SpecChapter = await model.ainvoke(
+            [("system", SCRIPT_SYSTEM), ("user", _chapter_text(plan, chapter))]
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "chapter %s scaffold failed (%s); deriving scaffold from plan",
+            chapter.id,
+            exc,
+        )
+        return _scaffold_from_plan(chapter)
     # Anchor identity to the plan so manifest/ordering stay consistent even if
     # the model echoes back blank or altered id/title fields.
     if not spec.id:
@@ -176,13 +262,108 @@ async def _design_one_chapter(
     return spec
 
 
+async def _design_pages(
+    model, plan: CoursePlan, chapter: PlanChapter, scaffold: SpecChapter
+) -> list[Page]:
+    msgs = [("system", SCRIPT_SYSTEM), ("user", _pages_text(plan, chapter, scaffold))]
+    pages: list[Page] = []
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            result: _ChapterPages = await model.ainvoke(msgs)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "chapter %s pages attempt %d failed (%s)", chapter.id, attempt + 1, exc
+            )
+            continue
+        if result.pages:
+            pages = result.pages
+            break
+    for i, page in enumerate(pages):
+        if not page.id:
+            page.id = f"{chapter.id}-p{i + 1}"
+    return pages
+
+
+async def _design_quiz(
+    model,
+    plan: CoursePlan,
+    chapter: PlanChapter,
+    scaffold: SpecChapter,
+    pages: list[Page],
+) -> Quiz:
+    msgs = [
+        ("system", SCRIPT_SYSTEM),
+        ("user", _quiz_text(plan, chapter, scaffold, pages)),
+    ]
+    quiz = Quiz()
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            result: _ChapterQuiz = await model.ainvoke(msgs)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "chapter %s quiz attempt %d failed (%s)", chapter.id, attempt + 1, exc
+            )
+            continue
+        if result.quiz.questions:
+            quiz = result.quiz
+            break
+    quiz.chapter_ref = quiz.chapter_ref or chapter.id
+    return quiz
+
+
+async def _design_one_chapter(
+    scaffold_model,
+    pages_model,
+    quiz_model,
+    plan: CoursePlan,
+    chapter: PlanChapter,
+    fallback: SpecChapter | None,
+) -> SpecChapter:
+    # 1. Scaffold (objective, learning_points, assessment_requirements, ...). The
+    #    combined schema reliably fills these shallow fields.
+    spec = await _scaffold_chapter(scaffold_model, plan, chapter)
+    # 2. Content pages and 3. quiz via focused, shallow-schema calls so the
+    #    deeply-nested arrays actually get populated.
+    spec.pages = await _design_pages(pages_model, plan, chapter, spec)
+    if not spec.pages and fallback is not None:
+        # All page attempts failed for this chapter — keep the rest of the course
+        # real and use the deterministic content for just this one.
+        logger.warning(
+            "chapter %s produced no pages; using deterministic fallback content",
+            chapter.id,
+        )
+        spec.pages = fallback.pages
+        spec.quiz = fallback.quiz
+        return spec
+    spec.quiz = await _design_quiz(quiz_model, plan, chapter, spec, spec.pages)
+    if not spec.quiz.questions and fallback is not None and fallback.quiz.questions:
+        spec.quiz = fallback.quiz
+        spec.quiz.chapter_ref = spec.quiz.chapter_ref or spec.id
+    return spec
+
+
 async def _design_interactions(state: _State) -> _State:
     plan = state["plan"]
     if not plan.chapters:
         raise RuntimeError("course plan has no chapters")
-    model = get_chat_model(temperature=0.5).with_structured_output(SpecChapter)
+    # Deterministic per-chapter fallback content (no API) used only if a chapter's
+    # focused generation fails outright.
+    fb = fallback_lastenheft(plan, state["company_name"], state["primary_color"])
+    scaffold_model = get_chat_model(temperature=0.5).with_structured_output(SpecChapter)
+    pages_model = get_chat_model(temperature=0.6).with_structured_output(_ChapterPages)
+    quiz_model = get_chat_model(temperature=0.3).with_structured_output(_ChapterQuiz)
     chapters = await asyncio.gather(
-        *(_design_one_chapter(model, plan, ch) for ch in plan.chapters)
+        *(
+            _design_one_chapter(
+                scaffold_model,
+                pages_model,
+                quiz_model,
+                plan,
+                ch,
+                fb.chapters[i] if i < len(fb.chapters) else None,
+            )
+            for i, ch in enumerate(plan.chapters)
+        )
     )
     if not chapters:
         raise RuntimeError("script writer produced no chapters")
@@ -280,9 +461,13 @@ async def generate_lastenheft(
             {"plan": plan, "company_name": company_name, "primary_color": primary_color}
         )
         lh = result.get("lastenheft")
-        if isinstance(lh, Lastenheft) and lh.chapters:
+        if isinstance(lh, Lastenheft) and lh.chapters and all(
+            ch.pages for ch in lh.chapters
+        ):
             return lh
-        logger.warning("script writer returned no usable Lastenheft; using fallback")
+        logger.warning(
+            "script writer returned chapters without pages; using fallback"
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("script writer graph failed (%s); using fallback", exc)
     return fallback_lastenheft(plan, company_name, primary_color)
