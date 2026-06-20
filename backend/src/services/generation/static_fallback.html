@@ -57,6 +57,51 @@
         padding: 8px 16px;
         cursor: pointer;
       }
+      button.nav.ghost {
+        background: #fff;
+        color: #111827;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+      }
+      button.nav:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .nav-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 13px;
+        margin: 4px 0 12px;
+      }
+      .steps {
+        display: flex;
+        gap: 6px;
+        margin: 10px 0 14px;
+      }
+      .steps span {
+        height: 6px;
+        flex: 1;
+        border-radius: 999px;
+        background: #e5e7eb;
+      }
+      .steps span.done {
+        background: var(--brand);
+      }
+      .steps span.cur {
+        background: rgba(81, 69, 229, 0.55);
+      }
+      .ok {
+        color: #059669;
+        font-weight: 600;
+      }
+      .bad {
+        color: #dc2626;
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -66,10 +111,11 @@
     </script>
     <script>
       const course = JSON.parse(document.getElementById("data").textContent);
-      let i = 0;
+      let i = 0; // chapter index
+      let p = 0; // page index within the chapter
       const passed = new Set();
       let am = {};
-      const cur = {};
+      let cur = {}; // quiz answers for the current chapter
       function resolve(l) {
         return l ? am[l] || l : "";
       }
@@ -87,6 +133,15 @@
             .join("");
         return b.text ? "<p>" + b.text + "</p>" : "";
       }
+      function steps(pages, onQuiz) {
+        let s = '<div class="steps">';
+        pages.forEach((_, pi) => {
+          const cls = pi < p ? "done" : pi === p && !onQuiz ? "cur" : "";
+          s += '<span class="' + cls + '"></span>';
+        });
+        s += '<span class="' + (onQuiz ? "cur" : "") + '"></span></div>';
+        return s;
+      }
       function render() {
         const c = course.chapters[i];
         const app = document.getElementById("app");
@@ -94,6 +149,9 @@
           app.innerHTML = '<div class="card">Course complete.</div>';
           return;
         }
+        const pages = c.pages || [];
+        const onQuiz = p >= pages.length;
+        const last = course.chapters.length - 1;
         let h =
           '<div class="card"><div class="eyebrow">Chapter ' +
           (i + 1) +
@@ -101,24 +159,66 @@
           course.chapters.length +
           "</div><h1>" +
           c.title +
-          "</h1>";
-        (c.pages || []).forEach((p) => (p.blocks || []).forEach((b) => (h += block(b))));
+          "</h1>" +
+          steps(pages, onQuiz);
+        if (!onQuiz) {
+          const pg = pages[p] || { blocks: [] };
+          h +=
+            '<div class="muted">Page ' +
+            (p + 1) +
+            " of " +
+            pages.length +
+            (pg.title ? " — " + pg.title : "") +
+            "</div>";
+          (pg.blocks || []).forEach((b) => (h += block(b)));
+          h += '</div><div class="card nav-row">';
+          h +=
+            '<button class="nav ghost" ' +
+            (i === 0 && p === 0 ? "disabled" : "") +
+            ' onclick="prev()">Back</button>';
+          h +=
+            '<button class="nav" onclick="nextPage()">' +
+            (p === pages.length - 1 ? "Go to knowledge check" : "Continue") +
+            "</button>";
+          h += "</div>";
+          app.innerHTML = h;
+          return;
+        }
         const pass_pct = (c.quiz && c.quiz.passing_pct) || 80;
-        h += '</div><div class="card"><h3>Knowledge check (need ' + pass_pct + "%)</h3>";
+        h += '<div class="muted">Knowledge check — need ' + pass_pct + "% to continue</div></div>";
+        h += '<div class="card"><h3>Knowledge check</h3>';
         ((c.quiz && c.quiz.questions) || []).forEach((q, qi) => {
           h += "<p><b>" + q.question + "</b></p>";
           q.options.forEach((o, oi) => {
-            h += '<button class="opt" onclick="ans(' + qi + "," + oi + ')">' + o + "</button>";
+            const sel = cur[qi] === oi ? ' style="border-color:var(--brand)"' : "";
+            h +=
+              '<button class="opt"' + sel + ' onclick="ans(' + qi + "," + oi + ')">' + o + "</button>";
           });
         });
-        h += '<div id="qr"></div><button class="nav" onclick="grade()">Submit</button> ';
-        if (passed.has(i) && i < course.chapters.length - 1)
-          h += '<button class="nav" onclick="next()">Next chapter</button>';
-        h += "</div>";
+        h += '<div id="qr"></div><div class="nav-row">';
+        h += '<button class="nav ghost" onclick="prev()">Back</button>';
+        h += '<button class="nav" onclick="grade()">Submit</button>';
+        if (passed.has(i) && i < last)
+          h += '<button class="nav" onclick="nextChapter()">Next chapter</button>';
+        h += "</div></div>";
         app.innerHTML = h;
       }
       function ans(q, o) {
         cur[q] = o;
+        render();
+      }
+      function nextPage() {
+        p++;
+        render();
+      }
+      function prev() {
+        if (p > 0) p--;
+        else if (i > 0) {
+          i--;
+          p = 0;
+          cur = {};
+        }
+        render();
       }
       function grade() {
         const c = course.chapters[i];
@@ -130,13 +230,22 @@
         const pct = qs.length ? Math.round((ok / qs.length) * 100) : 100;
         const pass = pct >= ((c.quiz && c.quiz.passing_pct) || 80);
         if (pass) passed.add(i);
-        document.getElementById("qr").innerHTML =
-          "<p>" + pct + "% — " + (pass ? "passed" : "try again") + "</p>";
-        if (pass) render();
+        render();
+        const qr = document.getElementById("qr");
+        if (qr)
+          qr.innerHTML =
+            '<p class="' +
+            (pass ? "ok" : "bad") +
+            '">' +
+            pct +
+            "% — " +
+            (pass ? "passed" : "below " + ((c.quiz && c.quiz.passing_pct) || 80) + "% — try again") +
+            "</p>";
       }
-      function next() {
+      function nextChapter() {
         i++;
-        for (const k in cur) delete cur[k];
+        p = 0;
+        cur = {};
         render();
       }
       fetch("./asset_map.json")
