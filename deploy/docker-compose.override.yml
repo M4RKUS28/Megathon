@@ -33,12 +33,13 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: development
+    command: ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ./backend/src:/app/src:rw
       - ./backend/alembic:/app/alembic:rw
     environment:
       LOG_LEVEL: DEBUG
-      RELOAD: "true"
+      RELOAD: "false"
       KEYCLOAK_RELATIVE_PATH: /
       # Bind-mounted source lives on the Windows host (Docker Desktop), where
       # inotify isn't available — watchfiles (uvicorn --reload) crashes with
@@ -52,15 +53,15 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       target: development
-    command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings", "--watch", "src"]
+    command: ["uv", "run", "arq", "src.services.queue.worker.WorkerSettings"]
     entrypoint: []
     volumes:
       - ./backend/src:/app/src:rw
     environment:
       LOG_LEVEL: DEBUG
       KEYCLOAK_RELATIVE_PATH: /
-      # See backend service: inotify is unavailable on the Windows host mount,
-      # so arq's --watch (watchfiles) needs polling to avoid "os error 22".
+      # Keep worker stable on Windows/Docker Desktop bind mounts. arq --watch
+      # still uses the native watcher in some cases and can crash with os error 22.
       WATCHFILES_FORCE_POLLING: "true"
 
   frontend:

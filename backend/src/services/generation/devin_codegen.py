@@ -115,7 +115,9 @@ def _build_prompt(spec: dict, asset_map: dict) -> str:
         "a visible score, celebratory micro-animations on success (confetti / a check popping "
         "in) and a replay button; invent richer games for custom kinds. Make them fun.\n"
         "- A chapter-end quiz is mandatory; require >=80% to unlock the next chapter, "
-        "and allow retry below 80%.\n"
+        "and allow retry below 80%. Do not render all quiz questions as one long page: "
+        "use question tabs/steps with one active question at a time, numbered tabs for "
+        "navigation, and clear Previous/Next/Submit controls.\n"
         "- Reference assets STRICTLY by their template_link (e.g. "
         '<img src="/resources/images/01" />); a build step maps them to real URLs '
         "via /asset_map.json which is loaded at runtime. Use every provided asset.\n"

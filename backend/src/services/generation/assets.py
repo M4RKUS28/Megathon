@@ -1,4 +1,4 @@
-"""Phase 2.5 Process A — Resource fetch / asset pipeline.
+﻿"""Phase 2.5 Process A â€” Resource fetch / asset pipeline.
 
 Works the isolated asset manifest from the Lastenheft and produces an
 `asset_map`: each `template_link` -> a final, production `storage_url` (MinIO).
@@ -15,6 +15,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+from collections import Counter
 
 from src.config.settings import settings
 from src.db.minio import ensure_bucket_exists, public_object_url, put_bytes
@@ -87,19 +88,55 @@ def fetch_assets(
     specs = [a if isinstance(a, AssetSpec) else AssetSpec(**a) for a in manifest]
     ensure_bucket_exists(settings.courses_bucket)
 
+    by_type = Counter(spec.type for spec in specs)
+    logger.info(
+        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s",
+        course_prefix,
+        len(specs),
+        dict(sorted(by_type.items())),
+        type(provider).__name__,
+    )
+
     asset_map: dict[str, str] = {}
+    skipped: Counter[str] = Counter()
     for spec in specs:
+        logger.debug(
+            "asset produce start: link=%s type=%s purpose=%s description_chars=%d",
+            spec.template_link,
+            spec.type,
+            spec.purpose,
+            len(spec.description or ""),
+        )
         try:
             content, ext, ctype = provider.produce(spec, primary_color)
-        except Exception as exc:  # noqa: BLE001 — one bad asset must not fail the batch
-            logger.warning("asset %s failed: %s", spec.template_link, exc)
+        except Exception as exc:  # noqa: BLE001
+            skipped[spec.type] += 1
+            logger.warning(
+                "asset produce failed: link=%s type=%s provider=%s error=%s",
+                spec.template_link,
+                spec.type,
+                type(provider).__name__,
+                exc,
+            )
             continue
         rel = spec.template_link.lstrip("/")
         object_name = f"{course_prefix}/{rel}.{ext}"
         put_bytes(content, object_name, settings.courses_bucket, ctype)
         asset_map[spec.template_link] = public_object_url(object_name, settings.courses_bucket)
+        logger.debug(
+            "asset uploaded: link=%s object=%s bytes=%d content_type=%s",
+            spec.template_link,
+            object_name,
+            len(content),
+            ctype,
+        )
 
-    logger.info("asset pipeline mapped %d/%d assets", len(asset_map), len(specs))
+    logger.info(
+        "asset pipeline finished: mapped=%d/%d skipped_by_type=%s",
+        len(asset_map),
+        len(specs),
+        dict(sorted(skipped.items())),
+    )
     return asset_map
 
 
