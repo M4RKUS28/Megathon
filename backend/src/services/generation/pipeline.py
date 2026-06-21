@@ -193,7 +193,14 @@ async def process_spec_job(job_id: str) -> None:
         try:
             company_name, primary, _style = await _branding(db, course.company_id)
             plan = CoursePlan(**course.plan)
-            lastenheft = await generate_lastenheft(plan, company_name, primary)
+
+            async def _spec_progress(info: dict) -> None:
+                job.result = {**(job.result or {}), **info}
+                await db.commit()
+
+            lastenheft = await generate_lastenheft(
+                plan, company_name, primary, progress_callback=_spec_progress
+            )
 
             spec = lastenheft.model_dump()
             course.spec = spec
@@ -202,6 +209,8 @@ async def process_spec_job(job_id: str) -> None:
             job.status = JOB_SUCCEEDED
             job.result = {
                 "chapters": len(lastenheft.chapters),
+                "chapters_total": len(lastenheft.chapters),
+                "chapters_completed": len(lastenheft.chapters),
                 "assets": len(lastenheft.asset_manifest),
             }
 

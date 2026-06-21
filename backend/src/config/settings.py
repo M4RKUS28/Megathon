@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # (it returns the project source files). Falls back to the template build.
     course_build_use_devin: bool = False
 
+    # Script-writer: generate chapters in parallel (one Gemini call per chapter).
+    spec_parallel_chapters: bool = True
+
     # Google Gemini (agentic planner / script-writer pipeline + media)
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
