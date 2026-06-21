@@ -316,6 +316,10 @@ const BUSY_MESSAGES: Record<string, string> = {
   building: "Building the per-course application and publishing it…",
 };
 
+function devinUrlFromId(sessionId?: string | null) {
+  return sessionId ? `https://app.devin.ai/sessions/${sessionId}` : null;
+}
+
 export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -324,7 +328,6 @@ export function CourseDetailPage() {
 
   const { data: course } = useCourse(id, true);
   const poll = course ? BUSY_STATUSES.has(course.status) : true;
-  useCourse(id, poll); // keep polling cadence while busy
   const { data: jobs } = useCourseJobs(id, poll);
   const { data: edits } = useCourseEdits(id, true);
 
@@ -385,9 +388,14 @@ export function CourseDetailPage() {
 
   const isReady = course.status === "ready" || course.status === "published";
   const isBusy = BUSY_STATUSES.has(course.status);
-  const latestDevinJob = jobs?.find((j) => j.devin_session_url);
-  const devinSessionUrl = course.devin_session_url ?? latestDevinJob?.devin_session_url ?? null;
-  const devinSessionId = course.devin_session_id ?? latestDevinJob?.devin_session_id ?? null;
+  const activeBuildJob = jobs?.find((j) => j.type === "build" && j.status === "running");
+  const latestDevinJob = jobs?.find((j) => j.devin_session_id || j.devin_session_url);
+  const devinJob = activeBuildJob ?? latestDevinJob;
+  const devinSessionId = course.devin_session_id ?? devinJob?.devin_session_id ?? null;
+  const devinSessionUrl =
+    course.devin_session_url ??
+    devinJob?.devin_session_url ??
+    devinUrlFromId(devinSessionId);
 
   return (
     <div className="space-y-8">

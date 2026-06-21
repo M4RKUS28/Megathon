@@ -1,5 +1,5 @@
 ﻿import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
   ArcElement,
@@ -225,7 +225,155 @@ function personaOf(turn: ConversationTurn, personas: Persona[]): Persona {
   );
 }
 
+// --- Dialogue Graph types (real shape for conversation/dialogue blocks) ---
+
+interface DialogueChoice {
+  text: string;
+  next_node: string | null;
+}
+
+interface DialogueNode {
+  id: string;
+  text: string;
+  choices?: DialogueChoice[];
+}
+
+interface DialogueGraphData {
+  speaker?: string;
+  dialogue_nodes: DialogueNode[];
+}
+
+function isDialogueGraph(d: Record<string, unknown>): boolean {
+  return Array.isArray(d.dialogue_nodes);
+}
+
+function DialogueGraph({ data }: { data: Record<string, unknown> }) {
+  const reduced = useReducedMotion();
+  const raw = data as unknown as DialogueGraphData;
+  const nodes = raw.dialogue_nodes;
+  const speakerName = typeof raw.speaker === "string" ? raw.speaker : "Speaker";
+  const nodeMap = useMemo(() => {
+    const m = new Map<string, DialogueNode>();
+    for (const n of nodes) m.set(n.id, n);
+    return m;
+  }, [nodes]);
+
+  const firstNode = nodes[0];
+  const [transcript, setTranscript] = useState<{ role: "speaker" | "learner"; text: string }[]>(
+    firstNode ? [{ role: "speaker", text: firstNode.text }] : [],
+  );
+  const [currentNodeId, setCurrentNodeId] = useState<string | null>(firstNode?.id ?? null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const currentNode = currentNodeId ? nodeMap.get(currentNodeId) : undefined;
+  const choices = currentNode?.choices ?? [];
+  const isTerminal = !currentNode || choices.length === 0;
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+  }, [transcript.length, reduced]);
+
+  const pickChoice = useCallback((choice: DialogueChoice) => {
+    setTranscript((prev) => [...prev, { role: "learner", text: choice.text }]);
+    if (choice.next_node && nodeMap.has(choice.next_node)) {
+      const nextNode = nodeMap.get(choice.next_node)!;
+      setCurrentNodeId(choice.next_node);
+      setTranscript((prev) => [...prev, { role: "speaker", text: nextNode.text }]);
+    } else {
+      setCurrentNodeId(null);
+    }
+  }, [nodeMap]);
+
+  const restart = useCallback(() => {
+    setTranscript(firstNode ? [{ role: "speaker", text: firstNode.text }] : []);
+    setCurrentNodeId(firstNode?.id ?? null);
+  }, [firstNode]);
+
+  if (!nodes.length) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+        No dialogue available.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white" role="region" aria-label="Interactive dialogue">
+      <div className="border-b border-black/5 px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Dialogue</span>
+        <div className="text-sm font-semibold text-gray-700">{speakerName}</div>
+      </div>
+
+      <div className="max-h-[400px] overflow-y-auto p-4">
+        <div className="space-y-2.5" role="log" aria-label="Conversation transcript" aria-live="polite">
+          {transcript.map((entry, i) => {
+            const isLearner = entry.role === "learner";
+            return (
+              <motion.div
+                key={i}
+                initial={reduced ? { opacity: 1 } : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${isLearner ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
+                    isLearner
+                      ? "bg-[var(--brand)] text-white"
+                      : "border border-black/5 bg-white"
+                  }`}
+                >
+                  <div className={`mb-0.5 text-[11px] font-semibold ${isLearner ? "text-white/85" : "opacity-70"}`}>
+                    {isLearner ? "You" : speakerName}
+                  </div>
+                  <div>{entry.text}</div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Choice buttons */}
+        {!isTerminal && choices.length > 0 ? (
+          <div className="mt-3 space-y-1.5">
+            {choices.map((choice, ci) => (
+              <button
+                key={ci}
+                type="button"
+                onClick={() => pickChoice(choice)}
+                className="block w-full rounded-xl border border-[var(--brand)]/30 bg-[var(--brand)]/5 px-3 py-2 text-left text-sm font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              >
+                {choice.text}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="flex items-center justify-between border-t border-black/5 px-4 py-3">
+        <span className="text-xs text-gray-400">
+          {isTerminal && transcript.length > 0 ? "Conversation complete" : `${transcript.length} messages`}
+        </span>
+        <button
+          type="button"
+          onClick={restart}
+          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+        >
+          Restart
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Conversation({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
+  // Real shape: dialogue_nodes graph
+  if (data && isDialogueGraph(data)) {
+    return <DialogueGraph data={data} />;
+  }
+
+  // Legacy shape: linear turns + personas
   const { personas, turns } = useMemo(() => normalizeConversation(data), [data]);
   const [shown, setShown] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -250,7 +398,6 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
     [resolve],
   );
 
-  // Auto-play the most recently revealed bubble.
   useEffect(() => {
     if (!turns.length) return;
     const turn = turns[shown - 1];
@@ -264,7 +411,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   const advance = () => setShown((s) => Math.min(s + 1, turns.length));
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4">
+    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4" role="region" aria-label="Conversation">
       <audio
         ref={audioRef}
         className="hidden"
@@ -284,7 +431,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
         <PersonaStage persona={right} active={right === active} resolve={resolve} />
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-2.5" role="log" aria-label="Conversation transcript" aria-live="polite">
         {turns.slice(0, shown).map((t, i) => {
           const p = personaOf(t, personas);
           const mine = p?.side === "right";
@@ -308,18 +455,21 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
                   }`}
                 >
                   {p?.name}
-                  {p?.role ? <span className="font-normal opacity-70">Â· {p.role}</span> : null}
+                  {p?.role ? <span className="font-normal opacity-70">{String.fromCharCode(183)} {p.role}</span> : null}
                 </div>
                 <div>{t.text}</div>
                 {t.audio ? (
                   <button
                     type="button"
                     onClick={() => play(t.audio, t.text)}
-                    className={`mt-1 inline-flex items-center gap-1 text-[11px] ${
+                    className={`mt-1 inline-flex items-center gap-1 text-[11px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
                       mine ? "text-white/85" : "text-[var(--brand)]"
                     }`}
                   >
-                    <span aria-hidden="true">ðŸ”Š</span> Replay
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.49 4.49 0 002.5-3.5z"/>
+                    </svg>
+                    Replay
                   </button>
                 ) : null}
               </div>
@@ -336,23 +486,24 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
           <button
             type="button"
             onClick={() => setShown(1)}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           >
-            â†» Replay conversation
+            Replay conversation
           </button>
         ) : (
           <button
             type="button"
             onClick={advance}
-            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white"
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Next â–¶
+            Next
           </button>
         )}
       </div>
     </div>
   );
 }
+
 
 function shuffle<T>(items: T[]): T[] {
   return [...items]
@@ -794,6 +945,55 @@ function Flashcards({ data }: { data?: Record<string, unknown> }) {
   );
 }
 
+// --- DragDrop types ---
+
+interface DragDropItemReal {
+  id: string;
+  text: string;
+  category: string;
+}
+
+interface DragDropCategoryReal {
+  id: string;
+  title: string;
+}
+
+interface DragDropNormalized {
+  prompt?: string;
+  items: { id: string; text: string; correctBin: string }[];
+  bins: { id: string; title: string }[];
+}
+
+function normalizeDragDropData(data?: Record<string, unknown>): DragDropNormalized {
+  if (!data) return { items: [], bins: [] };
+  // Real shape: { items, categories }
+  if (Array.isArray(data.items) && Array.isArray(data.categories)) {
+    const rawItems = data.items as DragDropItemReal[];
+    const rawCats = data.categories as DragDropCategoryReal[];
+    return {
+      prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+      items: rawItems.map((it, i) => ({
+        id: it.id ?? `item-${i}`,
+        text: it.text,
+        correctBin: it.category,
+      })),
+      bins: rawCats.map((c) => ({ id: c.id, title: c.title })),
+    };
+  }
+  // Legacy shape: { prompt, pairs: [{ left, right }] }
+  const pairs = (data.pairs as { left: string; right: string }[]) ?? [];
+  const uniqueRights = Array.from(new Set(pairs.map((p) => p.right)));
+  return {
+    prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+    items: pairs.map((p, i) => ({
+      id: `item-${i}`,
+      text: p.left,
+      correctBin: p.right,
+    })),
+    bins: uniqueRights.map((r) => ({ id: r, title: r })),
+  };
+}
+
 function DragDrop({ data }: { data?: Record<string, unknown> }) {
   const pairs = (data?.pairs as { left: string; right: string }[]) ?? [];
   const rights = useMemo(() => pairs.map((p) => p.right).sort(), [pairs]);
@@ -908,69 +1108,57 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
   );
 }
 
-function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
-  const spots = (data?.spots as { x: number; y: number; label: string }[]) ?? [];
-  const [active, setActive] = useState<number | null>(null);
-  const img = resolve(data?.asset as string | undefined);
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-black/5 bg-white">
-      {img ? <img src={img} alt="" className="w-full" /> : <div className="h-48 bg-gray-100" />}
-      {spots.map((s, i) => (
-        <button
-          key={i}
-          onClick={() => setActive(active === i ? null : i)}
-          style={{ left: `${s.x}%`, top: `${s.y}%` }}
-          className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--brand)] text-xs font-bold text-white shadow"
-        >
-          {i + 1}
-        </button>
-      ))}
-      {active !== null && spots[active] ? (
-        <div className="border-t border-black/5 bg-gray-50 p-3 text-sm">{spots[active].label}</div>
-      ) : null}
-    </div>
-  );
+
+// --- Scenario types ---
+
+interface ScenarioOption {
+  text: string;
+  feedback: string;
+  next_step?: string | null;
+  correct?: boolean;
 }
 
-function Timeline({ data }: { data?: Record<string, unknown> }) {
-  const items = (data?.events as { date: string; text: string }[]) ?? [];
-  return (
-    <ol className="relative space-y-4 border-l-2 border-[var(--brand)]/30 pl-5">
-      {items.map((it, i) => (
-        <motion.li
-          key={i}
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          className="relative"
-        >
-          <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full bg-[var(--brand)]" />
-          <div className="text-xs font-semibold text-[var(--brand)]">{it.date}</div>
-          <div className="text-sm">{it.text}</div>
-        </motion.li>
-      ))}
-    </ol>
-  );
+interface ScenarioStep {
+  id: string;
+  question: string;
+  options: ScenarioOption[];
 }
 
-function Accordion({ data }: { data?: Record<string, unknown> }) {
-  const items = (data?.items as { title: string; body: string }[]) ?? [];
-  const [open, setOpen] = useState<number | null>(0);
-  return (
-    <div className="divide-y divide-black/5 overflow-hidden rounded-xl border border-black/5 bg-white">
-      {items.map((it, i) => (
-        <div key={i}>
-          <button
-            onClick={() => setOpen(open === i ? null : i)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium"
-          >
-            {it.title}
-            <span>{open === i ? "âˆ’" : "+"}</span>
-          </button>
-          {open === i ? <div className="px-4 pb-4 text-sm text-gray-600">{it.body}</div> : null}
-        </div>
-      ))}
-    </div>
-  );
+interface ScenarioNormalized {
+  prompt?: string;
+  steps: ScenarioStep[];
+}
+
+function normalizeScenarioData(data?: Record<string, unknown>): ScenarioNormalized {
+  if (!data) return { steps: [] };
+  // Real shape: { steps: [{ id, question, options: [{ text, feedback, next_step }] }] }
+  if (Array.isArray(data.steps)) {
+    const steps = (data.steps as { id?: string; question?: string; options?: { text: string; feedback?: string; next_step?: string | null; correct?: boolean }[] }[]).map(
+      (s, i) => ({
+        id: typeof s.id === "string" ? s.id : `step-${i}`,
+        question: typeof s.question === "string" ? s.question : `Decision ${i + 1}`,
+        options: (s.options ?? []).map((o) => ({
+          text: o.text,
+          feedback: typeof o.feedback === "string" ? o.feedback : "",
+          next_step: o.next_step ?? null,
+          correct: typeof o.correct === "boolean" ? o.correct : undefined,
+        })),
+      }),
+    );
+    return { prompt: typeof data.prompt === "string" ? data.prompt : undefined, steps };
+  }
+  // Legacy shape: { prompt, branches: [{ choice, outcome }] }
+  const branches = (data.branches as { choice: string; outcome: string }[]) ?? [];
+  const singleStep: ScenarioStep = {
+    id: "step-0",
+    question: typeof data.prompt === "string" ? data.prompt : "Make your choice:",
+    options: branches.map((b) => ({
+      text: b.choice,
+      feedback: b.outcome,
+      next_step: null,
+    })),
+  };
+  return { prompt: undefined, steps: branches.length ? [singleStep] : [] };
 }
 
 function Scenario({ data }: { data?: Record<string, unknown> }) {
@@ -997,7 +1185,29 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
           </button>
         ))}
       </div>
-      {picked !== null && branches[picked] ? (
+    );
+  }
+
+  const totalSteps = steps.length;
+  const completedSteps = history.length;
+  const correctCount = history.filter((h) => h.option.correct === true).length;
+  const hasCorrectness = history.some((h) => h.option.correct !== undefined);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Decision scenario">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Scenario</div>
+          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+        </div>
+        <span className="text-xs text-gray-400">
+          Step {Math.min(completedSteps + 1, totalSteps)}/{totalSteps}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-gray-100">
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}

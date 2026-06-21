@@ -306,13 +306,29 @@ async def process_build_job(job_id: str) -> None:
             # (optional; falls back to the template build inside the builder).
             from src.services.generation.devin_codegen import generate_course_app
 
-            async def _on_devin_session(session_id: str) -> None:
+            async def _on_devin_session(created: dict) -> None:
                 # Persist + commit the moment the session exists so the UI can
                 # show a live link to it while Devin is still building.
+                session_id = created.get("session_id")
+                if not session_id:
+                    logger.warning("Devin create-session response missing session_id: %s", created)
+                    return
+                session_url = created.get("url")
                 course.devin_session_id = session_id
                 job.devin_session_id = session_id
+                job.result = {
+                    **(job.result or {}),
+                    "devin_session_id": session_id,
+                    "devin_session_url": session_url,
+                    "devin_status": created.get("status"),
+                }
                 await db.commit()
-                logger.info("devin session %s started for course %s", session_id, course.id)
+                logger.info(
+                    "devin session %s started for course %s (%s)",
+                    session_id,
+                    course.id,
+                    session_url,
+                )
 
             devin_session_id, source_files = await generate_course_app(
                 course.spec, asset_map, on_session=_on_devin_session
@@ -342,6 +358,8 @@ async def process_build_job(job_id: str) -> None:
                 "built": hosting["built"],
                 "course_url": hosting["course_url"],
                 "iframe_url": hosting["iframe_url"],
+                "devin_session_id": devin_session_id,
+                "devin_session_url": (job.result or {}).get("devin_session_url"),
             }
             await db.commit()
             logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])
