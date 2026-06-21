@@ -27,6 +27,7 @@ import {
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
+import { PipelineMonitor } from "@/components/PipelineMonitor";
 import type { CoursePlan, PlanChapter } from "@/lib/api";
 
 let _cid = 0;
@@ -415,6 +416,8 @@ export function CourseDetailPage() {
       </div>
 
       {isBusy ? (
+        <>
+        <PipelineMonitor courseId={course.id} />
         <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -442,6 +445,7 @@ export function CourseDetailPage() {
             </p>
           ) : null}
         </div>
+        </>
       ) : null}
 
       {course.status === "failed" ? (
@@ -454,6 +458,9 @@ export function CourseDetailPage() {
       {course.status === "plan_review" && course.plan ? (
         <PlanReview plan={course.plan} courseId={course.id} />
       ) : null}
+
+      {/* Pipeline completed summary */}
+      {isReady ? <PipelineMonitor courseId={course.id} /> : null}
 
       {/* Built course preview + edit-loop */}
       {isReady && course.host_url ? (
