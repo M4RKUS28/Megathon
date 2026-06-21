@@ -1,12 +1,13 @@
 # Coursive
 
 -----DEMO LINK-----
+http://49.12.110.247
 
 **Coursive** is a white-label platform that turns a short course brief into a fully
 interactive, hosted e-learning course using a multi-agent generation pipeline, and then
 delivers it to learners as an LMS (assignments, progress tracking, quizzes, reporting).
 
-A course creator describes what they want → an agentic pipeline plans the course, writes a
+A user describes what they want → an agentic pipeline plans the course, writes a
 detailed spec (*Lastenheft*), fetches/generates media assets, builds a per-course web app and
 hosts it → managers assign it to employees → learners take it chapter-by-chapter with
 end-of-chapter quiz gates → managers see progress and compliance reporting.
@@ -296,51 +297,8 @@ each provider degrades to a deterministic fallback when unset.
 - LMS: assignment, learner player with progress/quiz tracking, manager reporting, SCORM/xAPI export.
 - Multi-tenant white-label (company branding, primary color, style guide).
 
-### 🟡 Implemented but not yet verified live (no keys in CI/session)
-
-- **Cala MCP** knowledge client (real MCP handshake) — runs on placeholder until `CALA_MCP_URL` set.
-- **PixVerse** image/video — falls back to SVG until `PIXVERSE_API_KEY` set; endpoint paths may
-  need adjustment per plan.
-- **Devin per-course code-gen** — gated behind `COURSE_BUILD_USE_DEVIN`; template build used otherwise.
-
 ### ❌ Not yet implemented
 
-- Real Google Search / Unsplash / Pexels stock-image fetch (manifest entries currently route to
-  generative providers or placeholders).
-- Resource-fetch agents are sequential helpers, not the described **parallel** multi-agent fetch.
 - Asset validator stage (dimension/format validation before publish).
 - SCORM/xAPI: export helpers exist, but no LRS ingestion / webhook delivery.
 - Quiz analytics beyond pass/score (drop-off points, engagement score, certificates) are partial.
-
----
-
-## Roadmap / TODO
-
-1. Wire and live-verify Cala MCP, PixVerse, and Devin code-gen with real credentials.
-2. Add stock-image providers (Unsplash/Pexels/Google Images) and an asset validator stage.
-3. Parallelise the asset-fetch agents (true Phase 2.5 process-A concurrency).
-4. Richer learner analytics (engagement score, drop-off, certificates) + manager compliance views.
-5. LRS/webhook delivery for xAPI; SCORM package export (zip) for external LMS import.
-6. Auto-rebuild existing courses to upgrade their hosted renderer when the renderer changes.
-
----
-
-## Development
-
-```bash
-# Backend lint + tests
-cd backend && uv run ruff check . && uv run pytest
-
-# Frontend typecheck + build
-cd frontend && npm run build
-
-# Course renderer template
-cd course-app-template && npm run build
-```
-
-**Adding an API route:** model (`db/models/`) → register in `db/models/__init__.py` → CRUD
-(`db/crud/`) → service (`services/`) → schema (`api/v1/schemas/`) → endpoint
-(`api/v1/endpoints/`) registered in `api/v1/router.py` → migration
-(`uv run alembic revision --autogenerate -m "..."` then `upgrade head`).
-
-hi matthias here
