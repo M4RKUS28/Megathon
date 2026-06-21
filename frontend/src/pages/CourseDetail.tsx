@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   Check,
   ChevronDown,
   ChevronUp,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import {
   useAcceptEdit,
@@ -520,6 +522,28 @@ export function CourseDetailPage() {
                   Optionally select an element, then describe the change.
                 </p>
               )}
+
+              {/* Suggested prompt chips */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {[
+                  "Make it friendlier",
+                  "Add an example",
+                  "Simplify the language",
+                  "Add a quiz question",
+                  "Make it shorter",
+                  "Add compliance note",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setPrompt(chip)}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
               <form onSubmit={submitEdit} className="mt-3 space-y-2">
                 <textarea
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
@@ -527,10 +551,12 @@ export function CourseDetailPage() {
                   placeholder="e.g. Make chapter 1 friendlier and add an example"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
+                  minLength={3}
+                  maxLength={2000}
                 />
                 <button
                   type="submit"
-                  disabled={createEdit.isPending}
+                  disabled={createEdit.isPending || prompt.trim().length < 3}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
                   {createEdit.isPending ? (
@@ -547,8 +573,47 @@ export function CourseDetailPage() {
               <h3 className="text-sm font-semibold text-muted-foreground">Edit requests</h3>
               {edits?.map((ed) => (
                 <div key={ed.id} className="rounded-lg border border-border bg-card p-3 text-sm">
-                  <p className="font-medium">{ed.prompt}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium">{ed.prompt}</p>
+                    {ed.edit_tier ? (
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          ed.edit_tier === "simple"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-violet-50 text-violet-700 border border-violet-200"
+                        }`}
+                      >
+                        {ed.edit_tier === "simple" ? (
+                          <Zap className="h-3 w-3" />
+                        ) : (
+                          <Bot className="h-3 w-3" />
+                        )}
+                        {ed.edit_tier === "simple" ? "Quick edit" : "Deep edit with Devin"}
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">Status: {ed.status}</p>
+
+                  {/* Devin session link for complex edits */}
+                  {ed.devin_session_id && ed.devin_session_url ? (
+                    <a
+                      href={ed.devin_session_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline"
+                    >
+                      Watch Devin work
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : null}
+
+                  {/* Diff summary */}
+                  {ed.diff ? (
+                    <p className="mt-1.5 rounded-md bg-secondary/50 px-2 py-1 text-xs text-muted-foreground">
+                      {ed.diff.summary}
+                    </p>
+                  ) : null}
+
                   {ed.status === "preview_ready" ? (
                     <div className="mt-2 flex items-center gap-2">
                       {ed.preview_url ? (
