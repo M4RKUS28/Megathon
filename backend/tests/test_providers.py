@@ -128,14 +128,14 @@ def test_composite_falls_back_to_placeholder_svg():
     assert b"<svg" in content
 
 
-def test_composite_audio_and_video_fall_back():
+def test_composite_audio_and_video_raise_without_provider():
     provider = CompositeAssetProvider()
     video = AssetSpec(template_link="/resources/video/01", type="video", description="x")
-    _content, ext, _ctype = provider.produce(video, "#000000")
-    assert ext == "svg"  # visual placeholder when providers are unconfigured
+    with pytest.raises(RuntimeError, match="video provider|no video provider|pixverse"):
+        provider.produce(video, "#000000")
 
     audio = AssetSpec(template_link="/resources/audio/01", type="audio", description="x")
-    with pytest.raises(RuntimeError, match="audio provider|no audio provider"):
+    with pytest.raises(RuntimeError, match="audio provider|no audio provider|gemini-tts"):
         provider.produce(audio, "#000000")
 
 
@@ -163,11 +163,11 @@ def test_validate_files_rejects_path_traversal():
     assert out == {"package.json": "{}"}
 
 
-def test_devin_prompt_requires_chapter_subagents():
+def test_devin_prompt_requires_page_subagents():
     prompt = _build_prompt({"title": "t", "chapters": [{"title": "c"}]}, {})
     assert "Mandatory subagent workflow" in prompt
-    assert "use a separate subagent for EVERY chapter" in prompt
-    assert "Do not skip subagents for short or simple chapters" in prompt
+    assert "subagent for EVERY PAGE" in prompt
+    assert "Do not skip subagents" in prompt
 
 
 async def test_generate_course_app_disabled_returns_none():

@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 _IMAGE_TYPES = {"image", "diagram", "chart", "model"}
 _VIDEO_TYPES = {"video", "animation"}
 _AUDIO_TYPES = {"audio"}
+# Asset types that must NOT fall back to SVG placeholder (browser can't play them).
+_NO_PLACEHOLDER_TYPES = _VIDEO_TYPES | _AUDIO_TYPES
 
 
 def _image_provider() -> AssetProvider | None:
@@ -35,11 +37,11 @@ def _image_provider() -> AssetProvider | None:
         return NanoBananaImageProvider() if NanoBananaImageProvider.configured() else None
     if choice == "pixverse":
         return PixVerseProvider() if PixVerseProvider.configured() else None
-    # auto
-    if NanoBananaImageProvider.configured():
-        return NanoBananaImageProvider()
+    # auto — prefer PixVerse for richer image output when configured
     if PixVerseProvider.configured():
         return PixVerseProvider()
+    if NanoBananaImageProvider.configured():
+        return NanoBananaImageProvider()
     return None
 
 
@@ -89,9 +91,10 @@ class CompositeAssetProvider(AssetProvider):
             try:
                 return provider.produce(spec, primary_color)
             except Exception as exc:  # noqa: BLE001
-                if spec.type in _AUDIO_TYPES:
+                if spec.type in _NO_PLACEHOLDER_TYPES:
                     logger.warning(
-                        "audio provider %s failed for %s (%s); skipping audio asset",
+                        "%s provider %s failed for %s (%s); skipping (no SVG fallback)",
+                        spec.type,
                         type(provider).__name__,
                         spec.template_link,
                         exc,
@@ -103,8 +106,8 @@ class CompositeAssetProvider(AssetProvider):
                     spec.template_link,
                     exc,
                 )
-        if spec.type in _AUDIO_TYPES:
-            raise RuntimeError("no audio provider configured")
+        if spec.type in _NO_PLACEHOLDER_TYPES:
+            raise RuntimeError(f"no {spec.type} provider configured")
         return self.placeholder.produce(spec, primary_color)
 
 
