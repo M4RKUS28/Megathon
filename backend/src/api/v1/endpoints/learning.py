@@ -36,6 +36,7 @@ def _enrollment_response(e: Enrollment | None) -> EnrollmentResponse | None:
         status=e.status,
         progress_pct=e.progress_pct,
         current_chapter=e.current_chapter,
+        current_page=e.current_page,
         score=e.score,
         completed_at=e.completed_at,
     )

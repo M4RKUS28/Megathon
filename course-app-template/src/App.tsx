@@ -42,9 +42,21 @@ export function App() {
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       const d = e.data;
-      if (d && typeof d === "object" && d.type === "coursive:select-mode") {
+      if (!d || typeof d !== "object" || typeof d.type !== "string") return;
+
+      if (d.type === "coursive:select-mode") {
         setSelectMode(!!d.enabled);
         if (d.enabled) setPicked(null);
+      }
+
+      if (d.type === "coursive:init" && d.state) {
+        const ch = typeof d.state.current_chapter === "number" ? d.state.current_chapter : 0;
+        const pg = typeof d.state.current_page === "number" ? d.state.current_page : 0;
+        if (ch > 0 || pg > 0) {
+          setCurrent(ch);
+          setPageIdx(pg);
+          setUnlocked((u) => Math.max(u, ch + 1));
+        }
       }
     }
     window.addEventListener("message", onMessage);

@@ -29,6 +29,7 @@ export function CoursePlayerPage() {
               status: enrollment?.status ?? "not_started",
               progress_pct: enrollment?.progress_pct ?? 0,
               current_chapter: enrollment?.current_chapter ?? 0,
+              current_page: enrollment?.current_page ?? 0,
               score: enrollment?.score ?? null,
             },
           },
@@ -53,7 +54,7 @@ export function CoursePlayerPage() {
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrollment?.status, enrollment?.progress_pct, id]);
+  }, [enrollment?.status, enrollment?.progress_pct, enrollment?.current_chapter, enrollment?.current_page, id]);
 
   if (!course) {
     return (

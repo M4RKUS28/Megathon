@@ -275,6 +275,7 @@ export interface Enrollment {
   status: string;
   progress_pct: number;
   current_chapter: number | null;
+  current_page: number | null;
   score: number | null;
   completed_at: string | null;
 }

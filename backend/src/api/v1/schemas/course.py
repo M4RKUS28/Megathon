@@ -87,12 +87,12 @@ class EnrollmentResponse(BaseModel):
     status: str
     progress_pct: int
     current_chapter: int | None = None
+    current_page: int | None = None
     score: int | None = None
     completed_at: datetime | None = None
 
 
 class EnrollmentResponseFull(EnrollmentResponse):
-    current_page: int | None = None
     time_spent_seconds: int = 0
     quiz_attempts: int = 0
     engagement_score: int = 0
