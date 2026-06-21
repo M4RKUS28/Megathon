@@ -92,16 +92,49 @@ async def process_edit_job(job_id: str) -> None:
 
         company = await get_company(db, course.company_id)
         slug = company.slug if company else "tenant"
+        company_name = company.name if company else None
         target_text = payload.get("target_text")
 
+        # Extract context for the hybrid tiered editor.
+        plan = course.plan or {}
+        plan_summary = plan.get("description") or plan.get("title")
+        plan_audience = plan.get("audience")
+        plan_compliance = plan.get("compliance_requirements") or []
+
+        # Collect recent edit history for conversation threading.
+        from sqlalchemy import select as sa_select
+
+        prev_edits_result = await db.execute(
+            sa_select(EditRequest)
+            .where(EditRequest.course_id == course.id)
+            .where(EditRequest.id != edit.id)
+            .order_by(EditRequest.created_at.desc())
+            .limit(10)
+        )
+        edit_history = [
+            {"prompt": e.prompt, "status": e.status}
+            for e in prev_edits_result.scalars().all()
+        ]
+
         try:
-            # Phase-2-aware edit: rewrite the selected block (or the spec) and
-            # re-render a real preview reusing the course's existing assets.
             from src.services.agents.editor import generate_edited_spec
 
-            new_spec = await generate_edited_spec(
-                course.spec, edit.prompt, edit.target_selector, target_text
+            edit_result = await generate_edited_spec(
+                course.spec,
+                edit.prompt,
+                edit.target_selector,
+                target_text,
+                company_name=company_name,
+                plan_summary=plan_summary,
+                compliance_requirements=plan_compliance,
+                audience=plan_audience,
+                edit_history=edit_history or None,
             )
+            new_spec = edit_result.new_spec
+
+            if edit_result.devin_session_id:
+                edit.devin_session_id = edit_result.devin_session_id
+
             preview = publish_built_course(
                 slug,
                 f"{course.id}/preview/{edit.id}",
@@ -112,9 +145,29 @@ async def process_edit_job(job_id: str) -> None:
             edit.preview_object_prefix = preview["prefix"]
             edit.status = "preview_ready"
             job.status = JOB_SUCCEEDED
+
+            diff_data = None
+            if edit_result.diff:
+                diff_data = {
+                    "summary": edit_result.diff.summary,
+                    "blocks": [
+                        {
+                            "location": f"{d.chapter}.{d.page}.{d.block}",
+                            "action": d.action,
+                            "old_type": d.old_type,
+                            "new_type": d.new_type,
+                        }
+                        for d in edit_result.diff.changed
+                    ],
+                }
+
             job.result = {
                 "spec": new_spec,
                 "preview_index_url": preview["course_url"],
+                "edit_tier": edit_result.edit_tier,
+                "diff": diff_data,
+                "validation_warnings": edit_result.validation_warnings,
+                "devin_session_id": edit_result.devin_session_id,
             }
             await db.commit()
         except Exception as exc:  # noqa: BLE001
