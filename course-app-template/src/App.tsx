@@ -99,7 +99,7 @@ export function App() {
       <div className="grid h-full place-items-center p-8 text-center">
         <div>
           <h1 className="text-xl font-bold">Course unavailable</h1>
-          <p className="mt-2 text-sm text-gray-500">It is still being prepared. ({error})</p>
+          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">It is still being prepared. ({error})</p>
         </div>
       </div>
     );
@@ -151,10 +151,10 @@ export function App() {
       <aside className="hidden w-64 shrink-0 md:block">
         <div className="sticky top-6 space-y-4">
           <div>
-            <div className="text-sm font-semibold">{course.companyName ?? "Course"}</div>
-            <div className="text-[11px] uppercase tracking-wide text-gray-400">Coursive</div>
+            <div className="text-sm font-semibold text-[hsl(var(--sidebar-foreground))]">{course.companyName ?? "Course"}</div>
+            <div className="text-[11px] uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Coursive</div>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
+          <div className="h-1.5 overflow-hidden rounded-full bg-[hsl(var(--secondary))]">
             <div
               className="h-full rounded-full bg-[var(--brand)] transition-all"
               style={{ width: `${progressPct}%` }}
@@ -168,13 +168,13 @@ export function App() {
                   key={ch.id}
                   disabled={locked}
                   onClick={() => goChapter(i)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${
-                    i === current ? "bg-[var(--brand)]/10 font-medium" : "hover:bg-black/5"
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[hsl(var(--sidebar-foreground))] ${
+                    i === current ? "bg-[var(--brand)]/10 font-medium" : "hover:bg-[hsl(var(--muted))]"
                   } ${locked ? "opacity-40" : ""}`}
                 >
                   <span
                     className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${
-                      passed.has(i) ? "bg-emerald-500 text-white" : "bg-gray-200"
+                      passed.has(i) ? "bg-emerald-500 text-white" : "bg-[hsl(var(--secondary))]"
                     }`}
                   >
                     {passed.has(i) ? "✓" : locked ? "🔒" : i + 1}
@@ -189,13 +189,13 @@ export function App() {
 
       <main className="min-w-0 flex-1">
         {allDone ? (
-          <div className="grid h-full place-items-center rounded-2xl border border-black/5 bg-white p-10 text-center">
+          <div className="grid h-full place-items-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-10 text-center shadow-[var(--shadow-neu)]">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">
                 Complete
               </p>
               <h1 className="mt-1 text-2xl font-bold">{course.title}</h1>
-              <p className="mt-2 text-gray-500">
+              <p className="mt-2 text-[hsl(var(--muted-foreground))]">
                 You passed every chapter. Average score:{" "}
                 <strong>
                   {Math.round(
@@ -226,21 +226,21 @@ export function App() {
                 Chapter {current + 1} of {total}
               </p>
               <h1 className="mt-1 text-2xl font-bold">{chapter.title}</h1>
-              {chapter.objective ? <p className="mt-1 text-gray-500">{chapter.objective}</p> : null}
+              {chapter.objective ? <p className="mt-1 text-[hsl(var(--muted-foreground))]">{chapter.objective}</p> : null}
               <div className="mt-3 flex items-center gap-1.5">
                 {pages.map((p, pi) => (
                   <span
                     key={p.id}
                     className={`h-1.5 flex-1 rounded-full ${
-                      pi < pageIdx ? "bg-[var(--brand)]" : pi === pageIdx ? "bg-[var(--brand)]/60" : "bg-gray-200"
+                      pi < pageIdx ? "bg-[var(--brand)]" : pi === pageIdx ? "bg-[var(--brand)]/60" : "bg-[hsl(var(--secondary))]"
                     }`}
                   />
                 ))}
                 <span
-                  className={`h-1.5 flex-1 rounded-full ${onQuiz ? "bg-[var(--brand)]/60" : "bg-gray-200"}`}
+                  className={`h-1.5 flex-1 rounded-full ${onQuiz ? "bg-[var(--brand)]/60" : "bg-[hsl(var(--secondary))]"}`}
                 />
               </div>
-              <p className="mt-1.5 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-[hsl(var(--muted-foreground))]">
                 {onQuiz
                   ? "Knowledge check"
                   : `Page ${pageIdx + 1} of ${pages.length}${page?.title ? ` — ${page.title}` : ""}`}
@@ -278,7 +278,7 @@ export function App() {
               <button
                 disabled={current === 0 && pageIdx === 0}
                 onClick={goPrev}
-                className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium disabled:opacity-40"
+                className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] disabled:opacity-40"
               >
                 Back
               </button>

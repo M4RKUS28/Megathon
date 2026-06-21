@@ -4,6 +4,28 @@
 
 :root {
   --brand: #5145e5;
+  --background: 232 30% 8%;
+  --foreground: 220 20% 95%;
+  --card: 232 25% 12%;
+  --card-foreground: 220 20% 95%;
+  --primary: 217 90% 55%;
+  --primary-foreground: 220 20% 98%;
+  --secondary: 232 20% 18%;
+  --secondary-foreground: 220 20% 85%;
+  --muted: 232 20% 16%;
+  --muted-foreground: 220 12% 55%;
+  --accent: 217 80% 48%;
+  --accent-foreground: 220 20% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 232 18% 20%;
+  --radius: 1rem;
+  --shadow-neu-sm: 3px 3px 6px rgba(0,0,0,0.35), -2px -2px 5px rgba(255,255,255,0.04);
+  --shadow-neu: 6px 6px 14px rgba(0,0,0,0.45), -4px -4px 10px rgba(255,255,255,0.04);
+  --shadow-neu-lg: 10px 10px 20px rgba(0,0,0,0.5), -6px -6px 14px rgba(255,255,255,0.04);
+  --shadow-neu-inset: inset 3px 3px 6px rgba(0,0,0,0.35), inset -2px -2px 5px rgba(255,255,255,0.04);
+  --sidebar: 232 28% 10%;
+  --sidebar-foreground: 220 20% 85%;
 }
 
 html,
@@ -15,6 +37,6 @@ body,
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: #f6f7fb;
-  color: #111827;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }

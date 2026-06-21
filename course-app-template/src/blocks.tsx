@@ -59,7 +59,7 @@ function MediaImage({ src, alt }: { src?: string; alt?: string }) {
       animate={{ opacity: 1, y: 0 }}
       src={src}
       alt={alt ?? ""}
-      className="w-full rounded-xl border border-black/5 shadow-sm"
+      className="w-full rounded-xl border border-[hsl(var(--border))] shadow-[var(--shadow-neu-sm)]"
     />
   );
 }
@@ -138,7 +138,7 @@ function Avatar({ seed, size = 56 }: { seed: string; size?: number }) {
         </clipPath>
       </defs>
       <g clipPath={`url(#${clip})`}>
-        <rect width="100" height="100" fill="#eef2f7" />
+        <rect width="100" height="100" fill="hsl(232, 25%, 12%)" />
         <path d="M12,100 Q14,68 50,68 Q86,68 88,100 Z" fill={shirt} />
         <rect x="44" y="56" width="12" height="14" rx="5" fill={skin} />
         <circle cx="50" cy="40" r="22" fill={skin} />
@@ -204,7 +204,7 @@ function PersonaStage({
         <PersonaAvatar persona={persona} size={64} resolve={resolve} />
       </motion.div>
       <div className="mt-1.5 text-xs font-semibold">{persona?.name}</div>
-      {persona?.role ? <div className="text-[10px] text-gray-400">{persona.role}</div> : null}
+      {persona?.role ? <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{persona.role}</div> : null}
     </div>
   );
 }
@@ -303,17 +303,17 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
 
   if (!nodes.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No dialogue available.
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white" role="region" aria-label="Interactive dialogue">
-      <div className="border-b border-black/5 px-4 py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Dialogue</span>
-        <div className="text-sm font-semibold text-gray-700">{speakerName}</div>
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive dialogue">
+      <div className="border-b border-[hsl(var(--border))] px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Dialogue</span>
+        <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{speakerName}</div>
       </div>
 
       <div className="max-h-[400px] overflow-y-auto p-4">
@@ -331,7 +331,7 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
                   className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
                     isLearner
                       ? "bg-[var(--brand)] text-white"
-                      : "border border-black/5 bg-white"
+                      : "border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
                   }`}
                 >
                   <div className={`mb-0.5 text-[11px] font-semibold ${isLearner ? "text-white/85" : "opacity-70"}`}>
@@ -363,14 +363,14 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex items-center justify-between border-t border-black/5 px-4 py-3">
-        <span className="text-xs text-gray-400">
+      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-4 py-3">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           {isTerminal && transcript.length > 0 ? "Conversation complete" : `${transcript.length} messages`}
         </span>
         <button
           type="button"
           onClick={restart}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           Restart
         </button>
@@ -423,7 +423,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   const advance = () => setShown((s) => Math.min(s + 1, turns.length));
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4" role="region" aria-label="Conversation">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" role="region" aria-label="Conversation">
       <audio
         ref={audioRef}
         className="hidden"
@@ -437,7 +437,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
       />
       <div className="mb-4 flex items-end justify-between gap-2">
         <PersonaStage persona={left} active={left === active} resolve={resolve} />
-        <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           Conversation
         </span>
         <PersonaStage persona={right} active={right === active} resolve={resolve} />
@@ -458,7 +458,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
               <PersonaAvatar persona={p} size={30} resolve={resolve} />
               <div
                 className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
-                  mine ? "bg-[var(--brand)] text-white" : "border border-black/5 bg-white"
+                  mine ? "bg-[var(--brand)] text-white" : "border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
                 } ${isLast ? "ring-2 ring-[var(--brand)]/30" : ""}`}
               >
                 <div
@@ -491,14 +491,14 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           {Math.min(shown, turns.length)} / {turns.length}
         </span>
         {done ? (
           <button
             type="button"
             onClick={() => setShown(1)}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           >
             Replay conversation
           </button>
@@ -541,18 +541,18 @@ function GameShell({
 }) {
   const pct = total ? Math.round((score / total) * 100) : 0;
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-      <div className="border-b border-black/5 bg-[var(--brand)]/5 p-4">
+    <div className="overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-neu-sm)]">
+      <div className="border-b border-[hsl(var(--border))] bg-[var(--brand)]/5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">
               Minigame
             </div>
-            <h4 className="mt-0.5 text-base font-bold text-gray-900">{title}</h4>
-            {prompt ? <p className="mt-1 text-sm text-gray-600">{prompt}</p> : null}
+            <h4 className="mt-0.5 text-base font-bold text-[hsl(var(--foreground))]">{title}</h4>
+            {prompt ? <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
           </div>
-          <div className="rounded-xl border border-black/5 bg-white px-3 py-2 text-right shadow-sm">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-right shadow-[var(--shadow-neu-sm)]">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
               Score
             </div>
             <div className="text-lg font-bold text-[var(--brand)]">
@@ -560,7 +560,7 @@ function GameShell({
             </div>
           </div>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10">
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[hsl(var(--secondary))]">
           <motion.div
             animate={{ width: `${pct}%` }}
             className="h-full rounded-full bg-[var(--brand)]"
@@ -568,11 +568,11 @@ function GameShell({
         </div>
       </div>
       <div className="p-4">{children}</div>
-      <div className="flex justify-end border-t border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex justify-end border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <button
           type="button"
           onClick={onReset}
-          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium"
+          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))]"
         >
           Replay
         </button>
@@ -602,8 +602,8 @@ function QuizMinigame({ data }: { data: MinigameData }) {
           const picked = answers[qi];
           const answered = picked !== undefined;
           return (
-            <div key={qi} className="rounded-xl border border-black/5 bg-gray-50 p-3">
-              <div className="text-sm font-semibold text-gray-900">{q.question}</div>
+            <div key={qi} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{q.question}</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {q.options.map((option, oi) => {
                   const correct = oi === q.answerIndex;
@@ -615,10 +615,10 @@ function QuizMinigame({ data }: { data: MinigameData }) {
                       onClick={() => setAnswers((s) => ({ ...s, [qi]: oi }))}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
                         answered && correct
-                          ? "border-emerald-500 bg-emerald-50"
+                          ? "border-emerald-500 bg-emerald-500/10"
                           : active
-                            ? "border-red-400 bg-red-50"
-                            : "border-black/10 bg-white hover:border-[var(--brand)]"
+                            ? "border-red-400 bg-red-400/10"
+                            : "border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[var(--brand)]"
                       }`}
                     >
                       <span className="mr-2 font-bold">
@@ -633,7 +633,7 @@ function QuizMinigame({ data }: { data: MinigameData }) {
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 rounded-lg bg-white p-2 text-xs text-gray-600"
+                  className="mt-3 rounded-lg bg-[hsl(var(--card))] p-2 text-xs text-[hsl(var(--muted-foreground))]"
                 >
                   {q.explanation}
                 </motion.div>
@@ -677,24 +677,24 @@ function OrderMinigame({ data }: { data: MinigameData }) {
               layout
               key={step}
               className={`flex items-center gap-2 rounded-xl border p-2 ${
-                correct ? "border-emerald-500 bg-emerald-50" : "border-black/10 bg-gray-50"
+                correct ? "border-emerald-500 bg-emerald-500/10" : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--card))] text-sm font-bold">
                 {i + 1}
               </div>
               <div className="flex-1 text-sm">{step}</div>
               <button
                 type="button"
                 onClick={() => move(i, i - 1)}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))]"
               >
                 Up
               </button>
               <button
                 type="button"
                 onClick={() => move(i, i + 1)}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))]"
               >
                 Down
               </button>
@@ -733,16 +733,16 @@ function SortMinigame({ data }: { data: MinigameData }) {
               className={`rounded-xl border p-3 ${
                 picked
                   ? correct
-                    ? "border-emerald-500 bg-emerald-50"
-                    : "border-red-400 bg-red-50"
-                  : "border-black/10 bg-gray-50"
+                    ? "border-emerald-500 bg-emerald-500/10"
+                    : "border-red-400 bg-red-400/10"
+                  : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
               <div className="text-sm font-medium">{item.text}</div>
               <select
                 value={picked ?? ""}
                 onChange={(e) => setPicks((s) => ({ ...s, [i]: e.target.value }))}
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-sm"
+                className="mt-2 w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1.5 text-sm text-[hsl(var(--foreground))]"
               >
                 <option value="">Choose category</option>
                 {categories.map((category) => (
@@ -825,10 +825,10 @@ function MemoryMinigame({ data }: { data: MinigameData }) {
               onClick={() => flip(card)}
               className={`min-h-[82px] rounded-xl border p-3 text-sm font-medium transition ${
                 matched[card.pair]
-                  ? "border-emerald-500 bg-emerald-50"
+                  ? "border-emerald-500 bg-emerald-500/10"
                   : visible
                     ? "border-[var(--brand)] bg-[var(--brand)]/5"
-                    : "border-black/10 bg-gray-100"
+                    : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
               {visible ? card.text : "?"}
@@ -860,7 +860,7 @@ function Minigame({ data }: { data?: Record<string, unknown> }) {
           total={0}
           onReset={() => {}}
         >
-          <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+          <div className="rounded-xl bg-[hsl(var(--muted))] p-3 text-sm text-[hsl(var(--muted-foreground))]">
             Custom game: {game.game || "unknown"}
           </div>
         </GameShell>
@@ -1206,20 +1206,20 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
   const hasCorrectness = history.some((h) => h.option.correct !== undefined);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Decision scenario">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Decision scenario">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Scenario</div>
-          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+          {prompt ? <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           Step {Math.min(completedSteps + 1, totalSteps)}/{totalSteps}
         </span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-gray-100">
+      <div className="h-1 bg-[hsl(var(--secondary))]">
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1711,7 +1711,7 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
   if (!src && !block.text) return null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+    <div className="flex flex-col gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
           <span aria-hidden="true">AUDIO</span>
@@ -1721,7 +1721,7 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-black/10 bg-gray-50 text-xs font-bold text-gray-700"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-xs font-bold text-[hsl(var(--foreground))]"
             aria-label="Show spoken text"
             title="Show spoken text"
           >
@@ -1764,22 +1764,22 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"
+            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-[hsl(var(--card))] p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Spoken text"
           >
             <div className="flex items-start justify-between gap-3">
-              <h4 className="text-base font-bold text-gray-900">Spoken text</h4>
+              <h4 className="text-base font-bold text-[hsl(var(--foreground))]">Spoken text</h4>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-black/10 px-2 py-1 text-xs font-medium"
+                className="rounded-lg border border-[hsl(var(--border))] px-2 py-1 text-xs font-medium text-[hsl(var(--foreground))]"
               >
                 Close
               </button>
             </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[hsl(var(--foreground))]">
               {block.text}
             </p>
           </motion.div>
@@ -1817,7 +1817,7 @@ function StructuredValue({ value }: { value: unknown }) {
       <div className="space-y-2">
         {Object.entries(value as Record<string, unknown>).map(([key, item]) => (
           <div key={key}>
-            <span className="font-semibold text-gray-800">{labelize(key)}: </span>
+            <span className="font-semibold text-[hsl(var(--foreground))]">{labelize(key)}: </span>
             <StructuredValue value={item} />
           </div>
         ))}
@@ -1830,7 +1830,7 @@ function StructuredValue({ value }: { value: unknown }) {
 function StructuredData({ data }: { data?: Record<string, unknown> }) {
   if (!data || !Object.keys(data).length) return null;
   return (
-    <div className="rounded-xl border border-black/5 bg-gray-50 p-3 text-sm leading-relaxed text-gray-700">
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-sm leading-relaxed text-[hsl(var(--foreground))]">
       <StructuredValue value={data} />
     </div>
   );
@@ -1841,10 +1841,10 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     case "heading":
       return <h3 className="mt-2 text-xl font-bold">{block.text ? renderInlineMarkdown(block.text) : null}</h3>;
     case "paragraph":
-      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
+      return <p className="text-[15px] leading-relaxed text-[hsl(var(--foreground))]">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
     case "list":
       return (
-        <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
+        <ul className="list-disc space-y-1 pl-5 text-[15px] text-[hsl(var(--foreground))]">
           {(block.items ?? []).map((it, i) => (
             <li key={i}>{renderInlineMarkdown(it)}</li>
           ))}
@@ -1861,7 +1861,7 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     case "video": {
       const src = resolve(block.asset);
       return src ? (
-        <video controls className="w-full rounded-xl border border-black/5">
+        <video controls className="w-full rounded-xl border border-[hsl(var(--border))]">
           <source src={src} />
         </video>
       ) : null;
@@ -1906,10 +1906,10 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return (
         <div className="space-y-2">
           {block.text ? (
-            <p className="text-[15px] leading-relaxed text-gray-700">{renderInlineMarkdown(block.text)}</p>
+            <p className="text-[15px] leading-relaxed text-[hsl(var(--foreground))]">{renderInlineMarkdown(block.text)}</p>
           ) : null}
           {block.items && block.items.length ? (
-            <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
+            <ul className="list-disc space-y-1 pl-5 text-[15px] text-[hsl(var(--foreground))]">
               {block.items.map((it, i) => (
                 <li key={i}>{renderInlineMarkdown(it)}</li>
               ))}

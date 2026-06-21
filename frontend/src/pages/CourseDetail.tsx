@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   Check,
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  FileCode,
   Loader2,
   Maximize,
   Minimize,
@@ -14,6 +16,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import {
   useAcceptEdit,
@@ -147,7 +150,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
 
   return (
     <section className="space-y-5">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-300">
         <p className="font-semibold">Approval required</p>
         <p className="mt-1">
           Review the course plan below. Add, remove, reorder chapters or edit objectives and
@@ -156,10 +159,10 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card shadow-neu-sm p-4">
           <h3 className="text-sm font-semibold">Learning objectives</h3>
           <textarea
-            className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            className="mt-2 w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary"
             rows={4}
             value={draft.objectives.join("\n")}
             onChange={(e) =>
@@ -171,13 +174,13 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
           />
         </div>
         <div className="space-y-3">
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card shadow-neu-sm p-4">
             <h3 className="text-sm font-semibold">Estimated duration</h3>
             <div className="mt-2 flex items-center gap-2 text-sm">
               <input
                 type="number"
                 min={0}
-                className="w-24 rounded-lg border border-border bg-background px-3 py-1.5 outline-none focus:border-primary"
+                className="w-24 rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-1.5 outline-none focus:border-primary"
                 value={draft.estimated_minutes}
                 onChange={(e) => setTotalMinutes(Number(e.target.value) || 0)}
                 onBlur={redistributeMinutes}
@@ -189,7 +192,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
             </div>
           </div>
           {draft.compliance_requirements.length ? (
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card shadow-neu-sm p-4">
               <h3 className="text-sm font-semibold">Compliance requirements</h3>
               <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">
                 {draft.compliance_requirements.map((c, i) => (
@@ -213,19 +216,19 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
         </div>
         <ol className="space-y-3">
           {draft.chapters.map((ch, i) => (
-            <li key={ch.id} className="rounded-xl border border-border bg-card p-4">
+            <li key={ch.id} className="rounded-xl border border-border bg-card shadow-neu-sm p-4">
               <div className="flex items-start gap-3">
                 <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                   {i + 1}
                 </span>
                 <div className="flex-1 space-y-2">
                   <input
-                    className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
+                    className="w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-1.5 text-sm font-semibold outline-none focus:border-primary"
                     value={ch.title}
                     onChange={(e) => patchChapter(i, { title: e.target.value })}
                   />
                   <textarea
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                    className="w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary"
                     rows={2}
                     placeholder="Objective"
                     value={ch.objective}
@@ -235,7 +238,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
                     <label className="flex items-center gap-1">
                       Bloom:
                       <input
-                        className="w-28 rounded border border-border bg-background px-2 py-1"
+                        className="w-28 rounded border border-border bg-muted shadow-neu-inset px-2 py-1"
                         value={ch.bloom_level}
                         onChange={(e) => patchChapter(i, { bloom_level: e.target.value })}
                       />
@@ -245,7 +248,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
                       <input
                         type="number"
                         min={0}
-                        className="w-20 rounded border border-border bg-background px-2 py-1"
+                        className="w-20 rounded border border-border bg-muted shadow-neu-inset px-2 py-1"
                         value={ch.estimated_minutes}
                         onChange={(e) => setChapterMinutes(i, Number(e.target.value) || 0)}
                       />
@@ -269,7 +272,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
                   </button>
                   <button
                     onClick={() => remove(i)}
-                    className="rounded p-1 text-red-500 hover:bg-red-50"
+                    className="rounded p-1 text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -284,7 +287,7 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
         <button
           onClick={() => approve.mutate(draft)}
           disabled={approve.isPending || draft.chapters.length === 0}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-lg shadow-neu-sm bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {approve.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -308,18 +311,6 @@ const BUSY_STATUSES = new Set([
   "spec_ready",
   "building",
 ]);
-
-const BUSY_MESSAGES: Record<string, string> = {
-  draft: "Preparing the course…",
-  planning: "The planner agent is analyzing the brief and company knowledge…",
-  authoring: "The script writer is producing the Lastenheft…",
-  spec_ready: "Spec ready — fetching assets and building the course app…",
-  building: "Building the per-course application and publishing it…",
-};
-
-function devinUrlFromId(sessionId?: string | null) {
-  return sessionId ? `https://app.devin.ai/sessions/${sessionId}` : null;
-}
 
 export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -389,15 +380,6 @@ export function CourseDetailPage() {
 
   const isReady = course.status === "ready" || course.status === "published";
   const isBusy = BUSY_STATUSES.has(course.status);
-  const activeBuildJob = jobs?.find((j) => j.type === "build" && j.status === "running");
-  const latestDevinJob = jobs?.find((j) => j.devin_session_id || j.devin_session_url);
-  const devinJob = activeBuildJob ?? latestDevinJob;
-  const devinSessionId = course.devin_session_id ?? devinJob?.devin_session_id ?? null;
-  const devinSessionUrl =
-    course.devin_session_url ??
-    devinJob?.devin_session_url ??
-    devinUrlFromId(devinSessionId);
-
   return (
     <div className="space-y-8">
       <div>
@@ -416,40 +398,11 @@ export function CourseDetailPage() {
       </div>
 
       {isBusy ? (
-        <>
         <PipelineMonitor courseId={course.id} />
-        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {BUSY_MESSAGES[course.status] ?? "Working…"}
-          </div>
-          {devinSessionUrl ? (
-            <a
-              href={devinSessionUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
-            >
-              Open live Devin session
-              <ExternalLink className="h-3.5 w-3.5" />
-              {devinSessionId ? (
-                <span className="ml-1 font-mono text-xs text-muted-foreground">
-                  {devinSessionId}
-                </span>
-              ) : null}
-            </a>
-          ) : course.status === "building" ? (
-            <p className="mt-2 text-xs">
-              If this build uses Devin, the live session link will appear here as soon as Devin
-              starts.
-            </p>
-          ) : null}
-        </div>
-        </>
       ) : null}
 
       {course.status === "failed" ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
           Generation failed. Check the job log below.
         </div>
       ) : null}
@@ -494,7 +447,7 @@ export function CourseDetailPage() {
                 </button>
               </div>
             </div>
-            <div ref={frameWrapRef} className="relative bg-background">
+            <div ref={frameWrapRef} className="relative bg-background shadow-neu">
               {isFullscreen ? (
                 <button
                   onClick={toggleFullscreen}
@@ -516,29 +469,63 @@ export function CourseDetailPage() {
           </div>
 
           <div className="space-y-5">
-            <div className="rounded-xl border border-border bg-card p-5">
-              <h3 className="font-semibold">Edit with Devin</h3>
+            <div className="rounded-xl border border-border bg-gradient-to-b from-card to-background shadow-neu p-5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <h3 className="font-semibold">Edit with Devin</h3>
+              </div>
               {selected ? (
-                <div className="mt-3 rounded-lg bg-secondary/60 p-3 text-xs">
-                  <span className="font-medium">Selected:</span> {selected.text.slice(0, 120)}
+                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+                  <span className="font-medium text-primary">Selected:</span>{" "}
+                  <span className="text-muted-foreground">{selected.text.slice(0, 120)}</span>
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">
                   Optionally select an element, then describe the change.
                 </p>
               )}
+
+              {/* Suggested prompt chips */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {[
+                  "Make it friendlier",
+                  "Add an example",
+                  "Simplify the language",
+                  "Add a quiz question",
+                  "Make it shorter",
+                  "Add compliance note",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setPrompt(chip)}
+                    className={`rounded-full border px-2.5 py-1 text-xs transition-all ${
+                      prompt === chip
+                        ? "border-primary bg-primary/10 text-primary shadow-neu-sm"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
               <form onSubmit={submitEdit} className="mt-3 space-y-2">
                 <textarea
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                  className="w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary"
                   rows={3}
                   placeholder="e.g. Make chapter 1 friendlier and add an example"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
+                  minLength={3}
+                  maxLength={2000}
                 />
                 <button
                   type="submit"
-                  disabled={createEdit.isPending}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  disabled={createEdit.isPending || prompt.trim().length < 3}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg shadow-neu-sm bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
                 >
                   {createEdit.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -553,11 +540,57 @@ export function CourseDetailPage() {
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-muted-foreground">Edit requests</h3>
               {edits?.map((ed) => (
-                <div key={ed.id} className="rounded-lg border border-border bg-card p-3 text-sm">
-                  <p className="font-medium">{ed.prompt}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Status: {ed.status}</p>
+                <div key={ed.id} className="rounded-lg border border-border bg-card shadow-neu-sm p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                        ed.edit_tier === "simple" ? "bg-emerald-500/10" : "bg-violet-500/10"
+                      }`}>
+                        {ed.edit_tier === "simple" ? (
+                          <Zap className="h-3 w-3 text-emerald-400" />
+                        ) : (
+                          <Bot className="h-3 w-3 text-violet-400" />
+                        )}
+                      </div>
+                      <p className="font-medium">{ed.prompt}</p>
+                    </div>
+                    {ed.edit_tier ? (
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          ed.edit_tier === "simple"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-violet-500/10 text-violet-400 border border-violet-500/20"
+                        }`}
+                      >
+                        {ed.edit_tier === "simple" ? "Quick" : "Deep"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 ml-7 text-xs text-muted-foreground">Status: {ed.status}</p>
+
+                  {/* Devin session link for complex edits */}
+                  {ed.devin_session_id && ed.devin_session_url ? (
+                    <a
+                      href={ed.devin_session_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1.5 ml-7 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <FileCode className="h-3 w-3" />
+                      Watch Devin work
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : null}
+
+                  {/* Diff summary */}
+                  {ed.diff ? (
+                    <p className="mt-1.5 ml-7 rounded-md bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                      {ed.diff.summary}
+                    </p>
+                  ) : null}
+
                   {ed.status === "preview_ready" ? (
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2 ml-7 flex items-center gap-2">
                       {ed.preview_url ? (
                         <a
                           href={ed.preview_url}
@@ -570,7 +603,7 @@ export function CourseDetailPage() {
                       ) : null}
                       <button
                         onClick={() => acceptEdit.mutate(ed.id)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white"
+                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-500 px-2 py-1 text-xs font-medium text-white"
                       >
                         <Check className="h-3 w-3" /> Accept
                       </button>
@@ -600,35 +633,37 @@ export function CourseDetailPage() {
         </div>
       ) : null}
 
-      {/* Job log */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
-        <div className="mt-3 space-y-1.5">
-          {jobs?.map((j) => (
-            <div
-              key={j.id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
-            >
-              <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
-              <StatusBadge status={j.status} />
-              {j.devin_session_url ? (
-                <a
-                  href={j.devin_session_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-xs text-primary underline"
-                >
-                  {j.devin_session_id ?? "Devin session"}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : j.devin_session_id ? (
-                <span className="font-mono text-xs text-muted-foreground">{j.devin_session_id}</span>
-              ) : null}
-              {j.error ? <span className="text-xs text-red-600">{j.error}</span> : null}
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Job log — only shown when course is not actively generating (historical view) */}
+      {!isBusy && jobs && jobs.length > 0 ? (
+        <section>
+          <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
+          <div className="mt-3 space-y-1.5">
+            {jobs.map((j) => (
+              <div
+                key={j.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              >
+                <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
+                <StatusBadge status={j.status} />
+                {j.devin_session_url ? (
+                  <a
+                    href={j.devin_session_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-primary underline"
+                  >
+                    {j.devin_session_id ?? "Devin session"}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : j.devin_session_id ? (
+                  <span className="font-mono text-xs text-muted-foreground">{j.devin_session_id}</span>
+                ) : null}
+                {j.error ? <span className="text-xs text-destructive">{j.error}</span> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

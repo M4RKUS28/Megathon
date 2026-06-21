@@ -13,6 +13,7 @@ from src.api.v1.schemas.course import (
     CourseReportRow,
     CourseSummary,
     EditCreate,
+    EditDiffResponse,
     EditResponse,
     JobResponse,
     PlanApproval,
@@ -216,7 +217,17 @@ async def get_course_jobs(
 
 
 # ── Devin edit-loop ──────────────────────────────────────────────────────────
-def _edit_response(edit: EditRequest) -> EditResponse:
+def _edit_response(edit: EditRequest, job_result: dict | None = None) -> EditResponse:
+    edit_tier = None
+    diff = None
+    if job_result:
+        edit_tier = job_result.get("edit_tier")
+        diff_data = job_result.get("diff")
+        if diff_data:
+            diff = EditDiffResponse(
+                summary=diff_data.get("summary", ""),
+                blocks=diff_data.get("blocks", []),
+            )
     return EditResponse(
         id=edit.id,
         prompt=edit.prompt,
@@ -227,6 +238,8 @@ def _edit_response(edit: EditRequest) -> EditResponse:
         else None,
         devin_session_id=edit.devin_session_id,
         devin_session_url=session_web_url(edit.devin_session_id),
+        edit_tier=edit_tier,
+        diff=diff,
         created_at=edit.created_at,
     )
 
@@ -278,7 +291,27 @@ async def list_edits(
         .where(EditRequest.course_id == course.id)
         .order_by(EditRequest.created_at.desc())
     )
-    return [_edit_response(e) for e in result.scalars().all()]
+    edits = result.scalars().all()
+
+    # Look up job results for edit_tier / diff data.
+    responses: list[EditResponse] = []
+    for e in edits:
+        job_result: dict | None = None
+        job_row = await db.execute(
+            select(GenerationJob)
+            .where(
+                GenerationJob.course_id == course.id,
+                GenerationJob.type == "edit",
+                GenerationJob.payload["edit_request_id"].astext == str(e.id),
+            )
+            .order_by(GenerationJob.created_at.desc())
+            .limit(1)
+        )
+        job = job_row.scalar_one_or_none()
+        if job and job.result:
+            job_result = job.result
+        responses.append(_edit_response(e, job_result))
+    return responses
 
 
 async def _get_edit(db: AsyncSession, course_id: uuid.UUID, edit_id: uuid.UUID) -> EditRequest:

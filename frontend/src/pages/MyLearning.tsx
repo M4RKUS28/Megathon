@@ -22,7 +22,7 @@ export function MyLearningPage() {
       </div>
 
       {courses && courses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 py-16 text-center shadow-neu-sm">
           <GraduationCap className="h-8 w-8 text-muted-foreground" />
           <p className="mt-3 text-sm text-muted-foreground">No courses assigned yet.</p>
         </div>
@@ -36,7 +36,7 @@ export function MyLearningPage() {
             <button
               key={c.id}
               onClick={() => navigate(`/learn/${c.id}`)}
-              className="flex flex-col rounded-xl border border-border bg-card p-5 text-left transition hover:border-primary/50 hover:shadow-sm"
+              className="flex flex-col rounded-xl border border-border bg-card p-5 text-left shadow-neu-sm transition hover:border-primary/50 hover:shadow-sm"
             >
               <h3 className="font-semibold">{c.title}</h3>
               <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">

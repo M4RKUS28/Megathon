@@ -34,7 +34,7 @@ export function FileManagerPage() {
         <button
           onClick={() => inputRef.current?.click()}
           disabled={upload.isPending}
-          className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
+          className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground shadow-neu-sm hover:bg-primary/90 disabled:opacity-50"
         >
           {upload.isPending ? "Uploading..." : "Upload file"}
         </button>
@@ -50,12 +50,12 @@ export function FileManagerPage() {
       {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
 
       {!isLoading && files?.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-border bg-card/50 py-16 text-center text-muted-foreground shadow-neu-sm">
           No files yet. Click "Upload file" to get started.
         </div>
       )}
 
-      <div className="divide-y divide-border rounded-xl border border-border bg-card">
+      <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-neu-sm">
         {files?.map((f) => (
           <div key={f.id} className="flex items-center justify-between px-4 py-3">
             <div className="min-w-0">
@@ -68,13 +68,13 @@ export function FileManagerPage() {
               <button
                 onClick={() => handleDownload(f)}
                 disabled={downloading === f.id}
-                className="rounded-md px-3 py-1.5 text-xs text-primary hover:bg-accent disabled:opacity-50"
+                className="rounded-md px-3 py-1.5 text-xs text-primary hover:bg-accent/20 disabled:opacity-50"
               >
                 {downloading === f.id ? "..." : "Download"}
               </button>
               <button
                 onClick={() => del.mutate(f.id)}
-                className="rounded-md px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+                className="rounded-md px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
               >
                 Delete
               </button>

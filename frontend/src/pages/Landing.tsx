@@ -41,9 +41,9 @@ const roles = [
 
 function AssemblyVisual() {
   const cards = [
-    { tag: "BRIEF", title: "Onboarding · Engineering", tint: "bg-white/5", delay: "0ms", tilt: "-3deg" },
-    { tag: "CONCEPT", title: "6 chapters · 12 quiz items", tint: "bg-white/[0.07]", delay: "140ms", tilt: "2deg" },
-    { tag: "LIVE COURSE", title: "Hosted · brand-themed", tint: "bg-iris/20", delay: "280ms", tilt: "-1deg" },
+    { tag: "BRIEF", title: "Onboarding · Engineering", tint: "bg-secondary/50", delay: "0ms", tilt: "-3deg" },
+    { tag: "CONCEPT", title: "6 chapters · 12 quiz items", tint: "bg-secondary/60", delay: "140ms", tilt: "2deg" },
+    { tag: "LIVE COURSE", title: "Hosted · brand-themed", tint: "bg-primary/20", delay: "280ms", tilt: "-1deg" },
   ];
   return (
     <div className="relative mx-auto w-full max-w-md">
@@ -53,12 +53,12 @@ function AssemblyVisual() {
           <div
             key={c.tag}
             style={{ animationDelay: c.delay, ["--tilt" as string]: c.tilt }}
-            className={`animate-assemble-in rounded-2xl border border-white/10 ${c.tint} p-5 backdrop-blur`}
+            className={`animate-assemble-in rounded-2xl border border-border ${c.tint} p-5 backdrop-blur shadow-neu-sm`}
           >
-            <p className="font-mono text-[11px] tracking-[0.2em] text-signal">{c.tag}</p>
-            <p className="mt-2 font-display text-lg font-semibold text-paper">{c.title}</p>
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-2/3 rounded-full bg-iris" />
+            <p className="font-mono text-[11px] tracking-[0.2em] text-primary">{c.tag}</p>
+            <p className="mt-2 font-display text-lg font-semibold text-foreground">{c.title}</p>
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div className="h-full w-2/3 rounded-full bg-primary" />
             </div>
           </div>
         ))}
@@ -72,14 +72,14 @@ export function LandingPage() {
   const signedIn = ready && authenticated;
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader signedIn={signedIn} />
 
       {/* Hero */}
-      <section className="bg-ink text-paper">
+      <section className="bg-card text-foreground">
         <div className="mx-auto grid max-w-7xl items-center gap-14 px-6 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:py-28">
           <div>
-            <p className="font-mono text-xs tracking-[0.3em] text-signal">
+            <p className="font-mono text-xs tracking-[0.3em] text-primary">
               WHITE-LABEL COURSE ENGINE
             </p>
             <h1 className="mt-5 font-display text-5xl font-extrabold leading-[1.02] tracking-tight sm:text-6xl">
@@ -87,27 +87,27 @@ export function LandingPage() {
               <br />
               builds itself.
             </h1>
-            <p className="mt-6 max-w-lg text-lg text-paper/70">
+            <p className="mt-6 max-w-lg text-lg text-muted-foreground">
               Coursive turns a short brief into a fully interactive training course — generated,
               tested, and hosted in your company's brand. No authoring tools, no slide decks.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
                 to={signedIn ? "/dashboard" : "/signup"}
-                className="group inline-flex items-center gap-2 rounded-full bg-iris px-6 py-3 font-medium text-white transition hover:bg-iris/90"
+                className="group inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-white shadow-neu-sm transition hover:bg-primary/90"
               >
                 {signedIn ? "Open dashboard" : "Start building"}
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </Link>
               <Link
                 to="/about"
-                className="inline-flex items-center rounded-full border border-white/15 px-6 py-3 font-medium text-paper/90 transition hover:bg-white/5"
+                className="inline-flex items-center rounded-lg border border-border px-6 py-3 font-medium text-foreground/90 shadow-neu-sm transition hover:bg-secondary/50"
               >
                 How it works
               </Link>
             </div>
-            <p className="mt-6 font-mono text-xs text-paper/40">
-              Demo tenant: <span className="text-paper/70">acme</span> · creator@acme.test / creator2026
+            <p className="mt-6 font-mono text-xs text-muted-foreground/60">
+              Demo tenant: <span className="text-muted-foreground">acme</span> · creator@acme.test / creator2026
             </p>
           </div>
           <AssemblyVisual />
@@ -120,43 +120,43 @@ export function LandingPage() {
           <h2 className="max-w-md font-display text-3xl font-bold tracking-tight sm:text-4xl">
             From sentence to shipped course.
           </h2>
-          <p className="hidden max-w-xs text-sm text-ink/60 sm:block">
+          <p className="hidden max-w-xs text-sm text-muted-foreground sm:block">
             Every course is a real, standalone web app — generated by Devin and embedded over a
             secure boundary.
           </p>
         </div>
-        <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-mist bg-mist sm:grid-cols-3">
+        <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3">
           {pipeline.map((s) => (
-            <div key={s.n} className="bg-paper p-8">
-              <span className="font-mono text-sm text-signal">{s.n}</span>
+            <div key={s.n} className="bg-background p-8">
+              <span className="font-mono text-sm text-primary">{s.n}</span>
               <h3 className="mt-4 text-xl font-semibold">{s.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-ink/60">{s.body}</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* White-label proof */}
-      <section className="bg-ink text-paper">
+      <section className="bg-card text-foreground">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2">
           <div>
-            <p className="font-mono text-xs tracking-[0.3em] text-signal">ONE PLATFORM · EVERY BRAND</p>
+            <p className="font-mono text-xs tracking-[0.3em] text-primary">ONE PLATFORM · EVERY BRAND</p>
             <h2 className="mt-5 font-display text-3xl font-bold tracking-tight sm:text-4xl">
               Your company. Your colors. Your domain.
             </h2>
-            <p className="mt-5 max-w-md text-paper/70">
+            <p className="mt-5 max-w-md text-muted-foreground">
               Each tenant defines a style guide once. Coursive re-skins the dashboard and every
               generated course to match — strictly isolated from all other companies.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 shadow-2xl">
+          <div className="rounded-2xl border border-border bg-secondary/50 p-3 shadow-neu-sm">
             <div className="flex items-center gap-1.5 px-2 py-2">
-              <span className="h-3 w-3 rounded-full bg-signal/80" />
+              <span className="h-3 w-3 rounded-full bg-primary/80" />
               <span className="h-3 w-3 rounded-full bg-amber-400/70" />
               <span className="h-3 w-3 rounded-full bg-emerald-400/70" />
-              <span className="ml-3 font-mono text-xs text-paper/40">acme.coursive.app</span>
+              <span className="ml-3 font-mono text-xs text-muted-foreground/60">acme.coursive.app</span>
             </div>
-            <div className="rounded-xl bg-paper p-5 text-ink">
+            <div className="rounded-xl bg-background p-5 text-foreground">
               <div className="flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-md bg-[#6d28d9] text-xs font-bold text-white">
                   A
@@ -165,7 +165,7 @@ export function LandingPage() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {["Security 101", "Git & CI", "Brand Voice"].map((t) => (
-                  <div key={t} className="rounded-lg border border-mist p-3">
+                  <div key={t} className="rounded-lg border border-border p-3">
                     <div className="h-1.5 w-8 rounded-full bg-[#6d28d9]" />
                     <p className="mt-2 text-xs font-medium">{t}</p>
                   </div>
@@ -183,10 +183,10 @@ export function LandingPage() {
         </h2>
         <div className="mt-10 grid gap-6 sm:grid-cols-3">
           {roles.map(({ icon: Icon, label, body }) => (
-            <div key={label} className="rounded-2xl border border-mist bg-white p-7">
-              <Icon className="h-6 w-6 text-iris" />
+            <div key={label} className="rounded-2xl border border-border bg-card p-7 shadow-neu-sm">
+              <Icon className="h-6 w-6 text-primary" />
               <h3 className="mt-4 text-lg font-semibold">{label}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink/60">{body}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
           ))}
         </div>

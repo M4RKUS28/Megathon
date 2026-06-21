@@ -46,24 +46,24 @@ function useElapsed(startedAt: string | null, running: boolean): string {
 // ── Status visuals ─────────────────────────────────────────────────────────
 
 const STATUS_RING: Record<PhaseStatus, string> = {
-  pending: "border-zinc-600 bg-zinc-800/60",
-  running: "border-blue-400 bg-blue-500/20 shadow-[0_0_12px_rgba(59,130,246,0.35)]",
-  done: "border-emerald-400 bg-emerald-500/20",
-  failed: "border-red-400 bg-red-500/20",
+  pending: "border-muted-foreground/30 bg-muted/50",
+  running: "border-primary bg-primary/10 shadow-[0_0_8px_rgba(59,130,246,0.15)]",
+  done: "border-emerald-500 bg-emerald-500/10",
+  failed: "border-red-500 bg-red-500/10",
 };
 
 const STATUS_ICON: Record<PhaseStatus, React.ReactNode> = {
-  pending: <span className="h-2.5 w-2.5 rounded-full bg-zinc-500" />,
-  running: <Loader2 className="h-4 w-4 animate-spin text-blue-400" />,
-  done: <Check className="h-4 w-4 text-emerald-400" />,
-  failed: <X className="h-4 w-4 text-red-400" />,
+  pending: <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />,
+  running: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
+  done: <Check className="h-4 w-4 text-emerald-600" />,
+  failed: <X className="h-4 w-4 text-red-500" />,
 };
 
 const STATUS_LABEL_COLOR: Record<PhaseStatus, string> = {
-  pending: "text-zinc-500",
-  running: "text-blue-300",
-  done: "text-emerald-300",
-  failed: "text-red-300",
+  pending: "text-muted-foreground",
+  running: "text-primary",
+  done: "text-emerald-600",
+  failed: "text-red-500",
 };
 
 // ── Sub-components ─────────────────────────────────────────────────────────
@@ -73,16 +73,16 @@ function AssetBar({ progress }: { progress: AssetProgress }) {
   return (
     <div className="mt-2 space-y-1">
       <div className="flex items-center justify-between text-[11px]">
-        <span className="text-zinc-400">
+        <span className="text-muted-foreground">
           {progress.completed}/{progress.total} assets
         </span>
         {progress.failed > 0 && (
-          <span className="text-red-400">{progress.failed} failed</span>
+          <span className="text-red-500">{progress.failed} failed</span>
         )}
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-700 ease-out"
+          className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-700 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -97,12 +97,12 @@ function SpecProgressBar({ progress }: { progress: SpecProgress }) {
       : 0;
   return (
     <div className="mt-2 space-y-1">
-      <span className="text-[11px] text-zinc-400">
+      <span className="text-[11px] text-muted-foreground">
         {progress.chapters_completed}/{progress.chapters_total} chapters
       </span>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-400 transition-all duration-700 ease-out"
+          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-primary transition-all duration-700 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -113,7 +113,7 @@ function SpecProgressBar({ progress }: { progress: SpecProgress }) {
 function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
   if (sessions.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="mt-2 flex flex-wrap gap-2">
       {sessions.map((s) => {
         const isRunning = s.status === "running";
         const isDone = s.status === "done" || s.status === "completed";
@@ -124,20 +124,21 @@ function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
 
         const card = (
           <span
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-lg border font-medium transition-all duration-300 ${
               isRunning
-                ? "bg-blue-500/20 text-blue-300 animate-pulse"
+                ? "px-3 py-1.5 text-xs bg-primary/15 text-primary border-primary/40 shadow-[0_0_12px_rgba(59,130,246,0.25)]"
                 : isDone
-                  ? "bg-emerald-500/15 text-emerald-300"
+                  ? "px-2 py-1 text-[11px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                   : isFailed
-                    ? "bg-red-500/15 text-red-300"
-                    : "bg-zinc-700/60 text-zinc-400"
+                    ? "px-2 py-1 text-[11px] bg-red-500/10 text-red-500 border-red-500/30"
+                    : "px-2 py-1 text-[11px] bg-muted text-muted-foreground border-border"
             }`}
           >
-            {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
+            {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {isDone && <Check className="h-3 w-3" />}
             {isFailed && <AlertCircle className="h-3 w-3" />}
             {s.chapter}
+            {isRunning && devinUrl && <ExternalLink className="h-3 w-3 opacity-70" />}
           </span>
         );
 
@@ -148,7 +149,7 @@ function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
               href={devinUrl}
               target="_blank"
               rel="noreferrer"
-              className="no-underline hover:brightness-125"
+              className="no-underline hover:brightness-125 transition-transform hover:scale-105"
               title={`Open Devin session for ${s.chapter}`}
             >
               {card}
@@ -177,11 +178,11 @@ function PhaseNode({ phase }: { phase: PipelinePhase }) {
         {phase.label}
       </span>
       {elapsed && phase.status === "running" && (
-        <span className="text-[10px] tabular-nums text-zinc-500">{elapsed}</span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">{elapsed}</span>
       )}
       {phase.error && (
         <span
-          className="max-w-[120px] truncate text-[10px] text-red-400"
+          className="max-w-[120px] truncate text-[10px] text-red-500"
           title={phase.error}
         >
           {phase.error}
@@ -197,10 +198,10 @@ function Connector({ status }: { status: PhaseStatus }) {
       <div
         className={`h-0.5 w-6 transition-colors duration-500 sm:w-10 ${
           status === "done"
-            ? "bg-emerald-500/50"
+            ? "bg-emerald-500/40"
             : status === "running"
-              ? "bg-blue-500/40"
-              : "bg-zinc-700"
+              ? "bg-primary/40"
+              : "bg-border"
         }`}
       />
       <ChevronRight
@@ -208,8 +209,8 @@ function Connector({ status }: { status: PhaseStatus }) {
           status === "done"
             ? "text-emerald-500/50"
             : status === "running"
-              ? "text-blue-500/50"
-              : "text-zinc-700"
+              ? "text-primary/50"
+              : "text-border"
         }`}
       />
     </div>
@@ -229,10 +230,10 @@ function ParallelLanes({
     <div className="flex items-center">
       {/* Fork indicator */}
       <div className="flex flex-col items-center justify-center gap-0.5 pr-2">
-        <GitFork className="h-3.5 w-3.5 rotate-90 text-zinc-600" />
+        <GitFork className="h-3.5 w-3.5 rotate-90 text-muted-foreground/50" />
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-700/60 bg-zinc-800/40 px-4 py-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
         {/* Assets lane */}
         <div className="flex items-start gap-3">
           <div
@@ -269,7 +270,7 @@ function ParallelLanes({
                   href={codegen.devinSessionUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-[10px] text-blue-400 hover:text-blue-300"
+                  className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:text-primary/80"
                 >
                   Devin <ExternalLink className="h-2.5 w-2.5" />
                 </a>
@@ -282,7 +283,7 @@ function ParallelLanes({
 
       {/* Join indicator */}
       <div className="flex flex-col items-center justify-center gap-0.5 pl-2">
-        <GitFork className="h-3.5 w-3.5 -rotate-90 text-zinc-600" />
+        <GitFork className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/50" />
       </div>
     </div>
   );
@@ -293,12 +294,12 @@ function ParallelLanes({
 function CompletedSummary({ phases }: { phases: PipelinePhase[] }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3">
-      <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-emerald-400 bg-emerald-500/20">
+      <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-emerald-500 bg-emerald-500/20">
         <Check className="h-4 w-4 text-emerald-400" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-emerald-300">Pipeline complete</p>
-        <p className="text-xs text-zinc-400">
+        <p className="text-sm font-semibold text-emerald-400">Pipeline complete</p>
+        <p className="text-xs text-muted-foreground">
           All {phases.length} phases finished successfully.
         </p>
       </div>
@@ -311,32 +312,32 @@ function CompletedSummary({ phases }: { phases: PipelinePhase[] }) {
 const SERVICE_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   gemini: {
     label: "Gemini",
-    color: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    color: "bg-blue-500/10 text-blue-400 border-blue-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   "gemini-tts": {
     label: "Gemini TTS",
-    color: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+    color: "bg-violet-500/10 text-violet-400 border-violet-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   "gemini-imagen": {
     label: "Gemini Imagen",
-    color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+    color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   devin: {
     label: "Devin",
-    color: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    color: "bg-purple-500/10 text-purple-400 border-purple-500/30",
     icon: <ExternalLink className="h-3 w-3" />,
   },
   pixverse: {
     label: "PixVerse",
-    color: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    color: "bg-amber-500/10 text-amber-400 border-amber-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   internal: {
     label: "Internal",
-    color: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+    color: "bg-muted text-muted-foreground border-border",
     icon: <Check className="h-3 w-3" />,
   },
 };
@@ -356,7 +357,7 @@ function ServiceBadge({ service }: { service: string }) {
 // ── Expandable task list ─────────────────────────────────────────────────────
 
 function TaskList({ tasks }: { tasks: PipelineTask[] }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   if (tasks.length === 0) return null;
 
@@ -365,88 +366,84 @@ function TaskList({ tasks }: { tasks: PipelineTask[] }) {
   const failed = tasks.filter((t) => t.status === "failed");
 
   return (
-    <div className="mt-4 rounded-xl border border-zinc-700/60 bg-zinc-800/30">
+    <div className="mt-3 rounded-lg border border-border">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-zinc-700/20 transition-colors rounded-xl"
+        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors rounded-lg"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {expanded ? (
-            <ChevronDown className="h-4 w-4 text-zinc-400" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-zinc-400" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           )}
-          <span className="text-xs font-semibold text-zinc-300">Tasks</span>
-          <span className="text-[10px] text-zinc-500">
+          <span className="text-[11px] font-medium text-muted-foreground">Build steps</span>
+          <span className="text-[10px] text-muted-foreground/70">
             {running.length > 0 && (
-              <span className="text-blue-400">{running.length} running</span>
+              <span className="text-primary">{running.length} running</span>
             )}
             {running.length > 0 && done.length > 0 && " \u00b7 "}
             {done.length > 0 && (
-              <span className="text-emerald-400">{done.length} done</span>
+              <span className="text-emerald-600">{done.length} done</span>
             )}
             {failed.length > 0 && (
               <>
                 {" \u00b7 "}
-                <span className="text-red-400">{failed.length} failed</span>
+                <span className="text-red-500">{failed.length} failed</span>
               </>
             )}
           </span>
         </div>
-        <span className="text-[10px] tabular-nums text-zinc-500">
+        <span className="text-[10px] tabular-nums text-muted-foreground/60">
           {done.length + failed.length}/{tasks.length}
         </span>
       </button>
 
       {expanded && (
-        <div className="max-h-[320px] overflow-y-auto border-t border-zinc-700/40 px-4 py-2">
-          <div className="space-y-1.5">
+        <div className="max-h-[280px] overflow-y-auto border-t border-border px-3 py-1.5">
+          <div className="space-y-0.5">
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-zinc-700/30 transition-colors"
+                className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50 transition-colors"
               >
-                {/* Status icon */}
                 <div className="shrink-0">
                   {task.status === "running" && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
                   )}
                   {task.status === "done" && (
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    <Check className="h-3 w-3 text-emerald-500" />
                   )}
                   {task.status === "failed" && (
-                    <X className="h-3.5 w-3.5 text-red-400" />
+                    <X className="h-3 w-3 text-red-500" />
                   )}
                   {task.status !== "running" && task.status !== "done" && task.status !== "failed" && (
-                    <span className="h-2 w-2 rounded-full bg-zinc-600 block" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30 block" />
                   )}
                 </div>
 
-                {/* Task name */}
                 <span
                   className={`flex-1 truncate text-[11px] ${
                     task.status === "running"
-                      ? "text-zinc-200"
+                      ? "text-foreground"
                       : task.status === "done"
-                        ? "text-zinc-400"
+                        ? "text-muted-foreground"
                         : task.status === "failed"
-                          ? "text-red-300"
-                          : "text-zinc-500"
+                          ? "text-red-500"
+                          : "text-muted-foreground/60"
                   }`}
                 >
                   {task.name}
                 </span>
 
-                {/* Service badge */}
                 <ServiceBadge service={task.service} />
 
-                {/* Devin session link */}
                 {task.session_url && (
                   <a
                     href={task.session_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-0.5 text-[10px] text-purple-400 hover:text-purple-300 shrink-0"
+                    className="inline-flex items-center gap-0.5 text-[10px] text-purple-500 hover:text-purple-700 shrink-0"
                     title="Open Devin session"
                   >
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -463,6 +460,53 @@ function TaskList({ tasks }: { tasks: PipelineTask[] }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+function DevinBanner({ codegen }: { codegen: PipelinePhase }) {
+  if (codegen.status !== "running") return null;
+
+  const activeSession = codegen.codegenSessions.find((s) => s.status === "running");
+  const devinUrl = codegen.devinSessionUrl ?? (activeSession?.session_id
+    ? `https://app.devin.ai/sessions/${activeSession.session_id}`
+    : null);
+
+  return (
+    <div className="mb-4 rounded-xl border-2 border-primary/50 bg-card p-4 shadow-neu animate-[devin-glow_2s_ease-in-out_infinite]">
+      <style>{`
+        @keyframes devin-glow {
+          0%, 100% { box-shadow: 0 0 8px rgba(59,130,246,0.2), 0 0 20px rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.5); }
+          50% { box-shadow: 0 0 16px rgba(59,130,246,0.4), 0 0 40px rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.8); }
+        }
+      `}</style>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-full border-2 border-primary bg-primary/15">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-primary">Devin</span>
+              <span className="inline-flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+            </div>
+            <p className="text-xs text-muted-foreground animate-pulse">
+              Devin is building your course&hellip;
+            </p>
+          </div>
+        </div>
+        {devinUrl && (
+          <a
+            href={devinUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            Open Devin session
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PipelineMonitor({ courseId }: { courseId: string }) {
   const { phases, overallStatus, tasks } = usePipelineStatus(courseId);
 
@@ -474,52 +518,110 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
 
   if (!plan || !spec || !assets || !codegen || !build) return null;
 
-  if (overallStatus === "done") {
-    return (
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-        <CompletedSummary phases={phases} />
-      </section>
-    );
-  }
+  const doneCount = phases.filter((p) => p.status === "done").length;
+  const runningCount = phases.filter((p) => p.status === "running").length;
+  const isDevinRunning = codegen.status === "running";
+
+  const defaultOpen = overallStatus !== "done" && runningCount > 0;
+  const [open, setOpen] = useState(defaultOpen);
+  const hasAutoExpanded = useRef(false);
+
+  useEffect(() => {
+    if (defaultOpen && !hasAutoExpanded.current) {
+      setOpen(true);
+      hasAutoExpanded.current = true;
+    }
+  }, [defaultOpen]);
+
+  const statusSummary =
+    overallStatus === "done"
+      ? "Complete"
+      : runningCount > 0
+        ? `${doneCount}/${phases.length} phases`
+        : "Pending";
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-300">Pipeline progress</h3>
+    <section className={`rounded-xl border bg-card transition-all duration-300 ${
+      isDevinRunning && !open
+        ? "border-primary/40 shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+        : "border-border"
+    }`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors rounded-xl"
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="text-sm font-semibold text-foreground">Pipeline progress</span>
+          <span className="text-xs text-muted-foreground">{statusSummary}</span>
+        </div>
+        {overallStatus === "done" ? (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+            <Check className="h-3.5 w-3.5" /> Done
+          </span>
+        ) : isDevinRunning && !open ? (
+          <span className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary animate-pulse">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Devin is working&hellip;
+          </span>
+        ) : runningCount > 0 ? (
+          <span className="inline-flex items-center gap-1 text-xs text-primary">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running
+          </span>
+        ) : null}
+      </button>
 
-      {/* Horizontal pipeline diagram */}
-      <div className="flex flex-wrap items-center gap-y-4 overflow-x-auto pb-2">
-        <PhaseNode phase={plan} />
-        <Connector status={plan.status} />
-        <PhaseNode phase={spec} />
-        {spec.specProgress && <SpecProgressBar progress={spec.specProgress} />}
-        <Connector status={spec.status} />
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-3">
+          {overallStatus === "done" ? (
+            <CompletedSummary phases={phases} />
+          ) : (
+            <>
+              {/* Devin banner when codegen is running */}
+              <DevinBanner codegen={codegen} />
 
-        {/* Parallel lanes for assets + codegen */}
-        <ParallelLanes assets={assets} codegen={codegen} />
+              {/* Horizontal pipeline diagram */}
+              <div className="flex flex-wrap items-center gap-y-4 overflow-x-auto pb-2">
+                <PhaseNode phase={plan} />
+                <Connector status={plan.status} />
+                <PhaseNode phase={spec} />
+                {spec.specProgress && <SpecProgressBar progress={spec.specProgress} />}
+                <Connector status={spec.status} />
 
-        <Connector
-          status={
-            assets.status === "done" && codegen.status === "done"
-              ? "done"
-              : assets.status === "failed" || codegen.status === "failed"
-                ? "failed"
-                : assets.status === "running" || codegen.status === "running"
-                  ? "running"
-                  : "pending"
-          }
-        />
-        <PhaseNode phase={build} />
-      </div>
+                {/* Parallel lanes for assets + codegen */}
+                <ParallelLanes assets={assets} codegen={codegen} />
 
-      {/* Spec progress below the diagram when available */}
-      {spec.specProgress && spec.status === "running" && (
-        <div className="mt-3 max-w-[200px]">
-          <SpecProgressBar progress={spec.specProgress} />
+                <Connector
+                  status={
+                    assets.status === "done" && codegen.status === "done"
+                      ? "done"
+                      : assets.status === "failed" || codegen.status === "failed"
+                        ? "failed"
+                        : assets.status === "running" || codegen.status === "running"
+                          ? "running"
+                          : "pending"
+                  }
+                />
+                <PhaseNode phase={build} />
+              </div>
+
+              {/* Spec progress below the diagram when available */}
+              {spec.specProgress && spec.status === "running" && (
+                <div className="mt-3 max-w-[200px]">
+                  <SpecProgressBar progress={spec.specProgress} />
+                </div>
+              )}
+
+              {/* Expandable task list */}
+              <TaskList tasks={tasks} />
+            </>
+          )}
         </div>
       )}
-
-      {/* Expandable task list */}
-      <TaskList tasks={tasks} />
     </section>
   );
 }

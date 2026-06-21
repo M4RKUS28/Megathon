@@ -84,11 +84,11 @@ export function CoursePlayerPage() {
       <h1 className="text-xl font-bold tracking-tight">{course.title}</h1>
 
       {course.host_url ? (
-        <div ref={frameWrapRef} className="relative bg-background">
+        <div ref={frameWrapRef} className="relative bg-background shadow-neu rounded-xl">
           <button
             onClick={toggleFullscreen}
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/90 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+            className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/90 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-neu-sm backdrop-blur hover:text-foreground"
           >
             {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
             {isFullscreen ? "Exit" : "Fullscreen"}
