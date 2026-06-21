@@ -221,7 +221,7 @@ async def process_spec_job(job_id: str) -> None:
 
 async def process_build_job(job_id: str) -> None:
     """Phase 2.5 (assets) + Phase 3 (implementation) + Phase 4 (hosting)."""
-    from src.services.generation.assets import fetch_assets, publish_asset_map
+    from src.services.generation.assets import AssetProgress, fetch_assets, publish_asset_map
 
     async with AsyncSessionLocal() as db:
         job = await get_job(db, uuid.UUID(job_id))
@@ -270,7 +270,19 @@ async def process_build_job(job_id: str) -> None:
                     len(asset_map),
                 )
             else:
-                asset_map = fetch_assets(manifest, prefix, primary)
+
+                def _on_asset_progress(progress: AssetProgress) -> None:
+                    job.result = {
+                        **(job.result or {}),
+                        "asset_progress": progress.to_dict(),
+                    }
+
+                asset_map = await fetch_assets(
+                    manifest, prefix, primary, on_progress=_on_asset_progress
+                )
+                # Persist final asset_progress
+                await db.commit()
+
             mapped_audio = sum(1 for key in asset_map if "/audio/" in key)
             expected_audio = manifest_by_type.get("audio", 0)
             logger.info(
@@ -280,7 +292,7 @@ async def process_build_job(job_id: str) -> None:
                 mapped_audio,
                 expected_audio,
             )
-            publish_asset_map(prefix, asset_map)
+            await publish_asset_map(prefix, asset_map)
 
             # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
             # (optional; falls back to the template build inside the builder).
@@ -340,6 +352,7 @@ async def process_build_job(job_id: str) -> None:
                 "iframe_url": hosting["iframe_url"],
                 "devin_session_id": devin_session_id,
                 "devin_session_url": (job.result or {}).get("devin_session_url"),
+                "asset_progress": (job.result or {}).get("asset_progress"),
             }
             await db.commit()
             logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])

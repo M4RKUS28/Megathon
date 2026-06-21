@@ -1,4 +1,4 @@
-﻿"""Phase 2.5 Process A â€” Resource fetch / asset pipeline.
+"""Phase 2.5 Process A — Resource fetch / asset pipeline.
 
 Works the isolated asset manifest from the Lastenheft and produces an
 `asset_map`: each `template_link` -> a final, production `storage_url` (MinIO).
@@ -12,10 +12,13 @@ fall back to the transcript/browser voice instead of playing a silent snippet.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
 from collections import Counter
+from dataclasses import dataclass
+from typing import Callable
 
 from src.config.settings import settings
 from src.db.minio import ensure_bucket_exists, public_object_url, put_bytes
@@ -25,6 +28,18 @@ from ..agents.schemas import AssetSpec
 logger = logging.getLogger(__name__)
 
 _AUDIO_TYPES = {"audio", "narration"}
+
+
+@dataclass
+class AssetProgress:
+    """Tracks parallel asset pipeline progress."""
+
+    total: int = 0
+    completed: int = 0
+    failed: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {"total": self.total, "completed": self.completed, "failed": self.failed}
 
 
 class AssetProvider:
@@ -74,13 +89,20 @@ class PlaceholderAssetProvider(AssetProvider):
         return svg.encode("utf-8"), "svg", "image/svg+xml"
 
 
-def fetch_assets(
+async def fetch_assets(
     manifest: list[dict] | list[AssetSpec],
     course_prefix: str,
     primary_color: str = "#5145E5",
     provider: AssetProvider | None = None,
+    max_concurrent: int = 10,
+    on_progress: Callable[[AssetProgress], None] | None = None,
 ) -> dict[str, str]:
-    """Produce + upload every manifest asset; return template_link -> storage_url."""
+    """Produce + upload every manifest asset concurrently; return template_link -> storage_url.
+
+    Uses asyncio.gather with a bounded semaphore (max_concurrent) to limit
+    parallel API calls. Synchronous providers are offloaded via
+    asyncio.to_thread() so they don't block the event loop.
+    """
     if provider is None:
         from .providers import build_asset_provider
 
@@ -90,46 +112,71 @@ def fetch_assets(
 
     by_type = Counter(spec.type for spec in specs)
     logger.info(
-        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s",
+        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s max_concurrent=%d",
         course_prefix,
         len(specs),
         dict(sorted(by_type.items())),
         type(provider).__name__,
+        max_concurrent,
     )
 
+    progress = AssetProgress(total=len(specs))
     asset_map: dict[str, str] = {}
     skipped: Counter[str] = Counter()
-    for spec in specs:
-        logger.debug(
-            "asset produce start: link=%s type=%s purpose=%s description_chars=%d",
-            spec.template_link,
-            spec.type,
-            spec.purpose,
-            len(spec.description or ""),
-        )
-        try:
-            content, ext, ctype = provider.produce(spec, primary_color)
-        except Exception as exc:  # noqa: BLE001
-            skipped[spec.type] += 1
-            logger.warning(
-                "asset produce failed: link=%s type=%s provider=%s error=%s",
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def _process_one(spec: AssetSpec) -> tuple[str, str] | None:
+        """Process a single asset spec; returns (template_link, storage_url) or None on failure."""
+        async with semaphore:
+            logger.debug(
+                "asset produce start: link=%s type=%s purpose=%s description_chars=%d",
                 spec.template_link,
                 spec.type,
-                type(provider).__name__,
-                exc,
+                spec.purpose,
+                len(spec.description or ""),
             )
-            continue
-        rel = spec.template_link.lstrip("/")
-        object_name = f"{course_prefix}/{rel}.{ext}"
-        put_bytes(content, object_name, settings.courses_bucket, ctype)
-        asset_map[spec.template_link] = public_object_url(object_name, settings.courses_bucket)
-        logger.debug(
-            "asset uploaded: link=%s object=%s bytes=%d content_type=%s",
-            spec.template_link,
-            object_name,
-            len(content),
-            ctype,
-        )
+            try:
+                content, ext, ctype = await asyncio.to_thread(
+                    provider.produce, spec, primary_color
+                )
+            except Exception as exc:  # noqa: BLE001
+                skipped[spec.type] += 1
+                progress.failed += 1
+                if on_progress:
+                    on_progress(progress)
+                logger.warning(
+                    "asset produce failed: link=%s type=%s provider=%s error=%s",
+                    spec.template_link,
+                    spec.type,
+                    type(provider).__name__,
+                    exc,
+                )
+                return None
+
+            rel = spec.template_link.lstrip("/")
+            object_name = f"{course_prefix}/{rel}.{ext}"
+            await asyncio.to_thread(
+                put_bytes, content, object_name, settings.courses_bucket, ctype
+            )
+            url = public_object_url(object_name, settings.courses_bucket)
+            logger.debug(
+                "asset uploaded: link=%s object=%s bytes=%d content_type=%s",
+                spec.template_link,
+                object_name,
+                len(content),
+                ctype,
+            )
+            progress.completed += 1
+            if on_progress:
+                on_progress(progress)
+            return spec.template_link, url
+
+    results = await asyncio.gather(*[_process_one(spec) for spec in specs])
+
+    for result in results:
+        if result is not None:
+            link, url = result
+            asset_map[link] = url
 
     logger.info(
         "asset pipeline finished: mapped=%d/%d skipped_by_type=%s",
@@ -140,10 +187,11 @@ def fetch_assets(
     return asset_map
 
 
-def publish_asset_map(course_prefix: str, asset_map: dict[str, str]) -> str:
+async def publish_asset_map(course_prefix: str, asset_map: dict[str, str]) -> str:
     """Store the asset_map.json alongside the course and return its object name."""
     object_name = f"{course_prefix}/asset_map.json"
-    put_bytes(
+    await asyncio.to_thread(
+        put_bytes,
         json.dumps(asset_map).encode("utf-8"),
         object_name,
         settings.courses_bucket,
