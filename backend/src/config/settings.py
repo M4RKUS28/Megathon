@@ -101,17 +101,11 @@ class Settings(BaseSettings):
     cala_mcp_url: str = ""
     cala_timeout: int = 30
 
-    # PixVerse — image/video generation (Phase 2.5 asset pipeline).
-    pixverse_api_key: str = Field(
-        default="", validation_alias=AliasChoices("PIXVERSE_API_KEY", "PIX_VERSE")
-    )
-    pixverse_api_base_url: str = "https://app-api.pixverse.ai"
-    pixverse_timeout: int = 300
-
     # Asset-pipeline provider selection. "auto" picks the best configured
     # provider per asset type and falls back to the branded SVG placeholder.
-    asset_image_provider: str = "auto"  # auto | nano_banana | pixverse | placeholder
-    asset_video_provider: str = "auto"  # auto | pixverse | placeholder
+    # Video generation is currently disabled (no provider); video assets get
+    # an SVG placeholder.
+    asset_image_provider: str = "auto"  # auto | nano_banana | placeholder
     asset_audio_provider: str = "auto"  # auto | gemini_tts | placeholder
 
     @computed_field

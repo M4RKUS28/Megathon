@@ -3,7 +3,7 @@
 Works the isolated asset manifest from the Lastenheft and produces an
 `asset_map`: each `template_link` -> a final, production `storage_url` (MinIO).
 
-Providers (Unsplash/Pexels/Google Images, PixVerse, Nano-Banana, Google TTS) sit
+Providers (Unsplash/Pexels/Google Images, Nano-Banana, Google TTS) sit
 behind the `AssetProvider` interface. The default `PlaceholderAssetProvider`
 generates a deterministic branded SVG placeholder for visual assets. Audio is not
 silently replaced with fake speech; if TTS is unavailable the course renderer can
