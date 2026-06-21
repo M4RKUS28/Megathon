@@ -38,11 +38,11 @@ def _image_provider() -> AssetProvider | None:
         return NanoBananaImageProvider() if NanoBananaImageProvider.configured() else None
     if choice == "pixverse":
         return PixVerseProvider() if PixVerseProvider.configured() else None
-    # auto
-    if NanoBananaImageProvider.configured():
-        return NanoBananaImageProvider()
+    # auto — prefer PixVerse for richer image output when configured
     if PixVerseProvider.configured():
         return PixVerseProvider()
+    if NanoBananaImageProvider.configured():
+        return NanoBananaImageProvider()
     return None
 
 
