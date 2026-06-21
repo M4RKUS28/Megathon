@@ -33,5 +33,5 @@ class WorkerSettings:
         ping,
     ]
     redis_settings = redis_settings()
-    max_jobs = 4
+    max_jobs = 8
     job_timeout = 60 * 60  # course generation can take many minutes

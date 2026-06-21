@@ -39,6 +39,18 @@ ChartJS.register(
 
 type Resolve = (link?: string) => string | undefined;
 
+/** Parse inline markdown bold (`**text**`) into React nodes. */
+function renderInlineMarkdown(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 function MediaImage({ src, alt }: { src?: string; alt?: string }) {
   if (!src) return null;
   return (
@@ -1827,21 +1839,21 @@ function StructuredData({ data }: { data?: Record<string, unknown> }) {
 export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }) {
   switch (block.type) {
     case "heading":
-      return <h3 className="mt-2 text-xl font-bold">{block.text}</h3>;
+      return <h3 className="mt-2 text-xl font-bold">{block.text ? renderInlineMarkdown(block.text) : null}</h3>;
     case "paragraph":
-      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text}</p>;
+      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
     case "list":
       return (
         <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
           {(block.items ?? []).map((it, i) => (
-            <li key={i}>{it}</li>
+            <li key={i}>{renderInlineMarkdown(it)}</li>
           ))}
         </ul>
       );
     case "callout":
       return (
         <div className="rounded-xl border-l-4 border-[var(--brand)] bg-[var(--brand)]/5 p-4 text-sm">
-          {block.text}
+          {block.text ? renderInlineMarkdown(block.text) : null}
         </div>
       );
     case "image":
@@ -1894,12 +1906,12 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return (
         <div className="space-y-2">
           {block.text ? (
-            <p className="text-[15px] leading-relaxed text-gray-700">{block.text}</p>
+            <p className="text-[15px] leading-relaxed text-gray-700">{renderInlineMarkdown(block.text)}</p>
           ) : null}
           {block.items && block.items.length ? (
             <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
               {block.items.map((it, i) => (
-                <li key={i}>{it}</li>
+                <li key={i}>{renderInlineMarkdown(it)}</li>
               ))}
             </ul>
           ) : null}

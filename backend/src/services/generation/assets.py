@@ -1,4 +1,4 @@
-﻿"""Phase 2.5 Process A â€” Resource fetch / asset pipeline.
+"""Phase 2.5 Process A — Resource fetch / asset pipeline.
 
 Works the isolated asset manifest from the Lastenheft and produces an
 `asset_map`: each `template_link` -> a final, production `storage_url` (MinIO).
@@ -12,6 +12,7 @@ fall back to the transcript/browser voice instead of playing a silent snippet.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -68,6 +69,18 @@ def _is_likely_placeholder(spec: AssetSpec) -> bool:
         return True
 
     return False
+
+
+@dataclass
+class AssetProgress:
+    """Tracks parallel asset pipeline progress."""
+
+    total: int = 0
+    completed: int = 0
+    failed: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {"total": self.total, "completed": self.completed, "failed": self.failed}
 
 
 class AssetProvider:
@@ -173,11 +186,13 @@ class PlaceholderAssetProvider(AssetProvider):
         return svg
 
 
-def fetch_assets(
+async def fetch_assets(
     manifest: list[dict] | list[AssetSpec],
     course_prefix: str,
     primary_color: str = "#5145E5",
     provider: AssetProvider | None = None,
+    max_concurrent: int = 10,
+    on_progress: Callable[[AssetProgress], None] | None = None,
 ) -> dict[str, str]:
     """Produce + upload every manifest asset; return template_link -> storage_url.
 
@@ -193,13 +208,15 @@ def fetch_assets(
 
     by_type = Counter(spec.type for spec in specs)
     logger.info(
-        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s",
+        "asset pipeline starting: prefix=%s total=%d by_type=%s provider=%s max_concurrent=%d",
         course_prefix,
         len(specs),
         dict(sorted(by_type.items())),
         type(provider).__name__,
+        max_concurrent,
     )
 
+    progress = AssetProgress(total=len(specs))
     asset_map: dict[str, str] = {}
     skipped = 0
 
@@ -251,10 +268,11 @@ def _placeholder_for(spec: AssetSpec, primary_color: str) -> tuple[bytes, str, s
     return placeholder.produce(spec, primary_color)
 
 
-def publish_asset_map(course_prefix: str, asset_map: dict[str, str]) -> str:
+async def publish_asset_map(course_prefix: str, asset_map: dict[str, str]) -> str:
     """Store the asset_map.json alongside the course and return its object name."""
     object_name = f"{course_prefix}/asset_map.json"
-    put_bytes(
+    await asyncio.to_thread(
+        put_bytes,
         json.dumps(asset_map).encode("utf-8"),
         object_name,
         settings.courses_bucket,
