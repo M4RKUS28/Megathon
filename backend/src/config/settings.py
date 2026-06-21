@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # Phase 3: use a real Devin coding session to author the per-course Vite app
     # (it returns the project source files). Falls back to the template build.
     course_build_use_devin: bool = False
+    # Phase 3: spawn one Devin session per chapter in parallel (requires
+    # course_build_use_devin=True). Falls back to single-session if disabled or
+    # if the parallel approach fails.
+    course_build_parallel_chapters: bool = True
 
     # Script-writer: generate chapters in parallel (one Gemini call per chapter).
     spec_parallel_chapters: bool = True
