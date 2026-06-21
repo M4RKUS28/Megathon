@@ -12,11 +12,12 @@ export default {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
       },
       colors: {
-        // Fixed platform (Coursive) brand palette — unaffected by tenant theming.
         ink: "#0C0E1A",
         paper: "#F6F5F1",
         iris: "#5145E5",
@@ -49,13 +50,23 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+        },
+      },
+      boxShadow: {
+        neu: "var(--shadow-neu)",
+        "neu-sm": "var(--shadow-neu-sm)",
+        "neu-lg": "var(--shadow-neu-lg)",
+        "neu-inset": "var(--shadow-neu-inset)",
       },
       keyframes: {
         "assemble-in": {
           "0%": { opacity: "0", transform: "translateY(14px) rotate(var(--tilt, 0deg))" },
           "100%": { opacity: "1", transform: "translateY(0) rotate(var(--tilt, 0deg))" },
         },
-        "drift": {
+        drift: {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-6px)" },
         },
