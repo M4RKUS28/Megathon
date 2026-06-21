@@ -35,6 +35,18 @@ ChartJS.register(
 
 type Resolve = (link?: string) => string | undefined;
 
+/** Parse inline markdown bold (`**text**`) into React nodes. */
+function renderInlineMarkdown(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 function MediaImage({ src, alt }: { src?: string; alt?: string }) {
   if (!src) return null;
   return (
@@ -1627,20 +1639,24 @@ interface AccordionSectionNormalized {
   content: string;
 }
 
+function extractText(obj: Record<string, unknown>): string {
+  for (const key of ["content", "text", "body", "description"]) {
+    if (typeof obj[key] === "string") return obj[key] as string;
+  }
+  return "";
+}
+
 function normalizeAccordionData(data?: Record<string, unknown>): AccordionSectionNormalized[] {
   if (!data) return [];
-  // Real shape: { sections: [{ title, content }] }
-  if (Array.isArray(data.sections)) {
-    return (data.sections as { title?: string; content?: string }[]).map((s, i) => ({
-      title: typeof s.title === "string" ? s.title : `Section ${i + 1}`,
-      content: typeof s.content === "string" ? s.content : "",
-    }));
-  }
-  // Legacy shape: { items: [{ title, body }] }
-  const items = (data.items as { title: string; body: string }[]) ?? [];
-  return items.map((it) => ({
-    title: it.title,
-    content: it.body,
+  const arr = Array.isArray(data.sections)
+    ? data.sections
+    : Array.isArray(data.items)
+      ? data.items
+      : null;
+  if (!arr) return [];
+  return (arr as Record<string, unknown>[]).map((s, i) => ({
+    title: typeof s.title === "string" ? s.title : typeof s.label === "string" ? (s.label as string) : `Section ${i + 1}`,
+    content: extractText(s),
   }));
 }
 
@@ -1765,7 +1781,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
                     transition={{ duration: reduced ? 0 : 0.25 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-gray-600">{section.content}</div>
+                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-gray-600">{renderInlineMarkdown(section.content)}</div>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
@@ -2193,21 +2209,21 @@ function StructuredData({ data }: { data?: Record<string, unknown> }) {
 export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }) {
   switch (block.type) {
     case "heading":
-      return <h3 className="mt-2 text-xl font-bold">{block.text}</h3>;
+      return <h3 className="mt-2 text-xl font-bold">{block.text ? renderInlineMarkdown(block.text) : null}</h3>;
     case "paragraph":
-      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text}</p>;
+      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
     case "list":
       return (
         <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
           {(block.items ?? []).map((it, i) => (
-            <li key={i}>{it}</li>
+            <li key={i}>{renderInlineMarkdown(it)}</li>
           ))}
         </ul>
       );
     case "callout":
       return (
         <div className="rounded-xl border-l-4 border-[var(--brand)] bg-[var(--brand)]/5 p-4 text-sm">
-          {block.text}
+          {block.text ? renderInlineMarkdown(block.text) : null}
         </div>
       );
     case "image":
@@ -2252,12 +2268,12 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return (
         <div className="space-y-2">
           {block.text ? (
-            <p className="text-[15px] leading-relaxed text-gray-700">{block.text}</p>
+            <p className="text-[15px] leading-relaxed text-gray-700">{renderInlineMarkdown(block.text)}</p>
           ) : null}
           {block.items && block.items.length ? (
             <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
               {block.items.map((it, i) => (
-                <li key={i}>{it}</li>
+                <li key={i}>{renderInlineMarkdown(it)}</li>
               ))}
             </ul>
           ) : null}
