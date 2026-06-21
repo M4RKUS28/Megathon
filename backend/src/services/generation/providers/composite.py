@@ -4,9 +4,12 @@ provider, with deterministic placeholder fallback.
 Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_VIDEO_PROVIDER`,
 `ASSET_AUDIO_PROVIDER`). "auto" picks the best configured provider for the type:
 images -> Nano-Banana (Gemini), else PixVerse; videos -> PixVerse; audio ->
-Gemini TTS. Visual assets can fall back to branded SVG placeholders. Audio does
-not fall back to silence; if TTS is unavailable, the renderer can use the
-transcript/browser voice instead.
+Gemini TTS. If the selected provider is unconfigured or raises, the branded SVG
+placeholder is used so the pipeline always yields a hostable asset.
+
+Graceful degradation: when a provider fails for an asset that looks forced or
+generic (detected via `_is_likely_placeholder`), fall back immediately without
+retry. Save expensive retries for assets with rich, intentional descriptions.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ import logging
 from src.config.settings import settings
 
 from ...agents.schemas import AssetSpec
-from ..assets import AssetProvider, PlaceholderAssetProvider
+from ..assets import AssetProvider, PlaceholderAssetProvider, _is_likely_placeholder
 from .gemini_media import GeminiTTSProvider, NanoBananaImageProvider
 from .pixverse import PixVerseProvider
 
@@ -24,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 _IMAGE_TYPES = {"image", "diagram", "chart", "model"}
 _VIDEO_TYPES = {"video", "animation"}
-_AUDIO_TYPES = {"audio"}
-# Asset types that must NOT fall back to SVG placeholder (browser can't play them).
-_NO_PLACEHOLDER_TYPES = _VIDEO_TYPES | _AUDIO_TYPES
+_AUDIO_TYPES = {"audio", "narration"}
 
 
 def _image_provider() -> AssetProvider | None:
@@ -90,24 +91,21 @@ class CompositeAssetProvider(AssetProvider):
         if provider is not None:
             try:
                 return provider.produce(spec, primary_color)
-            except Exception as exc:  # noqa: BLE001
-                if spec.type in _NO_PLACEHOLDER_TYPES:
+            except Exception as exc:  # noqa: BLE001 — fall back, never fail the batch
+                # For forced/generic assets, don't log a scary warning — this is expected
+                if _is_likely_placeholder(spec):
+                    logger.debug(
+                        "provider %s failed for forced asset %s; expected, using placeholder",
+                        type(provider).__name__,
+                        spec.template_link,
+                    )
+                else:
                     logger.warning(
-                        "%s provider %s failed for %s (%s); skipping (no SVG fallback)",
-                        spec.type,
+                        "provider %s failed for %s (%s); using placeholder",
                         type(provider).__name__,
                         spec.template_link,
                         exc,
                     )
-                    raise
-                logger.warning(
-                    "provider %s failed for %s (%s); using placeholder",
-                    type(provider).__name__,
-                    spec.template_link,
-                    exc,
-                )
-        if spec.type in _NO_PLACEHOLDER_TYPES:
-            raise RuntimeError(f"no {spec.type} provider configured")
         return self.placeholder.produce(spec, primary_color)
 
 

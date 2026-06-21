@@ -227,6 +227,9 @@ class CalaKnowledge(CompanyKnowledge):
     def wiki_search(self, query: str) -> KnowledgeResult:
         return self._query("wiki", "wiki", query, super().wiki_search)
 
+    def google_search(self, query: str) -> KnowledgeResult:
+        return self._query("google", "web_search", query, super().google_search)
+
     def pdf_search(self, query: str) -> KnowledgeResult:
         return self._query("pdf", "pdf", query, super().pdf_search)
 

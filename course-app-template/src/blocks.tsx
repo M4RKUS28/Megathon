@@ -15,11 +15,15 @@ import {
 import type {
   Block,
   ConversationTurn,
+  FillInBlankData,
+  MatchingGameData,
   MinigameData,
   MinigamePair,
   MinigameQuestion,
   MinigameSortItem,
   Persona,
+  SortingChallengeData,
+  WordCloudData,
 } from "./types";
 
 ChartJS.register(
@@ -865,22 +869,90 @@ function Minigame({ data }: { data?: Record<string, unknown> }) {
 }
 
 function Flashcards({ data }: { data?: Record<string, unknown> }) {
-  const cards = (data?.cards as { front: string; back: string }[]) ?? [];
+  const allCards = useMemo(() => (data?.cards as { front: string; back: string }[]) ?? [], [data]);
+  const [order, setOrder] = useState<number[]>(() => allCards.map((_, i) => i));
   const [flipped, setFlipped] = useState<Record<number, boolean>>({});
+  const [firstFlipCorrect, setFirstFlipCorrect] = useState<Set<number>>(new Set());
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  const cards = useMemo(() => order.map((i) => ({ ...allCards[i], _idx: i })), [order, allCards]);
+  const revealed = Object.keys(flipped).filter((k) => flipped[Number(k)]).length;
+  const total = allCards.length;
+
+  const shuffle = useCallback(() => {
+    setOrder((prev) => {
+      const next = [...prev];
+      for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      return next;
+    });
+    setFlipped({});
+  }, []);
+
+  const flip = (idx: number) => {
+    const wasFlipped = !!flipped[idx];
+    setFlipped((f) => ({ ...f, [idx]: !f[idx] }));
+    if (!wasFlipped) {
+      setFirstFlipCorrect((s) => new Set(s).add(idx));
+      if (revealed + 1 === total && !showCelebration) {
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 2500);
+      }
+    }
+  };
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {cards.map((c, i) => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-500">
+          {revealed} / {total} revealed
+        </span>
         <button
-          key={i}
-          onClick={() => setFlipped((f) => ({ ...f, [i]: !f[i] }))}
-          className="min-h-[96px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-neu-sm)] transition hover:shadow-[var(--shadow-neu)]"
+          type="button"
+          onClick={shuffle}
+          className="rounded-lg border border-black/10 px-3 py-1 text-xs font-medium hover:bg-black/5"
         >
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand)]">
-            {flipped[i] ? "Answer" : "Card"}
-          </div>
-          <div className="mt-1 text-sm">{flipped[i] ? c.back : c.front}</div>
+          Shuffle
         </button>
-      ))}
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-[var(--brand)] transition-all"
+          style={{ width: `${total ? (revealed / total) * 100 : 0}%` }}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {cards.map((c) => (
+          <button
+            key={c._idx}
+            onClick={() => flip(c._idx)}
+            className={`min-h-[96px] rounded-xl border p-4 text-left shadow-sm transition hover:shadow-md ${
+              flipped[c._idx]
+                ? "border-[var(--brand)]/30 bg-[var(--brand)]/5"
+                : "border-black/5 bg-white"
+            }`}
+          >
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand)]">
+              {flipped[c._idx] ? "Answer" : "Card"}
+            </div>
+            <div className="mt-1 text-sm">{flipped[c._idx] ? c.back : c.front}</div>
+          </button>
+        ))}
+      </div>
+      {showCelebration && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-center"
+        >
+          <div className="text-lg font-bold text-emerald-700">All cards revealed!</div>
+          <div className="text-sm text-emerald-600">
+            {firstFlipCorrect.size} / {total} seen on first pass
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -935,859 +1007,114 @@ function normalizeDragDropData(data?: Record<string, unknown>): DragDropNormaliz
 }
 
 function DragDrop({ data }: { data?: Record<string, unknown> }) {
-  const reduced = useReducedMotion();
-  const normalized = useMemo(() => normalizeDragDropData(data), [data]);
-  const { prompt, items, bins } = normalized;
-
-  // Shuffled pool of items
-  const shuffledItems = useMemo(() => {
-    const arr = [...items];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((it) => it.id).join(",")]);
-
-  // Placements: itemId -> binId
-  const [placements, setPlacements] = useState<Record<string, string>>({});
+  const pairs = (data?.pairs as { left: string; right: string }[]) ?? [];
+  const rights = useMemo(() => pairs.map((p) => p.right).sort(), [pairs]);
+  const [picks, setPicks] = useState<Record<number, string>>({});
   const [checked, setChecked] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [dragOverBin, setDragOverBin] = useState<string | null>(null);
+  const [shakeIdx, setShakeIdx] = useState<number | null>(null);
 
-  const unplaced = shuffledItems.filter((it) => !placements[it.id]);
-  const allPlaced = items.length > 0 && unplaced.length === 0;
-  const score = checked
-    ? items.reduce((sum, it) => sum + (placements[it.id] === it.correctBin ? 1 : 0), 0)
-    : 0;
+  const allFilled = pairs.every((_, i) => !!picks[i]);
+  const correctCount = pairs.filter((p, i) => picks[i] === p.right).length;
+  const allCorrect = checked && correctCount === pairs.length;
 
-  const placeItem = useCallback((itemId: string, binId: string) => {
-    setPlacements((prev) => ({ ...prev, [itemId]: binId }));
-    setSelectedItem(null);
-    setChecked(false);
-  }, []);
-
-  const removeItem = useCallback((itemId: string) => {
-    setPlacements((prev) => {
-      const next = { ...prev };
-      delete next[itemId];
-      return next;
-    });
-    setChecked(false);
-  }, []);
-
-  const reset = useCallback(() => {
-    setPlacements({});
-    setChecked(false);
-    setSelectedItem(null);
-  }, []);
-
-  const handleDragStart = useCallback((e: React.DragEvent, itemId: string) => {
-    e.dataTransfer.setData("text/plain", itemId);
-    e.dataTransfer.effectAllowed = "move";
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent, binId: string) => {
-    e.preventDefault();
-    const itemId = e.dataTransfer.getData("text/plain");
-    if (itemId) placeItem(itemId, binId);
-    setDragOverBin(null);
-  }, [placeItem]);
-
-  const handleBinClick = useCallback((binId: string) => {
-    if (selectedItem) {
-      placeItem(selectedItem, binId);
+  const checkAll = () => {
+    setChecked(true);
+    // Shake the first wrong answer
+    const wrongIdx = pairs.findIndex((p, i) => picks[i] !== p.right);
+    if (wrongIdx >= 0) {
+      setShakeIdx(wrongIdx);
+      setTimeout(() => setShakeIdx(null), 600);
     }
-  }, [selectedItem, placeItem]);
-
-  const handleItemKeyDown = useCallback((e: React.KeyboardEvent, itemId: string) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      setSelectedItem((prev) => (prev === itemId ? null : itemId));
-    }
-  }, []);
-
-  const handleBinKeyDown = useCallback((e: React.KeyboardEvent, binId: string) => {
-    if ((e.key === "Enter" || e.key === " ") && selectedItem) {
-      e.preventDefault();
-      placeItem(selectedItem, binId);
-    }
-  }, [selectedItem, placeItem]);
-
-  if (!items.length) {
-    return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-        No items to sort.
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Drag and drop sorting activity">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Sort Items</div>
-          {prompt ? <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
-        </div>
-        {checked ? (
-          <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-sm font-bold text-[var(--brand)]">
-            {score}/{items.length}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="p-4">
-        {/* Item pool */}
-        {unplaced.length > 0 ? (
-          <div className="mb-4">
-            <div className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">Items to sort:</div>
-            <div className="flex flex-wrap gap-2" role="list" aria-label="Items to place">
-              {unplaced.map((item) => (
-                <motion.button
-                  key={item.id}
-                  type="button"
-                  layout={!reduced}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, item.id)}
-                  onClick={() => setSelectedItem((prev) => (prev === item.id ? null : item.id))}
-                  onKeyDown={(e) => handleItemKeyDown(e, item.id)}
-                  className={`cursor-grab rounded-lg border px-3 py-1.5 text-sm font-medium transition active:cursor-grabbing ${
-                    selectedItem === item.id
-                      ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
-                      : "border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[var(--brand)]/50"
-                  } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
-                  role="listitem"
-                  aria-label={`${item.text}${selectedItem === item.id ? " (selected)" : ""}`}
-                  aria-pressed={selectedItem === item.id}
-                >
-                  {item.text}
-                </motion.button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Category bins */}
-        <div className={`grid gap-3 ${bins.length <= 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
-          {bins.map((bin) => {
-            const binItems = items.filter((it) => placements[it.id] === bin.id);
-            const isOver = dragOverBin === bin.id;
-            return (
-              <div
-                key={bin.id}
-                onDragOver={handleDragOver}
-                onDragEnter={() => setDragOverBin(bin.id)}
-                onDragLeave={() => setDragOverBin(null)}
-                onDrop={(e) => handleDrop(e, bin.id)}
-                onClick={() => handleBinClick(bin.id)}
-                onKeyDown={(e) => handleBinKeyDown(e, bin.id)}
-                tabIndex={selectedItem ? 0 : -1}
-                role="group"
-                aria-label={`Category: ${bin.title}`}
-                className={`min-h-[80px] rounded-xl border-2 border-dashed p-3 transition ${
-                  isOver
-                    ? "border-[var(--brand)] bg-[var(--brand)]/5"
-                    : selectedItem
-                      ? "border-[var(--brand)]/30 bg-[var(--brand)]/5 cursor-pointer"
-                      : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
-                } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
-              >
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                  {bin.title}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {binItems.map((item) => {
-                    const isCorrect = checked && placements[item.id] === item.correctBin;
-                    const isWrong = checked && placements[item.id] !== item.correctBin;
-                    return (
-                      <span
-                        key={item.id}
-                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${
-                          isCorrect
-                            ? "border-emerald-300 bg-emerald-500/10 text-emerald-400"
-                            : isWrong
-                              ? "border-red-300 bg-red-400/10 text-red-400"
-                              : "border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-                        }`}
-                      >
-                        {item.text}
-                        {!checked ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
-                            className="ml-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
-                            aria-label={`Remove ${item.text}`}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                              <path d="M18 6L6 18M6 6l12 12" />
-                            </svg>
-                          </button>
-                        ) : null}
-                        {isCorrect ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        ) : null}
-                        {isWrong ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                            <path d="M18 6L6 18M6 6l12 12" />
-                          </svg>
-                        ) : null}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-        >
-          Reset
-        </button>
-        {allPlaced && !checked ? (
-          <button
-            type="button"
-            onClick={() => setChecked(true)}
-            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-          >
-            Check
-          </button>
-        ) : null}
-        {checked ? (
-          <span className="text-sm font-medium" role="status" aria-live="polite">
-            {score === items.length ? (
-              <span className="text-emerald-600">All correct!</span>
-            ) : (
-              <span className="text-[hsl(var(--muted-foreground))]">{score} of {items.length} correct</span>
-            )}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-
-// --- Hotspot types ---
-
-interface HotspotSpotNormalized {
-  id: string;
-  x: number;
-  y: number;
-  radius: number;
-  title: string;
-  description: string;
-}
-
-function normalizeHotspotData(
-  data: Record<string, unknown> | undefined,
-  resolve: Resolve,
-): { imageUrl: string | undefined; spots: HotspotSpotNormalized[] } {
-  if (!data) return { imageUrl: undefined, spots: [] };
-  // Real shape: { image_url, hotspots: [...] }
-  if (Array.isArray(data.hotspots)) {
-    const hotspots = data.hotspots as { id?: string; x: number; y: number; radius?: number; title?: string; description?: string }[];
-    return {
-      imageUrl: resolve(data.image_url as string | undefined),
-      spots: hotspots.map((h, i) => ({
-        id: typeof h.id === "string" ? h.id : `spot-${i}`,
-        x: h.x,
-        y: h.y,
-        radius: typeof h.radius === "number" ? h.radius : 3,
-        title: typeof h.title === "string" ? h.title : `Spot ${i + 1}`,
-        description: typeof h.description === "string" ? h.description : "",
-      })),
-    };
-  }
-  // Legacy shape: { asset, spots: [{ x, y, label }] }
-  const legacySpots = (data.spots as { x: number; y: number; label: string }[]) ?? [];
-  return {
-    imageUrl: resolve(data.asset as string | undefined),
-    spots: legacySpots.map((s, i) => ({
-      id: `spot-${i}`,
-      x: s.x,
-      y: s.y,
-      radius: 3,
-      title: s.label,
-      description: "",
-    })),
   };
-}
 
-function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: Resolve }) {
-  const reduced = useReducedMotion();
-  const { imageUrl, spots } = useMemo(() => normalizeHotspotData(data, resolve), [data, resolve]);
-  const [discovered, setDiscovered] = useState<Set<string>>(new Set());
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const total = spots.length;
-  const found = discovered.size;
-  const done = total > 0 && found >= total;
-
-  const clearHint = useCallback(() => {
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    setHint(null);
-  }, []);
-
-  const handleSpotClick = useCallback(
-    (spot: HotspotSpotNormalized) => {
-      clearHint();
-      setDiscovered((prev) => new Set(prev).add(spot.id));
-      setActiveId((prev) => (prev === spot.id ? null : spot.id));
-    },
-    [clearHint],
-  );
-
-  const handleImageClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if ((e.target as HTMLElement).closest("button")) return;
-      clearHint();
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = ((e.clientX - rect.left) / rect.width) * 100;
-      const clickY = ((e.clientY - rect.top) / rect.height) * 100;
-      const hit = spots.find((s) => {
-        const dx = clickX - s.x;
-        const dy = clickY - s.y;
-        return Math.sqrt(dx * dx + dy * dy) <= s.radius + 2;
-      });
-      if (hit) {
-        handleSpotClick(hit);
-      } else {
-        setHint("Try clicking on a highlighted region");
-        hintTimer.current = setTimeout(() => setHint(null), 2000);
-      }
-    },
-    [spots, handleSpotClick, clearHint],
-  );
-
-  const reset = useCallback(() => {
-    setDiscovered(new Set());
-    setActiveId(null);
-    clearHint();
-  }, [clearHint]);
-
-  useEffect(() => {
-    return () => { if (hintTimer.current) clearTimeout(hintTimer.current); };
-  }, []);
-
-  if (!spots.length) {
-    return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-        No hotspots available.
-      </div>
-    );
-  }
-
-  const activeSpot = spots.find((s) => s.id === activeId);
+  const reset = () => {
+    setPicks({});
+    setChecked(false);
+    setShakeIdx(null);
+  };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive hotspot image">
-      {/* Progress */}
-      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-2">
-        <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
-          Discovered {found}/{total}
-        </span>
-        {found > 0 ? (
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-md px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-          >
-            Reset
-          </button>
-        ) : null}
-      </div>
-
-      <div className="h-1 bg-[hsl(var(--secondary))]">
-        <motion.div
-          className="h-full bg-[var(--brand)]"
-          animate={{ width: `${total ? (found / total) * 100 : 0}%` }}
-          transition={{ duration: reduced ? 0 : 0.4 }}
-        />
-      </div>
-
-      {/* Image + spots */}
-      <div
-        className="relative cursor-crosshair select-none"
-        onClick={handleImageClick}
-        role="img"
-        aria-label="Hotspot image with clickable regions"
-      >
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="block w-full" draggable={false} />
-        ) : (
-          <div className="flex h-48 items-center justify-center bg-[hsl(var(--muted))] text-sm text-[hsl(var(--muted-foreground))]">
-            No image provided
-          </div>
-        )}
-
-        {spots.map((spot) => {
-          const isDiscovered = discovered.has(spot.id);
-          const isActive = activeId === spot.id;
+    <div className="rounded-xl border border-black/5 bg-white p-4">
+      {data?.prompt ? <p className="mb-3 text-sm font-medium">{String(data.prompt)}</p> : null}
+      <div className="space-y-2">
+        {pairs.map((p, i) => {
+          const correct = picks[i] === p.right;
+          const isShaking = shakeIdx === i;
           return (
-            <button
-              key={spot.id}
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleSpotClick(spot); }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); handleSpotClick(spot); } }}
-              style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
-              className={`absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-xs font-bold shadow-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] ${
-                isDiscovered
-                  ? "bg-emerald-500 text-white"
-                  : "bg-[var(--brand)] text-white"
-              } ${isActive ? "ring-4 ring-[var(--brand)]/30" : ""}`}
-              aria-label={isDiscovered ? `${spot.title} (discovered)` : `Undiscovered spot`}
-              aria-pressed={isActive}
-            >
-              {isDiscovered ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              ) : (
-                <motion.span
-                  animate={reduced ? {} : { scale: [1, 1.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                  className="block h-2.5 w-2.5 rounded-full bg-white/80"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          );
-        })}
-
-        <AnimatePresence>
-          {hint ? (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-gray-900/90 px-3 py-1.5 text-xs text-white shadow-lg"
-              role="alert"
+              key={i}
+              animate={isShaking ? { x: [0, -6, 6, -4, 4, 0] } : {}}
+              transition={{ duration: 0.4 }}
+              className="flex items-center gap-3"
             >
-              {hint}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
-
-      {/* Detail panel */}
-      <AnimatePresence>
-        {activeSpot ? (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.25 }}
-            className="overflow-hidden border-t border-[hsl(var(--border))]"
-          >
-            <div className="bg-[hsl(var(--muted))] p-4">
-              <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{activeSpot.title}</div>
-              {activeSpot.description ? (
-                <div className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{activeSpot.description}</div>
-              ) : null}
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      {/* Completion */}
-      <AnimatePresence>
-        {done ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="border-t border-emerald-200 bg-emerald-50 p-3 text-center text-sm font-medium text-emerald-700"
-            role="status"
-            aria-live="polite"
-          >
-            All {total} hotspots discovered!
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-
-// --- Timeline types ---
-
-interface TimelineStepNormalized {
-  id: string;
-  title: string;
-  description: string;
-}
-
-function normalizeTimelineData(data?: Record<string, unknown>): TimelineStepNormalized[] {
-  if (!data) return [];
-  // Real shape: { steps: [{ id, title, description }] }
-  if (Array.isArray(data.steps)) {
-    return (data.steps as { id?: string; title?: string; description?: string }[]).map((s, i) => ({
-      id: typeof s.id === "string" ? s.id : `step-${i}`,
-      title: typeof s.title === "string" ? s.title : `Step ${i + 1}`,
-      description: typeof s.description === "string" ? s.description : "",
-    }));
-  }
-  // Legacy shape: { events: [{ date, text }] }
-  const events = (data.events as { date: string; text: string }[]) ?? [];
-  return events.map((ev, i) => ({
-    id: `event-${i}`,
-    title: ev.date,
-    description: ev.text,
-  }));
-}
-
-function Timeline({ data }: { data?: Record<string, unknown> }) {
-  const reduced = useReducedMotion();
-  const authoredSteps = useMemo(() => normalizeTimelineData(data), [data]);
-  const [interactive, setInteractive] = useState(false);
-  const [userOrder, setUserOrder] = useState<TimelineStepNormalized[]>([]);
-  const [validated, setValidated] = useState(false);
-
-  const startInteractive = useCallback(() => {
-    const shuffled = [...authoredSteps];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    setUserOrder(shuffled);
-    setValidated(false);
-    setInteractive(true);
-  }, [authoredSteps]);
-
-  const moveStep = useCallback((from: number, direction: -1 | 1) => {
-    const to = from + direction;
-    setUserOrder((prev) => {
-      if (to < 0 || to >= prev.length) return prev;
-      const next = [...prev];
-      [next[from], next[to]] = [next[to], next[from]];
-      return next;
-    });
-    setValidated(false);
-  }, []);
-
-  const checkOrder = useCallback(() => setValidated(true), []);
-
-  const exitInteractive = useCallback(() => {
-    setInteractive(false);
-    setValidated(false);
-  }, []);
-
-  if (!authoredSteps.length) {
-    return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-        No timeline data available.
-      </div>
-    );
-  }
-
-  if (interactive) {
-    const allCorrect = userOrder.every((s, i) => s.id === authoredSteps[i].id);
-    return (
-      <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive timeline reorder">
-        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Reorder the steps</span>
-          <button
-            type="button"
-            onClick={exitInteractive}
-            className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-          >
-            Back to timeline
-          </button>
-        </div>
-
-        <div className="space-y-2 p-4" role="list" aria-label="Reorderable steps">
-          {userOrder.map((step, i) => {
-            const isCorrect = validated && step.id === authoredSteps[i].id;
-            const isWrong = validated && step.id !== authoredSteps[i].id;
-            return (
-              <motion.div
-                layout={!reduced}
-                key={step.id}
-                className={`flex items-center gap-2 rounded-xl border p-3 ${
-                  isCorrect
-                    ? "border-emerald-300 bg-emerald-500/10"
-                    : isWrong
-                      ? "border-red-300 bg-red-400/10"
-                      : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
+              <span className="w-28 shrink-0 text-sm font-medium">{p.left}</span>
+              <select
+                value={picks[i] ?? ""}
+                disabled={checked && correct}
+                onChange={(e) => {
+                  setPicks((s) => ({ ...s, [i]: e.target.value }));
+                  setChecked(false);
+                }}
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-all ${
+                  checked
+                    ? correct
+                      ? "border-emerald-500 bg-emerald-50"
+                      : "border-red-400 bg-red-50"
+                    : picks[i]
+                      ? "border-[var(--brand)] bg-[var(--brand)]/5"
+                      : "border-black/10"
                 }`}
-                role="listitem"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--card))] text-xs font-bold text-[hsl(var(--foreground))] shadow-[var(--shadow-neu-sm)]">
-                  {i + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{step.title}</div>
-                  {step.description ? <div className="text-xs text-[hsl(var(--muted-foreground))]">{step.description}</div> : null}
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveStep(i, -1)}
-                    disabled={i === 0}
-                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))] disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-                    aria-label={`Move ${step.title} up`}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M18 15l-6-6-6 6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveStep(i, 1)}
-                    disabled={i === userOrder.length - 1}
-                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))] disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-                    aria-label={`Move ${step.title} down`}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-          <span className="text-xs text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
-            {validated ? (allCorrect ? "Correct order!" : "Some steps are out of order") : `${userOrder.length} steps`}
-          </span>
-          {!validated ? (
-            <button
-              type="button"
-              onClick={checkOrder}
-              className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              Check Order
-            </button>
-          ) : !allCorrect ? (
-            <button
-              type="button"
-              onClick={() => setValidated(false)}
-              className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-            >
-              Try Again
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  // Default: vertical animated timeline
-  return (
-    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Timeline">
-      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Timeline</span>
-        {authoredSteps.length > 1 ? (
-          <button
-            type="button"
-            onClick={startInteractive}
-            className="rounded-md px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-          >
-            Try reordering
-          </button>
-        ) : null}
-      </div>
-
-      <ol className="relative space-y-0 border-l-2 border-[var(--brand)]/20 py-4 pl-8 pr-4 ml-4" aria-label="Timeline steps">
-        {authoredSteps.map((step, i) => (
-          <motion.li
-            key={step.id}
-            initial={reduced ? { opacity: 1 } : { opacity: 0, x: -12 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.1, duration: 0.3 }}
-            className="relative pb-6 last:pb-0"
-          >
-            <span className="absolute -left-[33px] top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-bold text-white shadow-[var(--shadow-neu-sm)]">
-              {i + 1}
-            </span>
-            <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{step.title}</div>
-            {step.description ? (
-              <div className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{step.description}</div>
-            ) : null}
-          </motion.li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-
-// --- Accordion types ---
-
-interface AccordionSectionNormalized {
-  title: string;
-  content: string;
-}
-
-function extractText(obj: Record<string, unknown>): string {
-  for (const key of ["content", "text", "body", "description"]) {
-    if (typeof obj[key] === "string") return obj[key] as string;
-  }
-  return "";
-}
-
-function normalizeAccordionData(data?: Record<string, unknown>): AccordionSectionNormalized[] {
-  if (!data) return [];
-  const arr = Array.isArray(data.sections)
-    ? data.sections
-    : Array.isArray(data.items)
-      ? data.items
-      : null;
-  if (!arr) return [];
-  return (arr as Record<string, unknown>[]).map((s, i) => ({
-    title: typeof s.title === "string" ? s.title : typeof s.label === "string" ? (s.label as string) : `Section ${i + 1}`,
-    content: extractText(s),
-  }));
-}
-
-function Accordion({ data }: { data?: Record<string, unknown> }) {
-  const reduced = useReducedMotion();
-  const sections = useMemo(() => normalizeAccordionData(data), [data]);
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [explored, setExplored] = useState<Set<number>>(new Set());
-
-  const total = sections.length;
-  const exploredCount = explored.size;
-  const allExplored = total > 0 && exploredCount >= total;
-
-  const toggle = useCallback((i: number) => {
-    setOpenIndex((prev) => {
-      const next = prev === i ? null : i;
-      if (next !== null) {
-        setExplored((prev) => new Set(prev).add(next));
-      }
-      return next;
-    });
-  }, []);
-
-  const collapseAll = useCallback(() => setOpenIndex(null), []);
-
-  const resetProgress = useCallback(() => {
-    setOpenIndex(null);
-    setExplored(new Set());
-  }, []);
-
-  if (!sections.length) {
-    return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-        No sections available.
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Accordion">
-      {/* Progress header */}
-      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-2">
-        <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
-          {allExplored ? (
-            <span className="text-emerald-600">All sections explored!</span>
-          ) : (
-            `Explored ${exploredCount}/${total}`
-          )}
-        </span>
-        <div className="flex gap-2">
-          {openIndex !== null ? (
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-            >
-              Collapse all
-            </button>
-          ) : null}
-          {exploredCount > 0 ? (
-            <button
-              type="button"
-              onClick={resetProgress}
-              className="text-xs font-medium text-[var(--brand)] hover:text-[var(--brand)]/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-            >
-              Reset
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="h-1 bg-[hsl(var(--secondary))]">
-        <motion.div
-          className="h-full bg-[var(--brand)]"
-          animate={{ width: `${total ? (exploredCount / total) * 100 : 0}%` }}
-          transition={{ duration: reduced ? 0 : 0.3 }}
-        />
-      </div>
-
-      {/* Sections */}
-      <div className="divide-y divide-[hsl(var(--border))]" role="list">
-        {sections.map((section, i) => {
-          const isOpen = openIndex === i;
-          const wasExplored = explored.has(i);
-          return (
-            <div key={i} role="listitem">
-              <button
-                type="button"
-                onClick={() => toggle(i)}
-                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-medium text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
-                aria-expanded={isOpen}
-              >
-                <span className="flex items-center gap-2">
-                  {wasExplored ? (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    </span>
-                  ) : (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[hsl(var(--border))]" aria-hidden="true" />
-                  )}
-                  {section.title}
+                <option value="">Selectâ€¦</option>
+                {rights.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              {checked && (
+                <span className={`text-sm font-bold ${correct ? "text-emerald-600" : "text-red-500"}`}>
+                  {correct ? "✓" : "✗"}
                 </span>
-                <motion.span
-                  animate={{ rotate: isOpen ? 180 : 0 }}
-                  transition={{ duration: reduced ? 0 : 0.2 }}
-                  aria-hidden="true"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </motion.span>
-              </button>
-              <AnimatePresence initial={false}>
-                {isOpen ? (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: reduced ? 0 : 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">{renderInlineMarkdown(section.content)}</div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
+              )}
+            </motion.div>
+
           );
         })}
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        {!checked ? (
+          <button
+            type="button"
+            disabled={!allFilled}
+            onClick={checkAll}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            Check All
+          </button>
+        ) : allCorrect ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 text-sm font-medium text-emerald-600"
+          >
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
+            All correct!
+          </motion.div>
+        ) : (
+          <>
+            <span className="text-sm font-medium text-red-600">
+              {correctCount} / {pairs.length} correct
+            </span>
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+            >
+              Try again
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1847,50 +1174,28 @@ function normalizeScenarioData(data?: Record<string, unknown>): ScenarioNormaliz
 }
 
 function Scenario({ data }: { data?: Record<string, unknown> }) {
-  const reduced = useReducedMotion();
-  const { prompt, steps } = useMemo(() => normalizeScenarioData(data), [data]);
-  const stepMap = useMemo(() => {
-    const m = new Map<string, ScenarioStep>();
-    for (const s of steps) m.set(s.id, s);
-    return m;
-  }, [steps]);
-
-  const [currentStepId, setCurrentStepId] = useState<string>(steps[0]?.id ?? "");
-  const [chosenOption, setChosenOption] = useState<ScenarioOption | null>(null);
-  const [history, setHistory] = useState<{ stepId: string; option: ScenarioOption }[]>([]);
-  const [complete, setComplete] = useState(false);
-
-  const currentStep = stepMap.get(currentStepId);
-
-  const pickOption = useCallback(
-    (option: ScenarioOption) => {
-      setChosenOption(option);
-    },
-    [],
-  );
-
-  const advance = useCallback(() => {
-    if (!chosenOption || !currentStepId) return;
-    setHistory((prev) => [...prev, { stepId: currentStepId, option: chosenOption }]);
-    if (chosenOption.next_step && stepMap.has(chosenOption.next_step)) {
-      setCurrentStepId(chosenOption.next_step);
-      setChosenOption(null);
-    } else {
-      setComplete(true);
-    }
-  }, [chosenOption, currentStepId, stepMap]);
-
-  const reset = useCallback(() => {
-    setCurrentStepId(steps[0]?.id ?? "");
-    setChosenOption(null);
-    setHistory([]);
-    setComplete(false);
-  }, [steps]);
-
-  if (!steps.length) {
-    return (
-      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-        No scenario data available.
+  const branches = (data?.branches as { choice: string; outcome: string; explanation?: string }[]) ?? [];
+  const [picked, setPicked] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-4">
+      {data?.prompt ? <p className="mb-3 text-sm font-medium">{String(data.prompt)}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        {branches.map((b, i) => (
+          <button
+            key={i}
+            onClick={() => { setPicked(i); setShowAll(false); }}
+            className={`rounded-lg border px-3 py-1.5 text-sm transition-all ${
+              picked === i
+                ? "border-[var(--brand)] bg-[var(--brand)]/10 font-medium"
+                : picked !== null
+                  ? "border-black/5 opacity-60"
+                  : "border-black/10 hover:border-[var(--brand)]/50"
+            }`}
+          >
+            {b.choice}
+          </button>
+        ))}
       </div>
     );
   }
@@ -1916,153 +1221,478 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
       {/* Progress bar */}
       <div className="h-1 bg-[hsl(var(--secondary))]">
         <motion.div
-          className="h-full bg-[var(--brand)]"
-          animate={{ width: `${totalSteps ? ((complete ? totalSteps : completedSteps) / totalSteps) * 100 : 0}%` }}
-          transition={{ duration: reduced ? 0 : 0.3 }}
-        />
-      </div>
-
-      <div className="p-4">
-        {/* History */}
-        {history.length > 0 ? (
-          <div className="mb-4 space-y-2">
-            {history.map((h, i) => {
-              const step = stepMap.get(h.stepId);
-              const isCorrect = h.option.correct === true;
-              const isWrong = h.option.correct === false;
-              return (
-                <motion.div
-                  key={i}
-                  initial={reduced ? { opacity: 1 } : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="rounded-lg bg-[hsl(var(--muted))] p-3"
-                >
-                  <div className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{step?.question}</div>
-                  <div className={`mt-1 text-sm font-medium ${isCorrect ? "text-emerald-400" : isWrong ? "text-red-400" : "text-[hsl(var(--foreground))]"}`}>
-                    {isCorrect ? (
-                      <svg className="mr-1 inline h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
-                    ) : isWrong ? (
-                      <svg className="mr-1 inline h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                    ) : null}
-                    {h.option.text}
-                  </div>
-                  {h.option.feedback ? (
-                    <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{h.option.feedback}</div>
-                  ) : null}
-                </motion.div>
-              );
-            })}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3 space-y-2"
+        >
+          <div className="rounded-lg bg-[var(--brand)]/5 border border-[var(--brand)]/10 p-3 text-sm">
+            <div className="font-medium text-[var(--brand)] mb-1">Your choice: {branches[picked].choice}</div>
+            {branches[picked].outcome}
           </div>
-        ) : null}
-
-        {/* Current step or completion */}
-        {complete ? (
-          <motion.div
-            initial={reduced ? { opacity: 1 } : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="text-sm font-semibold text-emerald-700">Scenario Complete</div>
-            {hasCorrectness ? (
-              <div className="mt-1 text-xs text-emerald-600">
-                {correctCount} of {history.length} decisions correct
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-emerald-600">
-                You completed all {history.length} decision{history.length !== 1 ? "s" : ""}
-              </div>
-            )}
-          </motion.div>
-        ) : currentStep ? (
-          <div>
-            <div className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">{currentStep.question}</div>
-            <div className="space-y-2">
-              {currentStep.options.map((option, oi) => {
-                const isChosen = chosenOption === option;
-                const showFeedback = isChosen && option.feedback;
-                const isCorrect = isChosen && option.correct === true;
-                const isWrong = isChosen && option.correct === false;
+          {!showAll && branches.some((b) => b.explanation) && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="text-xs font-medium text-[var(--brand)] hover:underline"
+            >
+              Why were the other options different?
+            </button>
+          )}
+          {showAll && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-1.5"
+            >
+              {branches.map((b, i) => {
+                if (i === picked || !b.explanation) return null;
                 return (
-                  <div key={oi}>
-                    <button
-                      type="button"
-                      onClick={() => pickOption(option)}
-                      disabled={chosenOption !== null && chosenOption !== option}
-                      className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${
-                        isCorrect
-                          ? "border-emerald-400 bg-emerald-500/10 text-emerald-400"
-                          : isWrong
-                            ? "border-red-300 bg-red-400/10 text-red-400"
-                            : isChosen
-                              ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
-                              : "border-[hsl(var(--border))] hover:border-[var(--brand)]/50"
-                      } disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
-                      aria-pressed={isChosen}
-                    >
-                      {option.text}
-                    </button>
-                    <AnimatePresence>
-                      {showFeedback ? (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: reduced ? 0 : 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-1.5 rounded-lg bg-[hsl(var(--muted))] p-2.5 text-xs text-[hsl(var(--muted-foreground))]" role="alert">
-                            {option.feedback}
-                          </div>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
+                  <div key={i} className="rounded-lg bg-gray-50 p-2.5 text-sm">
+                    <span className="font-medium text-gray-700">{b.choice}:</span>{" "}
+                    <span className="text-gray-500">{b.explanation}</span>
                   </div>
                 );
               })}
-            </div>
-          </div>
-        ) : null}
-      </div>
+            </motion.div>
+          )}
+        </motion.div>
+      ) : null}
+    </div>
+  );
+}
 
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+// ── New interactive block types ───────────────────────────────────────────────
+
+function MatchingGame({ data }: { data?: Record<string, unknown> }) {
+  const pairs = ((data as MatchingGameData | undefined)?.pairs) ?? [];
+  const total = pairs.length;
+
+  // Build a grid of 2*N cards (term + definition), shuffled once
+  const gridCards = useMemo(() => {
+    const cards: { id: number; text: string; pairIdx: number; kind: "term" | "def" }[] = [];
+    pairs.forEach((p, i) => {
+      cards.push({ id: i * 2, text: p.term, pairIdx: i, kind: "term" });
+      cards.push({ id: i * 2 + 1, text: p.definition, pairIdx: i, kind: "def" });
+    });
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+    return cards;
+  }, [pairs]);
+
+  const [flipped, setFlipped] = useState<Set<number>>(new Set());
+  const [matched, setMatched] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<number | null>(null);
+  const [wrong, setWrong] = useState<Set<number>>(new Set());
+  const [moves, setMoves] = useState(0);
+
+  const handleClick = (cardId: number) => {
+    if (matched.has(cardId) || flipped.has(cardId) || wrong.size > 0) return;
+    const card = gridCards.find((c) => c.id === cardId);
+    if (!card) return;
+
+    if (selected === null) {
+      setSelected(cardId);
+      setFlipped((s) => new Set(s).add(cardId));
+      return;
+    }
+
+    const prev = gridCards.find((c) => c.id === selected);
+    if (!prev) return;
+    setFlipped((s) => new Set(s).add(cardId));
+    setMoves((m) => m + 1);
+
+    if (prev.pairIdx === card.pairIdx && prev.kind !== card.kind) {
+      // Match!
+      setMatched((s) => { const n = new Set(s); n.add(prev.id); n.add(card.id); return n; });
+      setSelected(null);
+    } else {
+      // No match — briefly show both, then hide
+      setWrong(new Set([prev.id, card.id]));
+      setTimeout(() => {
+        setFlipped((s) => { const n = new Set(s); n.delete(prev.id); n.delete(card.id); return n; });
+        setWrong(new Set());
+        setSelected(null);
+      }, 800);
+    }
+  };
+
+  const allMatched = matched.size === gridCards.length && gridCards.length > 0;
+  const cols = total <= 3 ? "grid-cols-3" : total <= 4 ? "grid-cols-4" : "grid-cols-4";
+
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold">Memory Match</h4>
+        <span className="text-xs text-gray-400">{matched.size / 2} / {total} matched · {moves} moves</span>
+      </div>
+      <div className={`grid ${cols} gap-2`}>
+        {gridCards.map((card) => {
+          const isFlipped = flipped.has(card.id) || matched.has(card.id);
+          const isMatched = matched.has(card.id);
+          const isWrong = wrong.has(card.id);
+          return (
+            <button
+              key={card.id}
+              onClick={() => handleClick(card.id)}
+              disabled={isMatched}
+              className={`min-h-[72px] rounded-lg border p-2.5 text-xs text-center transition-all ${
+                isMatched
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : isWrong
+                    ? "border-red-400 bg-red-50"
+                    : isFlipped
+                      ? "border-[var(--brand)] bg-[var(--brand)]/5"
+                      : "border-black/10 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+              }`}
+            >
+              {isFlipped ? (
+                <span>{card.text}</span>
+              ) : (
+                <span className="text-gray-400 text-lg">?</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {allMatched && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center"
         >
-          Restart
-        </button>
-        {chosenOption && !complete ? (
+          <div className="font-bold text-emerald-700">All pairs matched!</div>
+          <div className="text-xs text-emerald-600">Completed in {moves} moves</div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+function SortingChallenge({ data }: { data?: Record<string, unknown> }) {
+  const raw = data as SortingChallengeData | undefined;
+  const prompt = raw?.prompt ?? "Put these items in the correct order:";
+  const items = useMemo(() => raw?.items ?? [], [raw]);
+  const correctOrder = useMemo(() => raw?.correctOrder ?? items.map((_, i) => i), [raw, items]);
+
+  const [order, setOrder] = useState<number[]>(() => {
+    const indices = items.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    return indices;
+  });
+  const [checked, setChecked] = useState(false);
+
+  const moveUp = (pos: number) => {
+    if (pos === 0) return;
+    setOrder((o) => { const n = [...o]; [n[pos], n[pos - 1]] = [n[pos - 1], n[pos]]; return n; });
+    setChecked(false);
+  };
+
+  const moveDown = (pos: number) => {
+    if (pos >= order.length - 1) return;
+    setOrder((o) => { const n = [...o]; [n[pos], n[pos + 1]] = [n[pos + 1], n[pos]]; return n; });
+    setChecked(false);
+  };
+
+  const isCorrect = order.every((idx, pos) => idx === correctOrder[pos]);
+
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-4">
+      <p className="mb-3 text-sm font-medium">{prompt}</p>
+      <div className="space-y-1.5">
+        {order.map((itemIdx, pos) => {
+          const posCorrect = checked && itemIdx === correctOrder[pos];
+          const posWrong = checked && itemIdx !== correctOrder[pos];
+          return (
+            <motion.div
+              key={itemIdx}
+              layout
+              className={`flex items-center gap-2 rounded-lg border p-2.5 text-sm transition-all ${
+                posCorrect
+                  ? "border-emerald-300 bg-emerald-50"
+                  : posWrong
+                    ? "border-red-300 bg-red-50"
+                    : "border-black/10 bg-white"
+              }`}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
+                {pos + 1}
+              </span>
+              <span className="flex-1">{items[itemIdx]}</span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => moveUp(pos)}
+                  disabled={pos === 0 || (checked && isCorrect)}
+                  className="rounded px-1.5 py-0.5 text-xs hover:bg-black/5 disabled:opacity-30"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDown(pos)}
+                  disabled={pos >= order.length - 1 || (checked && isCorrect)}
+                  className="rounded px-1.5 py-0.5 text-xs hover:bg-black/5 disabled:opacity-30"
+                >
+                  ▼
+                </button>
+              </div>
+              {checked && (
+                <span className={`text-sm font-bold ${posCorrect ? "text-emerald-600" : "text-red-500"}`}>
+                  {posCorrect ? "✓" : "✗"}
+                </span>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        {!checked ? (
           <button
             type="button"
-            onClick={advance}
-            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            onClick={() => setChecked(true)}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white"
           >
-            Continue
+            Check Order
           </button>
-        ) : null}
+        ) : isCorrect ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 text-sm font-medium text-emerald-600"
+          >
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
+            Correct order!
+          </motion.div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setChecked(false)}
+            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
+function FillInBlank({ data }: { data?: Record<string, unknown> }) {
+  const raw = data as FillInBlankData | undefined;
+  const sentences = raw?.sentences ?? [];
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState(false);
+
+  let totalBlanks = 0;
+  let correctBlanks = 0;
+  sentences.forEach((s, si) =>
+    s.blanks.forEach((b, bi) => {
+      totalBlanks++;
+      if (answers[`${si}-${bi}`] === b.answer) correctBlanks++;
+    }),
+  );
+  const allFilled = Object.keys(answers).length >= totalBlanks;
+  const allCorrect = checked && correctBlanks === totalBlanks;
+
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-4 space-y-4">
+      <h4 className="text-sm font-semibold">Fill in the blanks</h4>
+      {sentences.map((s, si) => {
+        // Split text at blank positions and interleave with dropdowns
+        const parts: (string | { blankIdx: number })[] = [];
+        let lastPos = 0;
+        const sortedBlanks = [...s.blanks].sort((a, b) => a.position - b.position);
+        sortedBlanks.forEach((blank, bi) => {
+          if (blank.position > lastPos) {
+            parts.push(s.text.slice(lastPos, blank.position));
+          }
+          parts.push({ blankIdx: bi });
+          // Skip past the blank placeholder (assume "___" or similar)
+          const afterBlank = s.text.indexOf(" ", blank.position + 1);
+          lastPos = afterBlank > blank.position ? afterBlank : blank.position + 3;
+        });
+        if (lastPos < s.text.length) parts.push(s.text.slice(lastPos));
+
+        return (
+          <div key={si} className="text-sm leading-loose flex flex-wrap items-center gap-1">
+            {parts.map((part, pi) => {
+              if (typeof part === "string") {
+                return <span key={pi}>{part}</span>;
+              }
+              const blank = s.blanks[part.blankIdx];
+              const key = `${si}-${part.blankIdx}`;
+              const val = answers[key];
+              const correct = val === blank.answer;
+              return (
+                <select
+                  key={pi}
+                  value={val ?? ""}
+                  disabled={checked && correct}
+                  onChange={(e) => {
+                    setAnswers((a) => ({ ...a, [key]: e.target.value }));
+                    setChecked(false);
+                  }}
+                  className={`inline-block rounded-md border px-2 py-1 text-sm min-w-[120px] ${
+                    checked
+                      ? correct
+                        ? "border-emerald-500 bg-emerald-50"
+                        : "border-red-400 bg-red-50"
+                      : val
+                        ? "border-[var(--brand)] bg-[var(--brand)]/5"
+                        : "border-black/10"
+                  }`}
+                >
+                  <option value="">Choose…</option>
+                  {blank.options.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              );
+            })}
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-3">
+        {!checked ? (
+          <button
+            type="button"
+            disabled={!allFilled}
+            onClick={() => setChecked(true)}
+            className="rounded-lg bg-[var(--brand)] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            Check Answers
+          </button>
+        ) : allCorrect ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 text-sm font-medium text-emerald-600"
+          >
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white text-xs">✓</span>
+            All blanks correct!
+          </motion.div>
+        ) : (
+          <>
+            <span className="text-sm text-red-600 font-medium">{correctBlanks} / {totalBlanks} correct</span>
+            <button
+              type="button"
+              onClick={() => setChecked(false)}
+              className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium"
+            >
+              Try again
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WordCloud({ data }: { data?: Record<string, unknown> }) {
+  const raw = data as WordCloudData | undefined;
+  const words = raw?.words ?? [];
+  const maxWeight = Math.max(...words.map((w) => w.weight), 1);
+
+  return (
+    <div className="rounded-xl border border-black/5 bg-gradient-to-br from-gray-50 to-white p-5">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+        {words.map((w, i) => {
+          const ratio = w.weight / maxWeight;
+          const size = 12 + ratio * 24; // 12px to 36px
+          const opacity = 0.4 + ratio * 0.6;
+          return (
+            <motion.span
+              key={i}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity, scale: 1 }}
+              transition={{ delay: i * 0.04 }}
+              style={{ fontSize: `${size}px` }}
+              className="font-semibold text-[var(--brand)] cursor-default select-none"
+              title={`Weight: ${w.weight}`}
+            >
+              {w.text}
+            </motion.span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Detect fabricated / placeholder chart data that shouldn't be rendered as a
+// real chart. Generic quarter labels with linearly increasing values are a
+// strong signal that the data is filler, not meaningful metrics.
+function looksLikePlaceholder(labels: string[], datasets: { data: number[] }[]): boolean {
+  const GENERIC = /^(q[1-4]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|month\s*\d|week\s*\d|step\s*\d|year\s*\d)/i;
+  const genericCount = labels.filter((l) => GENERIC.test(l.trim())).length;
+  if (genericCount < labels.length * 0.6) return false;
+  for (const ds of datasets) {
+    if (!ds.data || ds.data.length < 3) continue;
+    let monotone = true;
+    for (let i = 1; i < ds.data.length; i++) {
+      if (ds.data[i] < ds.data[i - 1]) { monotone = false; break; }
+    }
+    if (monotone) return true;
+  }
+  return false;
+}
 
 function ChartBlock({ data }: { data?: Record<string, unknown> }) {
   const chartType = (data?.chartType as string) ?? "bar";
   const labels = (data?.labels as string[]) ?? [];
-  const datasets = ((data?.datasets as { label: string; data: number[] }[]) ?? []).map((d, i) => ({
+  const datasets = (data?.datasets as { label: string; data: number[] }[]) ?? [];
+  const title = data?.title ? String(data.title) : undefined;
+
+  // If the data looks fabricated, render a styled info card instead of a chart
+  if (looksLikePlaceholder(labels, datasets)) {
+    return (
+      <div className="rounded-xl border border-black/5 bg-gradient-to-br from-[var(--brand)]/5 to-transparent p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)] text-sm">
+            📊
+          </span>
+          {title ? (
+            <h4 className="text-sm font-semibold">{title}</h4>
+          ) : (
+            <h4 className="text-sm font-semibold">Data Visualization</h4>
+          )}
+        </div>
+        <p className="text-sm text-gray-500">
+          This visualization will be populated with real metrics once data is available.
+        </p>
+        {datasets.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {datasets.map((ds, i) => (
+              <span
+                key={i}
+                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 border border-black/5"
+              >
+                {ds.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const coloredDatasets = datasets.map((d, i) => ({
     ...d,
     backgroundColor: ["#5145E5", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4"][i % 5],
     borderColor: "#5145E5",
   }));
-  const chartData = { labels, datasets };
+  const chartData = { labels, datasets: coloredDatasets };
   const opts = { responsive: true, plugins: { legend: { position: "bottom" as const } } };
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
-      {data?.title ? <h4 className="mb-2 text-sm font-semibold">{String(data.title)}</h4> : null}
+    <div className="rounded-xl border border-black/5 bg-white p-4">
+      {title ? <h4 className="mb-2 text-sm font-semibold">{title}</h4> : null}
       {chartType === "line" ? (
         <Line data={chartData} options={opts} />
       ) : chartType === "pie" ? (
@@ -2258,6 +1888,14 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return <Scenario data={block.data} />;
     case "chart":
       return <ChartBlock data={block.data} />;
+    case "matching_game":
+      return <MatchingGame data={block.data} />;
+    case "sorting_challenge":
+      return <SortingChallenge data={block.data} />;
+    case "fill_in_blank":
+      return <FillInBlank data={block.data} />;
+    case "word_cloud":
+      return <WordCloud data={block.data} />;
     default: {
       // Unknown / custom block type. The design is intentionally free, so rather
       // than dropping the block, surface whatever content it carries (text, list
