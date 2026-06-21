@@ -30,7 +30,7 @@ import { useFullscreen } from "@/hooks/useFullscreen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
 import { PipelineMonitor } from "@/components/PipelineMonitor";
-import type { CoursePlan, PlanChapter } from "@/lib/api";
+import type { CoursePlan, EditRecord, PlanChapter } from "@/lib/api";
 
 let _cid = 0;
 function newChapterId() {
@@ -303,6 +303,65 @@ function PlanReview({ plan, courseId }: { plan: CoursePlan; courseId: string }) 
   );
 }
 
+const SUGGESTED_PROMPTS = [
+  "Make this section more engaging",
+  "Add a practical example",
+  "Simplify the language for beginners",
+  "Update quiz questions to better test understanding",
+  "Add a callout with key takeaways",
+];
+
+function EditDiffSummary({ edit }: { edit: EditRecord }) {
+  if (!edit.diff) return null;
+  const { blocks_changed, blocks_added, blocks_removed, summary } = edit.diff;
+  const hasChanges = blocks_changed.length > 0 || blocks_added.length > 0 || blocks_removed.length > 0;
+  if (!hasChanges) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2 text-xs">
+      <p className="font-medium text-blue-800">{summary}</p>
+      <div className="mt-1 flex flex-wrap gap-1.5 text-blue-700">
+        {blocks_changed.length > 0 && (
+          <span className="rounded bg-blue-100 px-1.5 py-0.5">
+            {blocks_changed.length} modified
+          </span>
+        )}
+        {blocks_added.length > 0 && (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">
+            +{blocks_added.length} added
+          </span>
+        )}
+        {blocks_removed.length > 0 && (
+          <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">
+            -{blocks_removed.length} removed
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditHistoryThread({ edits }: { edits: EditRecord[] }) {
+  if (edits.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {edits.map((ed, i) => (
+        <div
+          key={ed.id}
+          className="flex items-start gap-2 text-xs text-muted-foreground"
+        >
+          <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold">
+            {i + 1}
+          </span>
+          <div className="flex-1">
+            <span className="font-medium text-foreground">{ed.prompt}</span>
+            <span className="ml-2 text-muted-foreground">({ed.status})</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const BUSY_STATUSES = new Set([
   "draft",
   "planning",
@@ -561,6 +620,18 @@ export function CourseDetailPage() {
                   minLength={3}
                   maxLength={2000}
                 />
+                <div className="flex flex-wrap gap-1.5">
+                  {SUGGESTED_PROMPTS.map((sp) => (
+                    <button
+                      key={sp}
+                      type="button"
+                      onClick={() => setPrompt(sp)}
+                      className="rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                    >
+                      {sp}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="submit"
                   disabled={createEdit.isPending || prompt.trim().length < 3}
@@ -578,6 +649,14 @@ export function CourseDetailPage() {
 
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-muted-foreground">Edit requests</h3>
+              {edits && edits.length > 1 ? (
+                <div className="rounded-lg border border-border bg-card/50 p-3">
+                  <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                    Edit history ({edits.length} edits)
+                  </p>
+                  <EditHistoryThread edits={edits} />
+                </div>
+              ) : null}
               {edits?.map((ed) => (
                 <div key={ed.id} className="rounded-lg border border-border bg-card p-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
@@ -622,29 +701,32 @@ export function CourseDetailPage() {
                   ) : null}
 
                   {ed.status === "preview_ready" ? (
-                    <div className="mt-2 flex items-center gap-2">
-                      {ed.preview_url ? (
-                        <a
-                          href={ed.preview_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-primary underline"
+                    <div className="mt-2">
+                      <EditDiffSummary edit={ed} />
+                      <div className="mt-2 flex items-center gap-2">
+                        {ed.preview_url ? (
+                          <a
+                            href={ed.preview_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-primary underline"
+                          >
+                            Preview
+                          </a>
+                        ) : null}
+                        <button
+                          onClick={() => acceptEdit.mutate(ed.id)}
+                          className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white"
                         >
-                          Preview
-                        </a>
-                      ) : null}
-                      <button
-                        onClick={() => acceptEdit.mutate(ed.id)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white"
-                      >
-                        <Check className="h-3 w-3" /> Accept
-                      </button>
-                      <button
-                        onClick={() => rejectEdit.mutate(ed.id)}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
-                      >
-                        <X className="h-3 w-3" /> Reject
-                      </button>
+                          <Check className="h-3 w-3" /> Accept
+                        </button>
+                        <button
+                          onClick={() => rejectEdit.mutate(ed.id)}
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                        >
+                          <X className="h-3 w-3" /> Reject
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                 </div>
