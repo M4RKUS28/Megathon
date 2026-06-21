@@ -380,6 +380,61 @@ input[type="checkbox"] {
   list-style: none;
 }
 
+/* ===== JUDGE HINT — remove this whole block (and the matching block in
+   js/coursive-login.js) to disable the demo credentials hint. ===== */
+.coursive-hint {
+  position: relative;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px dashed rgba(81, 69, 229, 0.45);
+  border-radius: 12px;
+  background: rgba(81, 69, 229, 0.06);
+  color: var(--coursive-ink);
+}
+
+.coursive-hint__label {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--coursive-iris);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.coursive-hint__text {
+  margin: 0 0 8px;
+  color: rgba(12, 14, 26, 0.7);
+  font-size: 13px;
+}
+
+.coursive-hint__creds {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.coursive-hint__creds dt {
+  color: rgba(12, 14, 26, 0.55);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.coursive-hint__creds dd {
+  margin: 0;
+}
+
+.coursive-hint__creds code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--coursive-iris-hover);
+}
+/* ===== END JUDGE HINT ===== */
+
 /* ── Responsive: stack the panes on small screens ────────────────────────── */
 @media (max-width: 860px) {
   .login-pf-page {
