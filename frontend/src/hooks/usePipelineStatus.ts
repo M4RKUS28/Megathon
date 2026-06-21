@@ -78,17 +78,25 @@ function derivePhases(jobs: GenerationJobRecord[]): PipelinePhase[] {
     }
   }
 
-  // The build job may contain assets/codegen sub-progress
+  // The build job may contain assets/codegen sub-progress under parallel_status
   const buildJob = byType.get("build");
   const buildResult = parseResult(buildJob);
 
-  const assetsResult = buildResult.assets as
+  // Backend stores parallel progress under job.result.parallel_status
+  const parallelStatus = buildResult.parallel_status as
+    | { assets?: { status?: string; progress?: AssetProgress }; codegen?: { status?: string; sessions?: CodegenSession[] } }
+    | undefined;
+  const assetsResult = parallelStatus?.assets as
     | { status?: string; progress?: AssetProgress }
     | undefined;
-  const codegenResult = buildResult.codegen as
+  const codegenResult = parallelStatus?.codegen as
     | { status?: string; sessions?: CodegenSession[] }
     | undefined;
-  const specProgressResult = buildResult.spec_progress as SpecProgress | undefined;
+
+  // Spec progress may be at top level or under parallel_status
+  const specJob = byType.get("spec");
+  const specResult = parseResult(specJob);
+  const specProgressResult = (specResult.spec_progress ?? buildResult.spec_progress) as SpecProgress | undefined;
 
   const phases: PipelinePhase[] = PHASE_ORDER.map((phaseId) => {
     const label =
