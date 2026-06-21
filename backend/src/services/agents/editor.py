@@ -189,7 +189,7 @@ def validate_edited_spec(
         quiz = ch.get("quiz", {})
         if quiz:
             pct = quiz.get("passing_pct", 80)
-            if not (0 <= pct <= 100):
+            if not isinstance(pct, (int, float)) or not (0 <= pct <= 100):
                 warnings.append(f"Chapter {ci} quiz passing_pct={pct} out of range [0,100]")
             questions = quiz.get("questions", [])
             if not questions:
@@ -199,7 +199,7 @@ def validate_edited_spec(
                 idx = q.get("answerIndex", 0)
                 if not opts:
                     warnings.append(f"Chapter {ci} quiz Q{qi} has no options")
-                elif idx < 0 or idx >= len(opts):
+                elif not isinstance(idx, int) or idx < 0 or idx >= len(opts):
                     warnings.append(
                         f"Chapter {ci} quiz Q{qi} answerIndex={idx} "
                         f"out of bounds (options count={len(opts)})"
@@ -289,7 +289,7 @@ def _build_history_section(edit_history: list[dict] | None = None) -> str:
     if not edit_history:
         return ""
     entries: list[str] = []
-    for h in edit_history[-5:]:
+    for h in edit_history[:5]:
         prompt = h.get("prompt", "")
         status = h.get("status", "")
         entries.append(f'- "{prompt}" (status: {status})')
@@ -464,7 +464,16 @@ async def _devin_edit_spec(
 
     spec_json = json.dumps(spec)
     if len(spec_json) > 120_000:
-        spec_json = spec_json[:120_000]
+        # Truncate at a structural boundary: keep only the first N chapters
+        # that fit within the limit, rather than cutting mid-JSON.
+        truncated = copy.deepcopy(spec)
+        chapters = truncated.get("chapters", [])
+        while json.dumps(truncated).__len__() > 120_000 and chapters:
+            chapters.pop()
+        omitted = len(spec.get("chapters", [])) - len(chapters)
+        if omitted > 0:
+            truncated["_note"] = f"{omitted} chapter(s) omitted for length"
+        spec_json = json.dumps(truncated)
 
     prompt = f"""You are editing an interactive e-learning course specification (Lastenheft).
 
@@ -546,8 +555,17 @@ async def generate_edited_spec(
     block = _get_block(new_spec, idx) if idx is not None else None
     devin_session_id: str | None = None
 
-    system_prompt = _format_system_prompt(
-        BLOCK_EDIT_SYSTEM if (idx is not None and block is not None) else SPEC_EDIT_SYSTEM,
+    is_block_edit = idx is not None and block is not None
+    block_prompt = _format_system_prompt(
+        BLOCK_EDIT_SYSTEM,
+        company_name=company_name,
+        audience=audience,
+        plan_summary=plan_summary,
+        compliance_requirements=compliance_requirements,
+        edit_history=edit_history,
+    )
+    spec_prompt = _format_system_prompt(
+        SPEC_EDIT_SYSTEM,
         company_name=company_name,
         audience=audience,
         plan_summary=plan_summary,
@@ -555,12 +573,12 @@ async def generate_edited_spec(
         edit_history=edit_history,
     )
 
-    if tier == TIER_SIMPLE and idx is not None and block is not None:
+    if tier == TIER_SIMPLE and is_block_edit:
         # Fast Gemini path for targeted block edits
         updated: dict | None = None
         if gemini_available():
             try:
-                updated = await _gemini_edit_block(block, instruction, target_text, system_prompt)
+                updated = await _gemini_edit_block(block, instruction, target_text, block_prompt)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Gemini block edit failed (%s); using local fallback", exc)
         if updated is None:
@@ -583,9 +601,9 @@ async def generate_edited_spec(
 
         if edited is None and gemini_available():
             try:
-                if idx is not None and block is not None:
+                if is_block_edit:
                     updated_block = await _gemini_edit_block(
-                        block, instruction, target_text, system_prompt,
+                        block, instruction, target_text, block_prompt,
                     )
                     if updated_block is not None:
                         c, p, b = idx
@@ -593,13 +611,13 @@ async def generate_edited_spec(
                         edited = new_spec
                 else:
                     edited = await _gemini_edit_spec(
-                        new_spec, instruction, target_text, system_prompt,
+                        new_spec, instruction, target_text, spec_prompt,
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Gemini fallback edit failed (%s); using local fallback", exc)
 
         if edited is None:
-            if idx is not None and block is not None:
+            if is_block_edit:
                 c, p, b = idx
                 new_spec["chapters"][c]["pages"][p]["blocks"][b] = _local_edit_block(
                     block, instruction,
