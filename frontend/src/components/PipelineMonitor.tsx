@@ -461,6 +461,7 @@ function TaskList({ tasks }: { tasks: PipelineTask[] }) {
 
 export function PipelineMonitor({ courseId }: { courseId: string }) {
   const { phases, overallStatus, tasks } = usePipelineStatus(courseId);
+  const [open, setOpen] = useState(false);
 
   const plan = phases.find((p) => p.id === "plan");
   const spec = phases.find((p) => p.id === "spec");
@@ -470,52 +471,86 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
 
   if (!plan || !spec || !assets || !codegen || !build) return null;
 
-  if (overallStatus === "done") {
-    return (
-      <section className="rounded-xl border border-border bg-card p-4">
-        <CompletedSummary phases={phases} />
-      </section>
-    );
-  }
+  const doneCount = phases.filter((p) => p.status === "done").length;
+  const runningCount = phases.filter((p) => p.status === "running").length;
+
+  const statusSummary =
+    overallStatus === "done"
+      ? "Complete"
+      : runningCount > 0
+        ? `${doneCount}/${phases.length} phases`
+        : "Pending";
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-3 text-sm font-semibold text-foreground">Pipeline progress</h3>
+    <section className="rounded-xl border border-border bg-card">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors rounded-xl"
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="text-sm font-semibold text-foreground">Pipeline progress</span>
+          <span className="text-xs text-muted-foreground">{statusSummary}</span>
+        </div>
+        {overallStatus === "done" ? (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+            <Check className="h-3.5 w-3.5" /> Done
+          </span>
+        ) : runningCount > 0 ? (
+          <span className="inline-flex items-center gap-1 text-xs text-primary">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running
+          </span>
+        ) : null}
+      </button>
 
-      {/* Horizontal pipeline diagram */}
-      <div className="flex flex-wrap items-center gap-y-4 overflow-x-auto pb-2">
-        <PhaseNode phase={plan} />
-        <Connector status={plan.status} />
-        <PhaseNode phase={spec} />
-        {spec.specProgress && <SpecProgressBar progress={spec.specProgress} />}
-        <Connector status={spec.status} />
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-3">
+          {overallStatus === "done" ? (
+            <CompletedSummary phases={phases} />
+          ) : (
+            <>
+              {/* Horizontal pipeline diagram */}
+              <div className="flex flex-wrap items-center gap-y-4 overflow-x-auto pb-2">
+                <PhaseNode phase={plan} />
+                <Connector status={plan.status} />
+                <PhaseNode phase={spec} />
+                {spec.specProgress && <SpecProgressBar progress={spec.specProgress} />}
+                <Connector status={spec.status} />
 
-        {/* Parallel lanes for assets + codegen */}
-        <ParallelLanes assets={assets} codegen={codegen} />
+                {/* Parallel lanes for assets + codegen */}
+                <ParallelLanes assets={assets} codegen={codegen} />
 
-        <Connector
-          status={
-            assets.status === "done" && codegen.status === "done"
-              ? "done"
-              : assets.status === "failed" || codegen.status === "failed"
-                ? "failed"
-                : assets.status === "running" || codegen.status === "running"
-                  ? "running"
-                  : "pending"
-          }
-        />
-        <PhaseNode phase={build} />
-      </div>
+                <Connector
+                  status={
+                    assets.status === "done" && codegen.status === "done"
+                      ? "done"
+                      : assets.status === "failed" || codegen.status === "failed"
+                        ? "failed"
+                        : assets.status === "running" || codegen.status === "running"
+                          ? "running"
+                          : "pending"
+                  }
+                />
+                <PhaseNode phase={build} />
+              </div>
 
-      {/* Spec progress below the diagram when available */}
-      {spec.specProgress && spec.status === "running" && (
-        <div className="mt-3 max-w-[200px]">
-          <SpecProgressBar progress={spec.specProgress} />
+              {/* Spec progress below the diagram when available */}
+              {spec.specProgress && spec.status === "running" && (
+                <div className="mt-3 max-w-[200px]">
+                  <SpecProgressBar progress={spec.specProgress} />
+                </div>
+              )}
+
+              {/* Expandable task list */}
+              <TaskList tasks={tasks} />
+            </>
+          )}
         </div>
       )}
-
-      {/* Expandable task list */}
-      <TaskList tasks={tasks} />
     </section>
   );
 }
