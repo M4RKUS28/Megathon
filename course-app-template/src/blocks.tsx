@@ -254,19 +254,16 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
     return m;
   }, [nodes]);
 
-  const [transcript, setTranscript] = useState<{ role: "speaker" | "learner"; text: string }[]>([]);
-  const [currentNodeId, setCurrentNodeId] = useState<string | null>(nodes[0]?.id ?? null);
+  const firstNode = nodes[0];
+  const [transcript, setTranscript] = useState<{ role: "speaker" | "learner"; text: string }[]>(
+    firstNode ? [{ role: "speaker", text: firstNode.text }] : [],
+  );
+  const [currentNodeId, setCurrentNodeId] = useState<string | null>(firstNode?.id ?? null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const currentNode = currentNodeId ? nodeMap.get(currentNodeId) : undefined;
   const choices = currentNode?.choices ?? [];
   const isTerminal = !currentNode || choices.length === 0;
-
-  useEffect(() => {
-    if (currentNode && (transcript.length === 0 || transcript[transcript.length - 1].text !== currentNode.text)) {
-      setTranscript((prev) => [...prev, { role: "speaker", text: currentNode.text }]);
-    }
-  }, [currentNode, transcript]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
@@ -284,9 +281,9 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
   }, [nodeMap]);
 
   const restart = useCallback(() => {
-    setTranscript([]);
-    setCurrentNodeId(nodes[0]?.id ?? null);
-  }, [nodes]);
+    setTranscript(firstNode ? [{ role: "speaker", text: firstNode.text }] : []);
+    setCurrentNodeId(firstNode?.id ?? null);
+  }, [firstNode]);
 
   if (!nodes.length) {
     return (
