@@ -113,7 +113,7 @@ function SpecProgressBar({ progress }: { progress: SpecProgress }) {
 function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
   if (sessions.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="mt-2 flex flex-wrap gap-2">
       {sessions.map((s) => {
         const isRunning = s.status === "running";
         const isDone = s.status === "done" || s.status === "completed";
@@ -124,20 +124,21 @@ function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
 
         const card = (
           <span
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-lg border font-medium transition-all duration-300 ${
               isRunning
-                ? "bg-primary/10 text-primary animate-pulse"
+                ? "px-3 py-1.5 text-xs bg-primary/15 text-primary border-primary/40 shadow-[0_0_12px_rgba(59,130,246,0.25)]"
                 : isDone
-                  ? "bg-emerald-500/10 text-emerald-600"
+                  ? "px-2 py-1 text-[11px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                   : isFailed
-                    ? "bg-red-500/10 text-red-500"
-                    : "bg-muted text-muted-foreground"
+                    ? "px-2 py-1 text-[11px] bg-red-500/10 text-red-500 border-red-500/30"
+                    : "px-2 py-1 text-[11px] bg-muted text-muted-foreground border-border"
             }`}
           >
-            {isRunning && <Loader2 className="h-3 w-3 animate-spin" />}
+            {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {isDone && <Check className="h-3 w-3" />}
             {isFailed && <AlertCircle className="h-3 w-3" />}
             {s.chapter}
+            {isRunning && devinUrl && <ExternalLink className="h-3 w-3 opacity-70" />}
           </span>
         );
 
@@ -148,7 +149,7 @@ function CodegenCards({ sessions }: { sessions: CodegenSession[] }) {
               href={devinUrl}
               target="_blank"
               rel="noreferrer"
-              className="no-underline hover:brightness-125"
+              className="no-underline hover:brightness-125 transition-transform hover:scale-105"
               title={`Open Devin session for ${s.chapter}`}
             >
               {card}
@@ -292,12 +293,12 @@ function ParallelLanes({
 
 function CompletedSummary({ phases }: { phases: PipelinePhase[] }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3">
-      <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-emerald-500 bg-emerald-100">
-        <Check className="h-4 w-4 text-emerald-600" />
+    <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3">
+      <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-emerald-500 bg-emerald-500/20">
+        <Check className="h-4 w-4 text-emerald-400" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-emerald-700">Pipeline complete</p>
+        <p className="text-sm font-semibold text-emerald-400">Pipeline complete</p>
         <p className="text-xs text-muted-foreground">
           All {phases.length} phases finished successfully.
         </p>
@@ -311,27 +312,27 @@ function CompletedSummary({ phases }: { phases: PipelinePhase[] }) {
 const SERVICE_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   gemini: {
     label: "Gemini",
-    color: "bg-blue-50 text-blue-600 border-blue-200",
+    color: "bg-blue-500/10 text-blue-400 border-blue-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   "gemini-tts": {
     label: "Gemini TTS",
-    color: "bg-violet-50 text-violet-600 border-violet-200",
+    color: "bg-violet-500/10 text-violet-400 border-violet-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   "gemini-imagen": {
     label: "Gemini Imagen",
-    color: "bg-cyan-50 text-cyan-600 border-cyan-200",
+    color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   devin: {
     label: "Devin",
-    color: "bg-purple-50 text-purple-600 border-purple-200",
+    color: "bg-purple-500/10 text-purple-400 border-purple-500/30",
     icon: <ExternalLink className="h-3 w-3" />,
   },
   pixverse: {
     label: "PixVerse",
-    color: "bg-amber-50 text-amber-600 border-amber-200",
+    color: "bg-amber-500/10 text-amber-400 border-amber-500/30",
     icon: <Sparkles className="h-3 w-3" />,
   },
   internal: {
@@ -459,9 +460,55 @@ function TaskList({ tasks }: { tasks: PipelineTask[] }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+function DevinBanner({ codegen }: { codegen: PipelinePhase }) {
+  if (codegen.status !== "running") return null;
+
+  const activeSession = codegen.codegenSessions.find((s) => s.status === "running");
+  const devinUrl = codegen.devinSessionUrl ?? (activeSession?.session_id
+    ? `https://app.devin.ai/sessions/${activeSession.session_id}`
+    : null);
+
+  return (
+    <div className="mb-4 rounded-xl border-2 border-primary/50 bg-card p-4 shadow-neu animate-[devin-glow_2s_ease-in-out_infinite]">
+      <style>{`
+        @keyframes devin-glow {
+          0%, 100% { box-shadow: 0 0 8px rgba(59,130,246,0.2), 0 0 20px rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.5); }
+          50% { box-shadow: 0 0 16px rgba(59,130,246,0.4), 0 0 40px rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.8); }
+        }
+      `}</style>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-full border-2 border-primary bg-primary/15">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-primary">Devin</span>
+              <span className="inline-flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+            </div>
+            <p className="text-xs text-muted-foreground animate-pulse">
+              Devin is building your course&hellip;
+            </p>
+          </div>
+        </div>
+        {devinUrl && (
+          <a
+            href={devinUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            Open Devin session
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PipelineMonitor({ courseId }: { courseId: string }) {
   const { phases, overallStatus, tasks } = usePipelineStatus(courseId);
-  const [open, setOpen] = useState(false);
 
   const plan = phases.find((p) => p.id === "plan");
   const spec = phases.find((p) => p.id === "spec");
@@ -473,6 +520,18 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
 
   const doneCount = phases.filter((p) => p.status === "done").length;
   const runningCount = phases.filter((p) => p.status === "running").length;
+  const isDevinRunning = codegen.status === "running";
+
+  const defaultOpen = overallStatus !== "done" && runningCount > 0;
+  const [open, setOpen] = useState(defaultOpen);
+  const hasAutoExpanded = useRef(false);
+
+  useEffect(() => {
+    if (defaultOpen && !hasAutoExpanded.current) {
+      setOpen(true);
+      hasAutoExpanded.current = true;
+    }
+  }, [defaultOpen]);
 
   const statusSummary =
     overallStatus === "done"
@@ -482,7 +541,11 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
         : "Pending";
 
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className={`rounded-xl border bg-card transition-all duration-300 ${
+      isDevinRunning && !open
+        ? "border-primary/40 shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+        : "border-border"
+    }`}>
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors rounded-xl"
@@ -497,8 +560,13 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
           <span className="text-xs text-muted-foreground">{statusSummary}</span>
         </div>
         {overallStatus === "done" ? (
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
             <Check className="h-3.5 w-3.5" /> Done
+          </span>
+        ) : isDevinRunning && !open ? (
+          <span className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary animate-pulse">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Devin is working&hellip;
           </span>
         ) : runningCount > 0 ? (
           <span className="inline-flex items-center gap-1 text-xs text-primary">
@@ -513,6 +581,9 @@ export function PipelineMonitor({ courseId }: { courseId: string }) {
             <CompletedSummary phases={phases} />
           ) : (
             <>
+              {/* Devin banner when codegen is running */}
+              <DevinBanner codegen={codegen} />
+
               {/* Horizontal pipeline diagram */}
               <div className="flex flex-wrap items-center gap-y-4 overflow-x-auto pb-2">
                 <PhaseNode phase={plan} />
