@@ -34,7 +34,7 @@ export function PeoplePage() {
 
       <section>
         <h2 className="text-lg font-semibold">Team</h2>
-        <div className="mt-4 overflow-hidden rounded-xl border border-border">
+        <div className="mt-4 overflow-hidden rounded-xl border border-border shadow-neu-sm">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-left text-muted-foreground">
               <tr>
@@ -56,7 +56,7 @@ export function PeoplePage() {
                         onChange={(e) =>
                           updatePerson.mutate({ id: p.id, role: e.target.value as AppRole })
                         }
-                        className="rounded-md border border-border bg-background px-2 py-1"
+                        className="rounded-md border border-border bg-muted shadow-neu-inset px-2 py-1"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -78,7 +78,7 @@ export function PeoplePage() {
                             department_id: e.target.value || null,
                           })
                         }
-                        className="rounded-md border border-border bg-background px-2 py-1"
+                        className="rounded-md border border-border bg-muted shadow-neu-inset px-2 py-1"
                       >
                         <option value="">—</option>
                         {departments?.map((d) => (
@@ -121,11 +121,11 @@ export function PeoplePage() {
               value={newDept}
               onChange={(e) => setNewDept(e.target.value)}
               placeholder="New department"
-              className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              className="w-64 rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary"
             />
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-neu-sm hover:opacity-90"
             >
               <Plus className="h-4 w-4" /> Add
             </button>
@@ -135,7 +135,7 @@ export function PeoplePage() {
           {departments?.map((d) => (
             <li
               key={d.id}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm shadow-neu-sm"
             >
               {d.name}
               {isAdmin ? (
