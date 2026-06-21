@@ -301,8 +301,8 @@ async def process_build_job(job_id: str) -> None:
             def _service_for_asset_type(atype: str) -> str:
                 if atype in ("audio", "narration"):
                     return "gemini-tts"
-                if atype == "video":
-                    return "pixverse"
+                if atype in ("video", "animation"):
+                    return "placeholder"
                 return "gemini-imagen"
 
             build_tasks: list[dict[str, str]] = []

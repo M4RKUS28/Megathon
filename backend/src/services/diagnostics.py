@@ -1,9 +1,9 @@
 """Live provider diagnostics — verify that the configured external API keys work.
 
-Each external provider (Gemini, Cala MCP, PixVerse, Devin) is probed with a
-lightweight, real authenticated request so we can tell whether the keys from the
-`.env` actually work. Probes never raise and never generate billable media; they
-only validate reachability + authentication. Results are returned to the frontend
+Each external provider (Gemini, Cala MCP, Devin) is probed with a lightweight,
+real authenticated request so we can tell whether the keys from the `.env`
+actually work. Probes never raise and never generate billable media; they only
+validate reachability + authentication. Results are returned to the frontend
 (which logs them to the browser console) and also written to the backend log.
 """
 
@@ -108,48 +108,6 @@ async def _check_cala() -> ProviderCheck:
         return ProviderCheck("cala", label, True, False, f"handshake failed: {exc}", None, latency)
 
 
-async def _check_pixverse() -> ProviderCheck:
-    label = "PixVerse (image / video generation)"
-    key = (settings.pixverse_api_key or "").strip()
-    if not key:
-        return ProviderCheck("pixverse", label, False, False, "PIXVERSE_API_KEY not set")
-    base = settings.pixverse_api_base_url.rstrip("/")
-    # Cheap authenticated probe: query a video result with a sentinel id. A valid
-    # key is accepted (the API replies with an app-level error, not an auth 401),
-    # so we never trigger a billable generation.
-    url = f"{base}/openapi/v2/video/result/1"
-    headers = {"API-KEY": key, "Accept": "application/json"}
-    start = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT) as client:
-            resp = await client.get(url, headers=headers)
-        latency = int((time.monotonic() - start) * 1000)
-        if resp.status_code in (401, 403):
-            return ProviderCheck(
-                "pixverse", label, True, False,
-                f"key rejected (HTTP {resp.status_code})", resp.status_code, latency,
-            )
-        if resp.status_code >= 500:
-            return ProviderCheck(
-                "pixverse", label, True, False,
-                f"server error HTTP {resp.status_code}", resp.status_code, latency,
-            )
-        err_msg = ""
-        try:
-            err_msg = str((resp.json() or {}).get("ErrMsg", ""))
-        except Exception:  # noqa: BLE001 — body may not be JSON
-            err_msg = resp.text[:120]
-        return ProviderCheck(
-            "pixverse", label, True, True,
-            f"key accepted (HTTP {resp.status_code}{f': {err_msg}' if err_msg else ''})",
-            resp.status_code, latency,
-        )
-    except Exception as exc:  # noqa: BLE001
-        latency = int((time.monotonic() - start) * 1000)
-        return ProviderCheck(
-            "pixverse", label, True, False, f"request failed: {exc}", None, latency
-        )
-
 
 async def _check_devin() -> ProviderCheck:
     label = "Devin v3 API (per-course code-gen)"
@@ -193,7 +151,6 @@ async def probe_providers() -> list[ProviderCheck]:
     checks = await asyncio.gather(
         _check_gemini(),
         _check_cala(),
-        _check_pixverse(),
         _check_devin(),
     )
     for check in checks:

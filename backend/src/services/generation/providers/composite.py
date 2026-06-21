@@ -1,12 +1,14 @@
-﻿"""Composite asset provider â€” dispatches per asset type to the configured real
+"""Composite asset provider -- dispatches per asset type to the configured real
 provider, with deterministic placeholder fallback.
 
-Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_VIDEO_PROVIDER`,
-`ASSET_AUDIO_PROVIDER`). "auto" picks the best configured provider for the type:
-images -> Nano-Banana (Gemini), else PixVerse; videos -> PixVerse; audio ->
-Gemini TTS. Visual assets can fall back to branded SVG placeholders. Audio does
-not fall back to silence; if TTS is unavailable, the renderer can use the
-transcript/browser voice instead.
+Selection is driven by settings (`ASSET_IMAGE_PROVIDER`, `ASSET_AUDIO_PROVIDER`).
+"auto" picks the best configured provider per asset type and falls back to the
+branded SVG placeholder. Images use Nano-Banana (Gemini); audio uses Gemini TTS.
+Video generation is disabled (no provider configured); video/animation assets
+receive an SVG placeholder.
+
+Audio does not fall back to silence; if TTS is unavailable, the renderer can use
+the transcript/browser voice instead.
 """
 
 from __future__ import annotations
@@ -18,39 +20,22 @@ from src.config.settings import settings
 from ...agents.schemas import AssetSpec
 from ..assets import AssetProvider, PlaceholderAssetProvider
 from .gemini_media import GeminiTTSProvider, NanoBananaImageProvider
-from .pixverse import PixVerseProvider
 
 logger = logging.getLogger(__name__)
 
 _IMAGE_TYPES = {"image", "diagram", "chart", "model"}
 _VIDEO_TYPES = {"video", "animation"}
 _AUDIO_TYPES = {"audio"}
-# Asset types that must NOT fall back to SVG placeholder (browser can't play them).
-_NO_PLACEHOLDER_TYPES = _VIDEO_TYPES | _AUDIO_TYPES
+# Audio must NOT fall back to SVG placeholder (browser can't play it).
+_NO_PLACEHOLDER_TYPES = _AUDIO_TYPES
 
 
 def _image_provider() -> AssetProvider | None:
     choice = settings.asset_image_provider
     if choice == "placeholder":
         return None
-    if choice == "nano_banana":
+    if choice == "nano_banana" or choice == "auto":
         return NanoBananaImageProvider() if NanoBananaImageProvider.configured() else None
-    if choice == "pixverse":
-        return PixVerseProvider() if PixVerseProvider.configured() else None
-    # auto — prefer PixVerse for richer image output when configured
-    if PixVerseProvider.configured():
-        return PixVerseProvider()
-    if NanoBananaImageProvider.configured():
-        return NanoBananaImageProvider()
-    return None
-
-
-def _video_provider() -> AssetProvider | None:
-    choice = settings.asset_video_provider
-    if choice == "placeholder":
-        return None
-    if choice in {"pixverse", "auto"} and PixVerseProvider.configured():
-        return PixVerseProvider()
     return None
 
 
@@ -67,23 +52,20 @@ class CompositeAssetProvider(AssetProvider):
     def __init__(self) -> None:
         self.placeholder = PlaceholderAssetProvider()
         self._image = _image_provider()
-        self._video = _video_provider()
         self._audio = _audio_provider()
         logger.info(
-            "asset providers: image=%s video=%s audio=%s",
+            "asset providers: image=%s audio=%s video=placeholder(disabled)",
             type(self._image).__name__ if self._image else "placeholder",
-            type(self._video).__name__ if self._video else "placeholder",
             type(self._audio).__name__ if self._audio else "placeholder",
         )
 
     def _select(self, spec: AssetSpec) -> AssetProvider | None:
-        if spec.type in _VIDEO_TYPES:
-            return self._video
         if spec.type in _AUDIO_TYPES:
             return self._audio
         if spec.type in _IMAGE_TYPES:
             return self._image
-        return self._image
+        # Video/animation: no provider, will use placeholder SVG
+        return None
 
     def produce(self, spec: AssetSpec, primary_color: str) -> tuple[bytes, str, str]:
         provider = self._select(spec)

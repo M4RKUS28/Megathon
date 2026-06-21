@@ -1,6 +1,6 @@
 """Provider unit tests (offline: no network, no API keys required).
 
-Cover the pure parsing/selection/validation logic of the 5 provider integrations
+Cover the pure parsing/selection/validation logic of the provider integrations
 and verify every provider degrades gracefully to the deterministic fallback.
 """
 
@@ -26,8 +26,6 @@ from src.services.generation.providers.gemini_media import (
     _pcm_to_wav,
     _rate_from_mime,
 )
-from src.services.generation.providers.pixverse import PixVerseProvider, _aspect_ratio
-
 
 # ── Cala MCP ─────────────────────────────────────────────────────────────────
 def test_cala_extract_snippets_from_content_and_structured():
@@ -101,17 +99,6 @@ def test_gemini_providers_unconfigured_without_key(monkeypatch):
     assert GeminiTTSProvider.configured() is False
 
 
-# ── PixVerse ─────────────────────────────────────────────────────────────────
-def test_pixverse_aspect_ratio():
-    assert _aspect_ratio("16:9") == "16:9"
-    assert _aspect_ratio("800x600") == "4:3"
-    assert _aspect_ratio("") == "16:9"
-
-
-def test_pixverse_not_configured_by_default():
-    assert PixVerseProvider.configured() is False
-
-
 # ── Composite provider (graceful fallback) ───────────────────────────────────
 def test_composite_falls_back_to_placeholder_svg():
     provider = CompositeAssetProvider()
@@ -128,12 +115,16 @@ def test_composite_falls_back_to_placeholder_svg():
     assert b"<svg" in content
 
 
-def test_composite_audio_and_video_raise_without_provider():
+def test_composite_video_falls_back_to_placeholder():
     provider = CompositeAssetProvider()
     video = AssetSpec(template_link="/resources/video/01", type="video", description="x")
-    with pytest.raises(RuntimeError, match="video provider|no video provider|pixverse"):
-        provider.produce(video, "#000000")
+    content, ext, ctype = provider.produce(video, "#000000")
+    assert ext == "svg"
+    assert ctype == "image/svg+xml"
 
+
+def test_composite_audio_raises_without_provider():
+    provider = CompositeAssetProvider()
     audio = AssetSpec(template_link="/resources/audio/01", type="audio", description="x")
     with pytest.raises(RuntimeError, match="audio provider|no audio provider|gemini-tts"):
         provider.produce(audio, "#000000")
