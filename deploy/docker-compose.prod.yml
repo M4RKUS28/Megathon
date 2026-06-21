@@ -221,6 +221,8 @@ services:
     entrypoint: []
     environment:
       <<: *backend-env
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
     depends_on:
       postgres:
         condition: service_healthy

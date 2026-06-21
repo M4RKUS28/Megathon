@@ -16,14 +16,17 @@ Falls back to the deterministic Lastenheft generator when Gemini is unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TypedDict
+from typing import Any, Callable, Coroutine, TypedDict
 
 from pydantic import BaseModel, Field
 
+from src.config.settings import settings
+
 from .fallback import fallback_lastenheft
 from .llm import gemini_available, get_chat_model
-from .schemas import AssetSpec, Block, CoursePlan, Lastenheft, SpecChapter
+from .schemas import AssetSpec, Block, CoursePlan, Lastenheft, PlanChapter, SpecChapter
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +139,15 @@ class _ChaptersOut(BaseModel):
     chapters: list[SpecChapter] = Field(default_factory=list)
 
 
+class _SingleChapterOut(BaseModel):
+    """Structured output for a single chapter (parallel mode)."""
+    chapter: SpecChapter
+
+
+# Type alias for the optional progress callback.
+ProgressCallback = Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
+
+
 class _State(TypedDict, total=False):
     plan: CoursePlan
     company_name: str
@@ -143,6 +155,7 @@ class _State(TypedDict, total=False):
     chapters: list[SpecChapter]
     asset_manifest: list[AssetSpec]
     lastenheft: Lastenheft
+    progress_callback: ProgressCallback | None
 
 
 def _plan_text(plan: CoursePlan) -> str:
@@ -169,7 +182,78 @@ async def _design_interactions(state: _State) -> _State:
     chapters = out.chapters or []
     if not chapters:
         raise RuntimeError("script writer produced no chapters")
+    cb = state.get("progress_callback")
+    if cb:
+        await cb({"chapters_total": len(chapters), "chapters_completed": len(chapters)})
     return {"chapters": chapters}
+
+
+def _chapter_context(plan: CoursePlan) -> str:
+    """Build a concise course-context preamble (shared across per-chapter calls)."""
+    lines = [
+        f"Title: {plan.title}",
+        f"Audience: {plan.audience}",
+        f"Language: {plan.language}",
+    ]
+    if plan.objectives:
+        lines.append("Objectives:\n" + "\n".join(f"- {o}" for o in plan.objectives))
+    if plan.compliance_requirements:
+        lines.append(
+            "Compliance:\n" + "\n".join(f"- {c}" for c in plan.compliance_requirements)
+        )
+    return "\n".join(lines)
+
+
+def _single_chapter_prompt(plan: CoursePlan, chapter: PlanChapter) -> str:
+    """Prompt for generating a single chapter with full course context."""
+    ctx = _chapter_context(plan)
+    kp = "; ".join(chapter.key_points)
+    return (
+        f"{ctx}\n\nGenerate ONLY the following chapter:\n"
+        f"- [{chapter.id}] {chapter.title} — {chapter.objective} (key points: {kp})"
+    )
+
+
+async def _design_interactions_parallel(state: _State) -> _State:
+    """Generate each chapter in parallel (one Gemini call per chapter).
+
+    Falls back to the single-call approach on any error."""
+    plan = state["plan"]
+    cb = state.get("progress_callback")
+    chapters_total = len(plan.chapters)
+
+    if cb:
+        await cb({"chapters_total": chapters_total, "chapters_completed": 0})
+
+    try:
+        model = get_chat_model(temperature=0.5).with_structured_output(_SingleChapterOut)
+        completed = 0
+        lock = asyncio.Lock()
+
+        async def _generate_one(plan_chapter: PlanChapter) -> SpecChapter:
+            nonlocal completed
+            prompt = _single_chapter_prompt(plan, plan_chapter)
+            out: _SingleChapterOut = await model.ainvoke(
+                [("system", SCRIPT_SYSTEM), ("user", prompt)]
+            )
+            ch = out.chapter
+            async with lock:
+                completed += 1
+                if cb:
+                    await cb({"chapters_total": chapters_total, "chapters_completed": completed})
+            return ch
+
+        chapters = list(
+            await asyncio.gather(*[_generate_one(pc) for pc in plan.chapters])
+        )
+        if not chapters:
+            raise RuntimeError("parallel script writer produced no chapters")
+        return {"chapters": chapters}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "parallel chapter generation failed (%s); falling back to single call", exc
+        )
+        return await _design_interactions(state)
 
 
 # Distinct TTS voices for the two sides of a conversation so the speakers sound
@@ -262,8 +346,14 @@ def _assemble(state: _State) -> _State:
 def _build_graph():
     from langgraph.graph import END, START, StateGraph
 
+    design_fn = (
+        _design_interactions_parallel
+        if settings.spec_parallel_chapters
+        else _design_interactions
+    )
+
     g = StateGraph(_State)
-    g.add_node("design_interactions", _design_interactions)
+    g.add_node("design_interactions", design_fn)
     g.add_node("build_manifest", _build_manifest)
     g.add_node("assemble", _assemble)
     g.add_edge(START, "design_interactions")
@@ -274,7 +364,10 @@ def _build_graph():
 
 
 async def generate_lastenheft(
-    plan: CoursePlan, company_name: str, primary_color: str
+    plan: CoursePlan,
+    company_name: str,
+    primary_color: str,
+    progress_callback: ProgressCallback | None = None,
 ) -> Lastenheft:
     """Run the script-writer graph (or deterministic fallback)."""
     if not gemini_available():
@@ -283,7 +376,12 @@ async def generate_lastenheft(
     try:
         graph = _build_graph()
         result = await graph.ainvoke(
-            {"plan": plan, "company_name": company_name, "primary_color": primary_color}
+            {
+                "plan": plan,
+                "company_name": company_name,
+                "primary_color": primary_color,
+                "progress_callback": progress_callback,
+            }
         )
         lh = result.get("lastenheft")
         if isinstance(lh, Lastenheft) and lh.chapters:

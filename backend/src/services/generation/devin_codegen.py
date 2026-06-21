@@ -7,12 +7,16 @@ output. The builder then writes those files, runs `npm run build`, and publishes
 the resulting `dist/` (Phase 4). If Devin is unavailable or fails, the caller
 falls back to the prebuilt `course-app-template` build.
 
+Supports parallel chapter sessions: one Devin session per chapter, each producing
+its chapter's components/pages, merged into a single project at the end.
+
 We keep hosting under our control (MinIO) rather than asking Devin to host, so the
 generated app stays sandboxed and embeddable.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -196,3 +200,282 @@ async def generate_course_app(
         return session_id, None
     logger.info("Devin authored %d project files for the course app", len(files))
     return session_id, files
+
+
+# ── Parallel chapter sessions ─────────────────────────────────────────────────
+
+# Schema for chapter sessions: each returns only its chapter's src/ files.
+CHAPTER_APP_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["files"],
+    "properties": {
+        "files": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["path", "content"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+
+def _build_skeleton_prompt(spec: dict) -> str:
+    """Build the shared skeleton prompt: package.json, router, layout, shared types.
+
+    This prompt creates the project scaffolding that all chapter sessions depend on.
+    """
+    course_meta = {
+        "title": spec.get("title"),
+        "primaryColor": spec.get("primaryColor"),
+        "chapters": [
+            {"id": ch.get("id"), "title": ch.get("title")}
+            for ch in spec.get("chapters", [])
+        ],
+    }
+    return (
+        "You are the Devin Skeleton Agent. Create ONLY the shared project scaffolding "
+        "for a Vite + React + TypeScript + Tailwind course application. Individual "
+        "chapter content will be built by separate agents and merged in later.\n\n"
+        "Create these files:\n"
+        "- package.json (with vite, react, react-dom, react-router-dom, typescript, "
+        "tailwindcss, framer-motion, recharts, @dnd-kit/core, @dnd-kit/sortable)\n"
+        "- vite.config.ts\n"
+        "- tsconfig.json\n"
+        "- tailwind.config.ts (with the course primaryColor as brand)\n"
+        "- index.html\n"
+        "- src/main.tsx (mounts <App/>)\n"
+        "- src/App.tsx (React Router with lazy routes for each chapter)\n"
+        "- src/types.ts (shared TypeScript interfaces: Chapter, Page, Block, Asset)\n"
+        "- src/hooks/useAssetMap.ts (loads /asset_map.json, resolves template_links)\n"
+        "- src/hooks/useCourse.ts (loads /course.json)\n"
+        "- src/components/Layout.tsx (sidebar/nav shell with chapter navigation)\n"
+        "- src/components/AudioPlayer.tsx (reusable audio player with transcript)\n"
+        "- src/components/QuizGate.tsx (chapter-end quiz requiring >=80%)\n"
+        "- src/components/ProgressBar.tsx\n"
+        "- src/styles/globals.css (Tailwind directives + brand variables)\n\n"
+        "The router should expect each chapter's pages at:\n"
+        "  src/chapters/<chapter_id>/index.tsx\n\n"
+        "Return ONLY structured output: a `files` array of {path, content}.\n\n"
+        f"=== Course metadata ===\n{json.dumps(course_meta)}\n"
+    )
+
+
+def _build_chapter_prompt(spec: dict, chapter: dict, chapter_index: int) -> str:
+    """Build a prompt for a single chapter's Devin session."""
+    course_meta = {
+        "title": spec.get("title"),
+        "primaryColor": spec.get("primaryColor"),
+        "totalChapters": len(spec.get("chapters", [])),
+    }
+    chapter_id = chapter.get("id", f"chapter-{chapter_index + 1}")
+    return (
+        f"You are the Devin Chapter Agent for chapter {chapter_index + 1}. Build ONLY "
+        f"the React components for this single chapter of an interactive course.\n\n"
+        "The chapter will be integrated into a shared Vite + React + TypeScript + "
+        "Tailwind project. Your files will be placed under:\n"
+        f"  src/chapters/{chapter_id}/\n\n"
+        "Requirements:\n"
+        "- Create src/chapters/{chapter_id}/index.tsx as the chapter's entry component\n"
+        "- Create sub-components for each page and block type in the chapter\n"
+        "- Cover ALL pages and ALL blocks in the chapter spec faithfully\n"
+        "- Audio blocks: render as accessible 'Listen' player with transcript toggle\n"
+        "- Conversation blocks: two-persona scene with speech bubbles, auto-advance\n"
+        "- Minigame blocks: polished, animated, scored games with drag-and-drop\n"
+        "- End the chapter with a quiz gate (>=80% to pass, retry below 80%)\n"
+        "- Reference assets by template_link (e.g. /resources/images/01)\n"
+        "- Import shared hooks from '../../hooks/useAssetMap' and '../../hooks/useCourse'\n"
+        "- Import shared components from '../../components/AudioPlayer' etc.\n"
+        "- Use Tailwind, Framer Motion for animations\n"
+        "- Apply the 60-30-10 color rule with the brand primaryColor\n"
+        "- Make it visually polished, modern, and accessible (WCAG AA)\n\n"
+        "Return ONLY structured output: a `files` array of {path, content}.\n"
+        f"All paths should be relative (e.g. src/chapters/{chapter_id}/index.tsx).\n\n"
+        f"=== Course metadata ===\n{json.dumps(course_meta)}\n\n"
+        f"=== Chapter spec ===\n{json.dumps(chapter)[:80000]}\n"
+    )
+
+
+def _merge_chapter_files(
+    skeleton_files: dict[str, str],
+    chapter_outputs: list[tuple[int, dict[str, str]]],
+) -> dict[str, str]:
+    """Merge skeleton + all chapter file maps into a single project."""
+    merged = dict(skeleton_files)
+    for _idx, chapter_files in sorted(chapter_outputs, key=lambda x: x[0]):
+        for path, content in chapter_files.items():
+            norm = path.lstrip("/")
+            if ".." in norm.split("/") or not norm:
+                continue
+            merged[norm] = content
+    return merged
+
+
+async def generate_course_app_parallel(
+    spec: dict,
+    asset_map: dict,
+    on_session: Callable[[dict], Awaitable[None]] | None = None,
+    on_chapter_session: Callable[[int, str, dict], Awaitable[None]] | None = None,
+) -> tuple[str | None, dict[str, str] | None, list[dict] | None]:
+    """Parallel chapter generation: one Devin session per chapter.
+
+    Returns (primary_session_id, merged_file_map, chapter_sessions_info) or
+    (None, None, None) to fall back to template/single-session approach.
+
+    `on_session` is called for the skeleton session.
+    `on_chapter_session` is called for each chapter session with
+    (chapter_index, chapter_title, created_response).
+    """
+    if not settings.course_build_use_devin or not settings.course_build_parallel_chapters:
+        return None, None, None
+
+    client = DevinClient()
+    if not client.enabled:
+        logger.info("Parallel chapters: Devin API not configured; skipping")
+        return None, None, None
+
+    chapters = spec.get("chapters", [])
+    if not chapters:
+        logger.warning("Parallel chapters: no chapters in spec; skipping")
+        return None, None, None
+
+    logger.info("Starting parallel chapter generation: %d chapters", len(chapters))
+    chapter_sessions: list[dict] = []
+
+    try:
+        # Step 1: Create the skeleton session
+        skeleton_session_id: str | None = None
+
+        async def _on_skeleton_created(created: dict) -> None:
+            nonlocal skeleton_session_id
+            skeleton_session_id = created.get("session_id")
+            if on_session:
+                await on_session(created)
+
+        skeleton_id, skeleton_output = await client.run(
+            _build_skeleton_prompt(spec),
+            structured_output_schema=CHAPTER_APP_SCHEMA,
+            title=f"Skeleton: {spec.get('title', 'course')}",
+            tags=["coursive", "course-app", "skeleton"],
+            on_created=_on_skeleton_created,
+        )
+        skeleton_files = _validate_files(skeleton_output)
+        if not skeleton_files:
+            logger.warning("Skeleton session returned no usable files; falling back")
+            return skeleton_id, None, None
+
+        logger.info("Skeleton session %s produced %d files", skeleton_id, len(skeleton_files))
+
+        # Step 2: Spawn one Devin session per chapter in parallel
+        async def _run_chapter(
+            index: int, chapter: dict,
+        ) -> tuple[int, dict[str, str] | None, dict]:
+            chapter_title = chapter.get("title", f"Chapter {index + 1}")
+            chapter_id = chapter.get("id", f"chapter-{index + 1}")
+            session_info: dict[str, Any] = {
+                "chapter": chapter_title,
+                "chapter_id": chapter_id,
+                "chapter_index": index,
+                "session_id": None,
+                "status": "pending",
+            }
+
+            async def _on_ch_created(created: dict) -> None:
+                session_info["session_id"] = created.get("session_id")
+                session_info["status"] = "running"
+                session_info["url"] = created.get("url")
+                if on_chapter_session:
+                    await on_chapter_session(index, chapter_title, created)
+
+            try:
+                ch_session_id, ch_output = await client.run(
+                    _build_chapter_prompt(spec, chapter, index),
+                    structured_output_schema=CHAPTER_APP_SCHEMA,
+                    title=f"Ch{index + 1}: {chapter_title[:40]}",
+                    tags=["coursive", "course-app", "chapter", f"ch-{index + 1}"],
+                    on_created=_on_ch_created,
+                )
+                session_info["session_id"] = ch_session_id
+                ch_files = _validate_chapter_files(ch_output)
+                if ch_files:
+                    session_info["status"] = "done"
+                    session_info["files_count"] = len(ch_files)
+                    return index, ch_files, session_info
+                else:
+                    session_info["status"] = "failed"
+                    session_info["error"] = "no usable files returned"
+                    return index, None, session_info
+            except DevinError as exc:
+                session_info["status"] = "failed"
+                session_info["error"] = str(exc)
+                logger.warning("Chapter %d session failed: %s", index + 1, exc)
+                return index, None, session_info
+
+        tasks = [_run_chapter(i, ch) for i, ch in enumerate(chapters)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Collect results
+        chapter_outputs: list[tuple[int, dict[str, str]]] = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Chapter task raised exception: %s", result)
+                continue
+            index, files, info = result
+            chapter_sessions.append(info)
+            if files:
+                chapter_outputs.append((index, files))
+
+        if not chapter_outputs:
+            logger.warning("No chapter sessions produced files; falling back")
+            return skeleton_id, None, chapter_sessions
+
+        logger.info(
+            "Parallel chapters: %d/%d succeeded",
+            len(chapter_outputs),
+            len(chapters),
+        )
+
+        # Step 3: Merge skeleton + chapter files
+        merged = _merge_chapter_files(skeleton_files, chapter_outputs)
+        if "package.json" not in merged:
+            logger.warning("Merged project missing package.json; falling back")
+            return skeleton_id, None, chapter_sessions
+
+        logger.info(
+            "Parallel generation complete: %d total files from skeleton + %d chapters",
+            len(merged),
+            len(chapter_outputs),
+        )
+        return skeleton_id, merged, chapter_sessions
+
+    except DevinError as exc:
+        logger.warning("Parallel chapter generation failed (%s); falling back", exc)
+        return None, None, chapter_sessions
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Unexpected error in parallel chapter generation: %s", exc)
+        return None, None, chapter_sessions
+
+
+def _validate_chapter_files(output: dict) -> dict[str, str] | None:
+    """Validate chapter session output (less strict than full project validation)."""
+    files = output.get("files") if isinstance(output, dict) else None
+    if not isinstance(files, list) or not files:
+        return None
+    result: dict[str, str] = {}
+    for entry in files:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        content = entry.get("content")
+        if not isinstance(path, str) or not isinstance(content, str):
+            continue
+        norm = path.lstrip("/")
+        if ".." in norm.split("/") or not norm:
+            logger.warning("skipping unsafe chapter path: %s", path)
+            continue
+        result[norm] = content
+    return result if result else None
