@@ -1,16 +1,10 @@
-"""Edit loop — apply a targeted change to an existing Lastenheft (spec).
+"""Hybrid Tiered Edit Architecture — "Edit with Devin".
 
-The creator selects a block in the rendered course and describes a change in
-plain language ("Edit with Devin"). We rewrite just that block — or, when no
-block is selected, apply a spec-level instruction — using Gemini, falling back to
-a deterministic local edit so the loop works offline. The result is a new spec
-dict the builder re-renders into a preview the creator can accept or reject.
+Simple/targeted block edits route through an enhanced Gemini path (fast).
+Complex/structural edits route through a real Devin API session (powerful).
+Both paths include context injection, post-edit validation, and diff tracking.
 
-Enhanced with:
-- Rich context injection (company, audience, plan summary, compliance)
-- Conversation history for iterative refinement
-- Post-edit validation with auto-retry
-- Diff tracking between old and new specs
+Fallback chain: Devin → Gemini → deterministic local edit.
 """
 
 from __future__ import annotations
@@ -18,21 +12,239 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
+from dataclasses import dataclass, field
 
 from .llm import gemini_available, get_chat_model
 from .schemas import Block, Lastenheft
 
 logger = logging.getLogger(__name__)
 
-# ── System prompts with context placeholders ─────────────────────────────────
+# ── Edit-tier labels ─────────────────────────────────────────────────────────
+
+TIER_SIMPLE = "simple"
+TIER_COMPLEX = "complex"
+
+# ── Complexity classifier ────────────────────────────────────────────────────
+
+_COMPLEX_KEYWORDS = re.compile(
+    r"\b(add\s+chapter|remove\s+chapter|delete\s+chapter|new\s+chapter"
+    r"|add\s+page|remove\s+page|delete\s+page|new\s+page"
+    r"|restructure|reorganize|reorder|merge\s+chapter|split\s+chapter"
+    r"|add\s+quiz|change\s+quiz|modify\s+quiz|update\s+quiz|remove\s+quiz"
+    r"|compliance|regulation|policy|mandatory|certification"
+    r"|move\s+block|swap\s+block|add\s+block|remove\s+block|delete\s+block"
+    r"|multiple\s+block|several\s+block|all\s+block|every\s+block"
+    r"|across\s+chapter|across\s+page|throughout)\b",
+    re.IGNORECASE,
+)
+
+_SIMPLE_KEYWORDS = re.compile(
+    r"\b(friendlier|simpler|shorter|longer|rephrase|reword|tone|example"
+    r"|typo|fix\s+grammar|translate|summarize|summarise|clarify"
+    r"|bold|italic|highlight|emphasize|emphasise)\b",
+    re.IGNORECASE,
+)
+
+
+def classify_edit_complexity(instruction: str, selector: str | None) -> str:
+    """Classify an edit as 'simple' or 'complex' using keyword heuristics."""
+    if not selector:
+        return TIER_COMPLEX
+
+    if _COMPLEX_KEYWORDS.search(instruction):
+        return TIER_COMPLEX
+
+    if _SIMPLE_KEYWORDS.search(instruction):
+        return TIER_SIMPLE
+
+    if len(instruction.split()) <= 20:
+        return TIER_SIMPLE
+
+    return TIER_COMPLEX
+
+
+# ── Diff tracking ────────────────────────────────────────────────────────────
+
+
+@dataclass
+class BlockDiff:
+    chapter: int
+    page: int
+    block: int
+    action: str  # "changed" | "added" | "removed"
+    old_type: str | None = None
+    new_type: str | None = None
+
+
+@dataclass
+class EditDiff:
+    changed: list[BlockDiff] = field(default_factory=list)
+    summary: str = ""
+
+
+def compute_edit_diff(old_spec: dict, new_spec: dict) -> EditDiff:
+    """Compare two specs and return a structured diff."""
+    diffs: list[BlockDiff] = []
+    old_chapters = old_spec.get("chapters", [])
+    new_chapters = new_spec.get("chapters", [])
+
+    max_chapters = max(len(old_chapters), len(new_chapters))
+    for ci in range(max_chapters):
+        old_ch = old_chapters[ci] if ci < len(old_chapters) else None
+        new_ch = new_chapters[ci] if ci < len(new_chapters) else None
+        if old_ch is None and new_ch is not None:
+            for pi, page in enumerate(new_ch.get("pages", [])):
+                for bi, blk in enumerate(page.get("blocks", [])):
+                    diffs.append(BlockDiff(ci, pi, bi, "added", new_type=blk.get("type")))
+            continue
+        if new_ch is None and old_ch is not None:
+            for pi, page in enumerate(old_ch.get("pages", [])):
+                for bi, blk in enumerate(page.get("blocks", [])):
+                    diffs.append(BlockDiff(ci, pi, bi, "removed", old_type=blk.get("type")))
+            continue
+
+        old_pages = (old_ch or {}).get("pages", [])
+        new_pages = (new_ch or {}).get("pages", [])
+        max_pages = max(len(old_pages), len(new_pages))
+        for pi in range(max_pages):
+            old_pg = old_pages[pi] if pi < len(old_pages) else None
+            new_pg = new_pages[pi] if pi < len(new_pages) else None
+            old_blocks = (old_pg or {}).get("blocks", [])
+            new_blocks = (new_pg or {}).get("blocks", [])
+            max_blocks = max(len(old_blocks), len(new_blocks))
+            for bi in range(max_blocks):
+                old_b = old_blocks[bi] if bi < len(old_blocks) else None
+                new_b = new_blocks[bi] if bi < len(new_blocks) else None
+                if old_b is None and new_b is not None:
+                    diffs.append(BlockDiff(ci, pi, bi, "added", new_type=new_b.get("type")))
+                elif new_b is None and old_b is not None:
+                    diffs.append(BlockDiff(ci, pi, bi, "removed", old_type=old_b.get("type")))
+                elif old_b != new_b:
+                    diffs.append(BlockDiff(
+                        ci, pi, bi, "changed",
+                        old_type=old_b.get("type") if old_b else None,
+                        new_type=new_b.get("type") if new_b else None,
+                    ))
+
+    changed = sum(1 for d in diffs if d.action == "changed")
+    added = sum(1 for d in diffs if d.action == "added")
+    removed = sum(1 for d in diffs if d.action == "removed")
+    parts = []
+    if changed:
+        parts.append(f"{changed} block(s) changed")
+    if added:
+        parts.append(f"{added} block(s) added")
+    if removed:
+        parts.append(f"{removed} block(s) removed")
+    summary = ", ".join(parts) or "no changes detected"
+
+    return EditDiff(changed=diffs, summary=summary)
+
+
+# ── Post-edit validation ─────────────────────────────────────────────────────
+
+
+def validate_edited_spec(
+    new_spec: dict,
+    old_spec: dict | None = None,
+    block_level: bool = False,
+) -> list[str]:
+    """Validate an edited spec for structural integrity. Returns warnings."""
+    warnings: list[str] = []
+    chapters = new_spec.get("chapters", [])
+
+    if not chapters:
+        warnings.append("Spec has no chapters")
+        return warnings
+
+    if block_level and old_spec:
+        old_chapters = old_spec.get("chapters", [])
+        if len(chapters) != len(old_chapters):
+            warnings.append(
+                f"Chapter count changed ({len(old_chapters)} -> {len(chapters)}) "
+                "during a block-level edit"
+            )
+        for ci, (old_ch, new_ch) in enumerate(
+            zip(old_chapters, chapters, strict=False)
+        ):
+            old_pages = old_ch.get("pages", [])
+            new_pages = new_ch.get("pages", [])
+            if len(old_pages) != len(new_pages):
+                warnings.append(
+                    f"Chapter {ci} page count changed "
+                    f"({len(old_pages)} -> {len(new_pages)}) during a block-level edit"
+                )
+
+    old_assets: set[str] = set()
+    if old_spec:
+        for ch in old_spec.get("chapters", []):
+            for pg in ch.get("pages", []):
+                for blk in pg.get("blocks", []):
+                    asset = blk.get("asset")
+                    if asset and asset.startswith("/resources/"):
+                        old_assets.add(asset)
+
+    for ci, ch in enumerate(chapters):
+        quiz = ch.get("quiz", {})
+        if quiz:
+            pct = quiz.get("passing_pct", 80)
+            if not isinstance(pct, (int, float)) or not (0 <= pct <= 100):
+                warnings.append(f"Chapter {ci} quiz passing_pct={pct} out of range [0,100]")
+            questions = quiz.get("questions", [])
+            if not questions:
+                warnings.append(f"Chapter {ci} quiz has no questions")
+            for qi, q in enumerate(questions):
+                opts = q.get("options", [])
+                idx = q.get("answerIndex", 0)
+                if not opts:
+                    warnings.append(f"Chapter {ci} quiz Q{qi} has no options")
+                elif not isinstance(idx, int) or idx < 0 or idx >= len(opts):
+                    warnings.append(
+                        f"Chapter {ci} quiz Q{qi} answerIndex={idx} "
+                        f"out of bounds (options count={len(opts)})"
+                    )
+
+        for pi, pg in enumerate(ch.get("pages", [])):
+            blocks = pg.get("blocks", [])
+            if not blocks:
+                warnings.append(f"Chapter {ci} page {pi} has no blocks")
+            for bi, blk in enumerate(blocks):
+                btype = blk.get("type", "")
+                if not btype:
+                    warnings.append(f"Block {ci}.{pi}.{bi} has no type")
+
+                has_content = bool(
+                    blk.get("text") or blk.get("items") or blk.get("data") or blk.get("asset")
+                )
+                if not has_content:
+                    warnings.append(f"Block {ci}.{pi}.{bi} ({btype}) has no content")
+
+    new_assets: set[str] = set()
+    for ch in chapters:
+        for pg in ch.get("pages", []):
+            for blk in pg.get("blocks", []):
+                asset = blk.get("asset")
+                if asset and asset.startswith("/resources/"):
+                    new_assets.add(asset)
+
+    missing = old_assets - new_assets
+    if missing:
+        warnings.append(f"Asset template links removed: {', '.join(sorted(missing))}")
+
+    return warnings
+
+
+# ── System prompts ───────────────────────────────────────────────────────────
 
 BLOCK_EDIT_SYSTEM = """You are editing ONE block of an interactive course.{context_section}
 
 Rules:
 - Keep the same `type` unless the request clearly requires a different block type.
 - Preserve the `asset` link and the `data` structure unless the request asks to change them.
-- Preserve structural integrity: quizzes, assets, and page structure must remain valid.
 - Keep it concise and on-topic. Return ONLY the single updated block as structured output.
+- Maintain the same language/locale as the existing content.
+- Do not add/remove chapters or pages — you are editing a single block only.
 {compliance_section}{history_section}"""
 
 SPEC_EDIT_SYSTEM = """You are editing an interactive course specification \
@@ -49,9 +261,9 @@ Return the FULL updated specification as structured output.
 
 
 def _build_context_section(
-    company_name: str = "",
-    audience: str = "",
-    plan_summary: dict | None = None,
+    company_name: str | None = None,
+    audience: str | None = None,
+    plan_summary: str | None = None,
 ) -> str:
     parts: list[str] = []
     if company_name or audience:
@@ -62,10 +274,7 @@ def _build_context_section(
             ctx += f", targeting {audience}"
         parts.append(f"\nYou are editing a course{ctx}.")
     if plan_summary:
-        objectives = plan_summary.get("objectives", [])
-        if objectives:
-            obj_str = "; ".join(objectives[:5])
-            parts.append(f"\nLearning objectives: {obj_str}")
+        parts.append(f"\nCourse plan: {plan_summary}")
     return "".join(parts)
 
 
@@ -80,19 +289,19 @@ def _build_history_section(edit_history: list[dict] | None = None) -> str:
     if not edit_history:
         return ""
     entries: list[str] = []
-    for h in edit_history[-5:]:  # keep last 5 for context window
+    for h in edit_history[:5]:
         prompt = h.get("prompt", "")
         status = h.get("status", "")
-        entries.append(f"- \"{prompt}\" (status: {status})")
+        entries.append(f'- "{prompt}" (status: {status})')
     history_str = "\n".join(entries)
     return f"\nPrevious edits on this target (for continuity):\n{history_str}\n"
 
 
 def _format_system_prompt(
     template: str,
-    company_name: str = "",
-    audience: str = "",
-    plan_summary: dict | None = None,
+    company_name: str | None = None,
+    audience: str | None = None,
+    plan_summary: str | None = None,
     compliance_requirements: list[str] | None = None,
     edit_history: list[dict] | None = None,
 ) -> str:
@@ -103,177 +312,10 @@ def _format_system_prompt(
     )
 
 
-# ── Validation ───────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
-def validate_edited_spec(
-    old_spec: dict, new_spec: dict, edit_type: str
-) -> list[str]:
-    """Validate an edited spec against structural rules.
-
-    Returns a list of validation warnings (empty = valid).
-    """
-    warnings: list[str] = []
-
-    if edit_type == "block":
-        # For block edits: verify the block has a valid type, text/data not empty
-        new_chapters = new_spec.get("chapters", [])
-        for ci, ch in enumerate(new_chapters):
-            for pi, page in enumerate(ch.get("pages", [])):
-                for bi, block in enumerate(page.get("blocks", [])):
-                    if not block.get("type"):
-                        warnings.append(
-                            f"Block at {ci}.{pi}.{bi} is missing a valid 'type'"
-                        )
-                    if (
-                        not block.get("text")
-                        and not block.get("data")
-                        and not block.get("items")
-                        and not block.get("asset")
-                    ):
-                        warnings.append(
-                            f"Block at {ci}.{pi}.{bi} has no text, data, items, or asset"
-                        )
-        # Verify asset links preserved
-        old_assets = _collect_asset_links(old_spec)
-        new_assets = _collect_asset_links(new_spec)
-        missing_assets = old_assets - new_assets
-        if missing_assets:
-            warnings.append(
-                f"Asset links removed: {', '.join(sorted(missing_assets))}"
-            )
-
-    elif edit_type == "spec":
-        old_chapters = old_spec.get("chapters", [])
-        new_chapters = new_spec.get("chapters", [])
-
-        # Verify chapter count unchanged (unless that was the point)
-        if len(new_chapters) != len(old_chapters):
-            warnings.append(
-                f"Chapter count changed from {len(old_chapters)} to {len(new_chapters)} "
-                f"(only acceptable if explicitly requested)"
-            )
-
-        # Verify quiz exists per chapter
-        for ci, ch in enumerate(new_chapters):
-            quiz = ch.get("quiz")
-            if not quiz or not quiz.get("questions"):
-                warnings.append(f"Chapter {ci} is missing quiz questions")
-
-        # Verify passing_pct in valid range
-        for ci, ch in enumerate(new_chapters):
-            quiz = ch.get("quiz", {})
-            pct = quiz.get("passing_pct", 80)
-            if not (1 <= pct <= 100):
-                warnings.append(
-                    f"Chapter {ci} quiz passing_pct={pct} is out of range (1-100)"
-                )
-
-        # Verify answerIndex in bounds
-        for ci, ch in enumerate(new_chapters):
-            quiz = ch.get("quiz", {})
-            for qi, q in enumerate(quiz.get("questions", [])):
-                options = q.get("options", [])
-                answer_idx = q.get("answerIndex", 0)
-                if answer_idx < 0 or answer_idx >= len(options):
-                    warnings.append(
-                        f"Chapter {ci} quiz question {qi}: answerIndex={answer_idx} "
-                        f"out of bounds (options count: {len(options)})"
-                    )
-
-        # Verify all asset template_links from old spec still present
-        old_assets = _collect_asset_links(old_spec)
-        new_assets = _collect_asset_links(new_spec)
-        missing_assets = old_assets - new_assets
-        if missing_assets:
-            warnings.append(
-                f"Asset template_links removed: {', '.join(sorted(missing_assets))}"
-            )
-
-    return warnings
-
-
-def _collect_asset_links(spec: dict) -> set[str]:
-    """Collect all asset/template_link references from a spec."""
-    links: set[str] = set()
-    for ch in spec.get("chapters", []):
-        for page in ch.get("pages", []):
-            for block in page.get("blocks", []):
-                if block.get("asset"):
-                    links.add(block["asset"])
-    # Also check asset_manifest
-    for asset in spec.get("asset_manifest", []):
-        if asset.get("template_link"):
-            links.add(asset["template_link"])
-    return links
-
-
-# ── Diff tracking ────────────────────────────────────────────────────────────
-
-def compute_edit_diff(old_spec: dict, new_spec: dict) -> dict:
-    """Compute a structured diff between old and new specs.
-
-    Returns:
-        blocks_changed: list of block selectors that changed
-        blocks_added: list of new blocks
-        blocks_removed: list of removed blocks
-        summary: human-readable summary of changes
-    """
-    old_blocks = _index_blocks(old_spec)
-    new_blocks = _index_blocks(new_spec)
-
-    old_keys = set(old_blocks.keys())
-    new_keys = set(new_blocks.keys())
-
-    blocks_added = sorted(new_keys - old_keys)
-    blocks_removed = sorted(old_keys - new_keys)
-    blocks_changed: list[str] = []
-
-    for key in sorted(old_keys & new_keys):
-        if old_blocks[key] != new_blocks[key]:
-            blocks_changed.append(key)
-
-    # Build human-readable summary
-    summary_parts: list[str] = []
-    if blocks_changed:
-        summary_parts.append(f"{len(blocks_changed)} block(s) modified")
-    if blocks_added:
-        summary_parts.append(f"{len(blocks_added)} block(s) added")
-    if blocks_removed:
-        summary_parts.append(f"{len(blocks_removed)} block(s) removed")
-
-    # Check chapter-level changes
-    old_chapters = old_spec.get("chapters", [])
-    new_chapters = new_spec.get("chapters", [])
-    if len(new_chapters) != len(old_chapters):
-        summary_parts.append(
-            f"chapters: {len(old_chapters)} -> {len(new_chapters)}"
-        )
-
-    summary = "; ".join(summary_parts) if summary_parts else "No structural changes detected"
-
-    return {
-        "blocks_changed": blocks_changed,
-        "blocks_added": blocks_added,
-        "blocks_removed": blocks_removed,
-        "summary": summary,
-    }
-
-
-def _index_blocks(spec: dict) -> dict[str, dict]:
-    """Index all blocks by their chapter.page.block selector."""
-    index: dict[str, dict] = {}
-    for ci, ch in enumerate(spec.get("chapters", [])):
-        for pi, page in enumerate(ch.get("pages", [])):
-            for bi, block in enumerate(page.get("blocks", [])):
-                key = f"{ci}.{pi}.{bi}"
-                index[key] = block
-    return index
-
-
-# ── Parsing / helpers ────────────────────────────────────────────────────────
 
 def _parse_selector(selector: str | None) -> tuple[int, int, int] | None:
-    """Parse a "chapter.page.block" index selector emitted by the renderer."""
     if not selector:
         return None
     parts = selector.split(".")
@@ -293,7 +335,20 @@ def _get_block(spec: dict, idx: tuple[int, int, int]) -> dict | None:
         return None
 
 
-# ── Gemini edit functions ────────────────────────────────────────────────────
+def _validate_single_block(block: dict) -> list[str]:
+    warnings: list[str] = []
+    if not block.get("type"):
+        warnings.append("Block has no type")
+    has_content = bool(
+        block.get("text") or block.get("items") or block.get("data") or block.get("asset")
+    )
+    if not has_content:
+        warnings.append("Block has no content")
+    return warnings
+
+
+# ── Fast Gemini path (simple edits) ──────────────────────────────────────────
+
 
 async def _gemini_edit_block(
     block: dict,
@@ -301,6 +356,7 @@ async def _gemini_edit_block(
     target_text: str | None,
     system_prompt: str,
 ) -> dict | None:
+    """Enhanced Gemini block edit with validation retry."""
     model = get_chat_model(temperature=0.4).with_structured_output(Block)
     prompt = (
         f"Current block (JSON): {json.dumps(block)}\n"
@@ -309,29 +365,30 @@ async def _gemini_edit_block(
         "Return the full updated block."
     )
     out = await model.ainvoke([("system", system_prompt), ("user", prompt)])
-    if isinstance(out, Block):
-        return out.model_dump(exclude_none=True)
-    return None
+    if not isinstance(out, Block):
+        return None
 
+    result = out.model_dump(exclude_none=True)
 
-def _local_edit_block(block: dict, instruction: str) -> dict:
-    """Deterministic offline edit: visibly fold the instruction into the block."""
-    edited = copy.deepcopy(block)
-    note = instruction.strip()
-    if edited.get("text"):
-        edited["text"] = f"{edited['text']} (Updated: {note})"
-    elif edited.get("items"):
-        edited["items"] = [*edited["items"], f"Updated: {note}"]
-    else:
-        edited["text"] = note
-    return edited
+    block_warnings = _validate_single_block(result)
+    if block_warnings:
+        logger.info("Block validation warnings, retrying: %s", block_warnings)
+        retry_prompt = (
+            f"The previous edit had validation issues: {'; '.join(block_warnings)}.\n"
+            f"Original block: {json.dumps(block)}\n"
+            f"Your previous output: {json.dumps(result)}\n"
+            f"Requested change: {instruction}\n"
+            "Fix the issues and return the corrected block."
+        )
+        retry_out = await model.ainvoke([("system", system_prompt), ("user", retry_prompt)])
+        if isinstance(retry_out, Block):
+            result = retry_out.model_dump(exclude_none=True)
+
+    return result
 
 
 async def _gemini_edit_spec(
-    spec: dict,
-    instruction: str,
-    target_text: str | None,
-    system_prompt: str,
+    spec: dict, instruction: str, target_text: str | None, system_prompt: str
 ) -> dict | None:
     model = get_chat_model(temperature=0.4).with_structured_output(Lastenheft)
     prompt = (
@@ -346,8 +403,22 @@ async def _gemini_edit_spec(
     return None
 
 
+# ── Local fallback edits ─────────────────────────────────────────────────────
+
+
+def _local_edit_block(block: dict, instruction: str) -> dict:
+    edited = copy.deepcopy(block)
+    note = instruction.strip()
+    if edited.get("text"):
+        edited["text"] = f"{edited['text']} (Updated: {note})"
+    elif edited.get("items"):
+        edited["items"] = [*edited["items"], f"Updated: {note}"]
+    else:
+        edited["text"] = note
+    return edited
+
+
 def _local_edit_spec(spec: dict, instruction: str) -> dict:
-    """Deterministic offline edit: add a callout reflecting the request."""
     edited = copy.deepcopy(spec)
     chapters = edited.get("chapters") or []
     if chapters and chapters[0].get("pages"):
@@ -357,7 +428,105 @@ def _local_edit_spec(spec: dict, instruction: str) -> dict:
     return edited
 
 
-# ── Main entry point ─────────────────────────────────────────────────────────
+# ── Devin session path (complex edits) ───────────────────────────────────────
+
+
+async def _devin_edit_spec(
+    spec: dict,
+    instruction: str,
+    *,
+    company_name: str | None = None,
+    plan_summary: str | None = None,
+    audience: str | None = None,
+    compliance_requirements: list[str] | None = None,
+) -> tuple[dict | None, str | None]:
+    """Create a Devin API session for complex spec edits.
+
+    Returns (new_spec_dict, devin_session_id).
+    """
+    from src.services.devin.client import DevinClient
+
+    client = DevinClient()
+    if not client.enabled:
+        logger.info("Devin API not configured; skipping Devin edit path")
+        return None, None
+
+    context_parts: list[str] = []
+    if company_name:
+        context_parts.append(f"Company: {company_name}")
+    if audience:
+        context_parts.append(f"Target audience: {audience}")
+    if plan_summary:
+        context_parts.append(f"Course plan summary: {plan_summary}")
+    if compliance_requirements:
+        context_parts.append(f"Compliance requirements: {', '.join(compliance_requirements)}")
+    context_block = "\n".join(context_parts) if context_parts else "No additional context."
+
+    spec_json = json.dumps(spec)
+    if len(spec_json) > 120_000:
+        # Truncate at a structural boundary: keep only the first N chapters
+        # that fit within the limit, rather than cutting mid-JSON.
+        truncated = copy.deepcopy(spec)
+        chapters = truncated.get("chapters", [])
+        while json.dumps(truncated).__len__() > 120_000 and chapters:
+            chapters.pop()
+        omitted = len(spec.get("chapters", [])) - len(chapters)
+        if omitted > 0:
+            truncated["_note"] = f"{omitted} chapter(s) omitted for length"
+        spec_json = json.dumps(truncated)
+
+    prompt = f"""You are editing an interactive e-learning course specification (Lastenheft).
+
+## Course Context
+{context_block}
+
+## Current Specification (JSON)
+{spec_json}
+
+## Edit Request
+{instruction}
+
+## Constraints
+- Preserve quiz structure: each chapter must have a quiz with passing_pct=80, retryable=true
+- Preserve all asset template links (paths starting with /resources/)
+- Maintain chapter progression and page structure where possible
+- Keep the same language/locale as the existing content
+- Return the FULL updated specification
+
+Apply the requested change and return the complete updated Lastenheft."""
+
+    schema = Lastenheft.model_json_schema()
+
+    try:
+        session_id, output = await client.run(
+            prompt,
+            structured_output_schema=schema,
+            title=f"Course edit: {instruction[:80]}",
+            tags=["coursive", "edit"],
+        )
+        if isinstance(output, dict) and output.get("chapters"):
+            return output, session_id
+        logger.warning("Devin session %s returned invalid output", session_id)
+        return None, session_id
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Devin edit session failed: %s", exc)
+        return None, None
+
+
+# ── EditResult dataclass ─────────────────────────────────────────────────────
+
+
+@dataclass
+class EditResult:
+    new_spec: dict
+    devin_session_id: str | None = None
+    edit_tier: str = TIER_SIMPLE
+    diff: EditDiff | None = None
+    validation_warnings: list[str] = field(default_factory=list)
+
+
+# ── Unified edit function ────────────────────────────────────────────────────
+
 
 async def generate_edited_spec(
     spec: dict,
@@ -365,73 +534,37 @@ async def generate_edited_spec(
     selector: str | None,
     target_text: str | None,
     *,
-    company_name: str = "",
-    plan_summary: dict | None = None,
+    company_name: str | None = None,
+    plan_summary: str | None = None,
     compliance_requirements: list[str] | None = None,
-    audience: str = "",
+    audience: str | None = None,
     edit_history: list[dict] | None = None,
-) -> dict:
-    """Return a NEW spec dict with the requested edit applied.
+) -> EditResult:
+    """Return an EditResult with the new spec and metadata.
 
-    When `selector` ("chapter.page.block") points at a real block, only that
-    block is rewritten; otherwise the whole spec is edited.
+    Routes edits through the appropriate tier:
+    - 'simple' -> enhanced Gemini (fast)
+    - 'complex' -> Devin session (powerful) -> Gemini fallback -> local fallback
 
-    Enhanced parameters:
-        company_name: Name of the company this course is for.
-        plan_summary: Dict with objectives, competencies, etc from the plan.
-        compliance_requirements: List of compliance rules that must not be violated.
-        audience: Target audience description.
-        edit_history: List of previous edit dicts (prompt, status) for context.
+    Includes context injection, conversation history, validation, and diff tracking.
     """
+    old_spec = copy.deepcopy(spec)
     new_spec = copy.deepcopy(spec)
+    tier = classify_edit_complexity(instruction, selector)
     idx = _parse_selector(selector)
     block = _get_block(new_spec, idx) if idx is not None else None
+    devin_session_id: str | None = None
 
-    if idx is not None and block is not None:
-        # Block-level edit
-        system_prompt = _format_system_prompt(
-            BLOCK_EDIT_SYSTEM,
-            company_name=company_name,
-            audience=audience,
-            plan_summary=plan_summary,
-            compliance_requirements=compliance_requirements,
-            edit_history=edit_history,
-        )
-        updated: dict | None = None
-        if gemini_available():
-            try:
-                updated = await _gemini_edit_block(
-                    block, instruction, target_text, system_prompt
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Gemini block edit failed (%s); using local fallback", exc)
-
-        if updated is None:
-            updated = _local_edit_block(block, instruction)
-
-        # Validate and retry once if needed
-        c, p, b = idx
-        new_spec["chapters"][c]["pages"][p]["blocks"][b] = updated
-        validation_warnings = validate_edited_spec(spec, new_spec, "block")
-        if validation_warnings and gemini_available():
-            logger.info("Block edit validation warnings: %s; retrying", validation_warnings)
-            try:
-                retry_instruction = (
-                    f"{instruction}\n\n"
-                    f"IMPORTANT: Fix these validation issues: {'; '.join(validation_warnings)}"
-                )
-                retried = await _gemini_edit_block(
-                    block, retry_instruction, target_text, system_prompt
-                )
-                if retried is not None:
-                    new_spec["chapters"][c]["pages"][p]["blocks"][b] = retried
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Gemini block retry failed (%s); keeping first result", exc)
-
-        return new_spec
-
-    # No specific block selected -> spec-level edit.
-    system_prompt = _format_system_prompt(
+    is_block_edit = idx is not None and block is not None
+    block_prompt = _format_system_prompt(
+        BLOCK_EDIT_SYSTEM,
+        company_name=company_name,
+        audience=audience,
+        plan_summary=plan_summary,
+        compliance_requirements=compliance_requirements,
+        edit_history=edit_history,
+    )
+    spec_prompt = _format_system_prompt(
         SPEC_EDIT_SYSTEM,
         company_name=company_name,
         audience=audience,
@@ -439,32 +572,87 @@ async def generate_edited_spec(
         compliance_requirements=compliance_requirements,
         edit_history=edit_history,
     )
-    if gemini_available():
-        try:
-            edited = await _gemini_edit_spec(
-                new_spec, instruction, target_text, system_prompt
-            )
-            if edited is not None:
-                # Validate and retry once if needed
-                validation_warnings = validate_edited_spec(spec, edited, "spec")
-                if validation_warnings:
-                    logger.info("Spec edit validation warnings: %s; retrying", validation_warnings)
-                    try:
-                        retry_instruction = (
-                            f"{instruction}\n\n"
-                            f"IMPORTANT: Fix these validation issues: "
-                            f"{'; '.join(validation_warnings)}"
-                        )
-                        retried = await _gemini_edit_spec(
-                            new_spec, retry_instruction, target_text, system_prompt
-                        )
-                        if retried is not None:
-                            return retried
-                    except Exception as exc:  # noqa: BLE001
-                        logger.warning(
-                            "Gemini spec retry failed (%s); keeping first result", exc
-                        )
-                return edited
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Gemini spec edit failed (%s); using local fallback", exc)
-    return _local_edit_spec(new_spec, instruction)
+
+    if tier == TIER_SIMPLE and is_block_edit:
+        # Fast Gemini path for targeted block edits
+        updated: dict | None = None
+        if gemini_available():
+            try:
+                updated = await _gemini_edit_block(block, instruction, target_text, block_prompt)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Gemini block edit failed (%s); using local fallback", exc)
+        if updated is None:
+            updated = _local_edit_block(block, instruction)
+        c, p, b = idx
+        new_spec["chapters"][c]["pages"][p]["blocks"][b] = updated
+
+    elif tier == TIER_COMPLEX:
+        # Complex path: try Devin -> Gemini fallback -> local fallback
+        edited: dict | None = None
+
+        edited, devin_session_id = await _devin_edit_spec(
+            new_spec,
+            instruction,
+            company_name=company_name,
+            plan_summary=plan_summary,
+            audience=audience,
+            compliance_requirements=compliance_requirements,
+        )
+
+        if edited is None and gemini_available():
+            try:
+                if is_block_edit:
+                    updated_block = await _gemini_edit_block(
+                        block, instruction, target_text, block_prompt,
+                    )
+                    if updated_block is not None:
+                        c, p, b = idx
+                        new_spec["chapters"][c]["pages"][p]["blocks"][b] = updated_block
+                        edited = new_spec
+                else:
+                    edited = await _gemini_edit_spec(
+                        new_spec, instruction, target_text, spec_prompt,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Gemini fallback edit failed (%s); using local fallback", exc)
+
+        if edited is None:
+            if is_block_edit:
+                c, p, b = idx
+                new_spec["chapters"][c]["pages"][p]["blocks"][b] = _local_edit_block(
+                    block, instruction,
+                )
+                edited = new_spec
+            else:
+                edited = _local_edit_spec(new_spec, instruction)
+
+        new_spec = edited
+
+    else:
+        # Simple edit without a valid block selector
+        if gemini_available():
+            try:
+                edited_spec = await _gemini_edit_spec(
+                    new_spec, instruction, target_text, system_prompt,
+                )
+                if edited_spec is not None:
+                    new_spec = edited_spec
+                else:
+                    new_spec = _local_edit_spec(new_spec, instruction)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Gemini spec edit failed (%s); using local fallback", exc)
+                new_spec = _local_edit_spec(new_spec, instruction)
+        else:
+            new_spec = _local_edit_spec(new_spec, instruction)
+
+    is_block_edit = idx is not None and block is not None
+    validation_warnings = validate_edited_spec(new_spec, old_spec, block_level=is_block_edit)
+    diff = compute_edit_diff(old_spec, new_spec)
+
+    return EditResult(
+        new_spec=new_spec,
+        devin_session_id=devin_session_id,
+        edit_tier=tier,
+        diff=diff,
+        validation_warnings=validation_warnings,
+    )

@@ -13,7 +13,7 @@ from src.api.v1.schemas.course import (
     CourseReportRow,
     CourseSummary,
     EditCreate,
-    EditDiff,
+    EditDiffResponse,
     EditResponse,
     JobResponse,
     PlanApproval,
@@ -217,30 +217,17 @@ async def get_course_jobs(
 
 
 # ── Devin edit-loop ──────────────────────────────────────────────────────────
-def _edit_diff_from_job(edit: EditRequest, db_result=None) -> EditDiff | None:
-    """Extract the diff from the edit's generation job result."""
-    # We look up the job inline if a preloaded result isn't passed
-    return None  # Will be populated async in the list/detail endpoints
-
-
-async def _edit_response_with_diff(
-    edit: EditRequest, db: AsyncSession
-) -> EditResponse:
-    """Build EditResponse with diff populated from the job result."""
-    diff: EditDiff | None = None
-    if edit.status == "preview_ready":
-        result = await db.execute(
-            select(GenerationJob)
-            .where(
-                GenerationJob.course_id == edit.course_id,
-                GenerationJob.type == "edit",
-                GenerationJob.payload["edit_request_id"].astext == str(edit.id),
+def _edit_response(edit: EditRequest, job_result: dict | None = None) -> EditResponse:
+    edit_tier = None
+    diff = None
+    if job_result:
+        edit_tier = job_result.get("edit_tier")
+        diff_data = job_result.get("diff")
+        if diff_data:
+            diff = EditDiffResponse(
+                summary=diff_data.get("summary", ""),
+                blocks=diff_data.get("blocks", []),
             )
-            .order_by(GenerationJob.created_at.desc())
-        )
-        edit_job = result.scalars().first()
-        if edit_job and edit_job.result and "diff" in edit_job.result:
-            diff = EditDiff(**edit_job.result["diff"])
     return EditResponse(
         id=edit.id,
         prompt=edit.prompt,
@@ -249,25 +236,10 @@ async def _edit_response_with_diff(
         preview_url=index_url(edit.preview_object_prefix)
         if edit.preview_object_prefix
         else None,
+        devin_session_id=edit.devin_session_id,
+        devin_session_url=session_web_url(edit.devin_session_id),
+        edit_tier=edit_tier,
         diff=diff,
-        devin_session_id=edit.devin_session_id,
-        devin_session_url=session_web_url(edit.devin_session_id),
-        created_at=edit.created_at,
-    )
-
-
-def _edit_response(edit: EditRequest) -> EditResponse:
-    return EditResponse(
-        id=edit.id,
-        prompt=edit.prompt,
-        target_selector=edit.target_selector,
-        status=edit.status,
-        preview_url=index_url(edit.preview_object_prefix)
-        if edit.preview_object_prefix
-        else None,
-        diff=None,
-        devin_session_id=edit.devin_session_id,
-        devin_session_url=session_web_url(edit.devin_session_id),
         created_at=edit.created_at,
     )
 
@@ -320,7 +292,26 @@ async def list_edits(
         .order_by(EditRequest.created_at.desc())
     )
     edits = result.scalars().all()
-    return [await _edit_response_with_diff(e, db) for e in edits]
+
+    # Look up job results for edit_tier / diff data.
+    responses: list[EditResponse] = []
+    for e in edits:
+        job_result: dict | None = None
+        job_row = await db.execute(
+            select(GenerationJob)
+            .where(
+                GenerationJob.course_id == course.id,
+                GenerationJob.type == "edit",
+                GenerationJob.payload["edit_request_id"].astext == str(e.id),
+            )
+            .order_by(GenerationJob.created_at.desc())
+            .limit(1)
+        )
+        job = job_row.scalar_one_or_none()
+        if job and job.result:
+            job_result = job.result
+        responses.append(_edit_response(e, job_result))
+    return responses
 
 
 async def _get_edit(db: AsyncSession, course_id: uuid.UUID, edit_id: uuid.UUID) -> EditRequest:

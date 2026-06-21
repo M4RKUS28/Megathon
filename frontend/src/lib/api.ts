@@ -228,10 +228,13 @@ export interface CourseBriefInput {
 }
 
 export interface EditDiff {
-  blocks_changed: string[];
-  blocks_added: string[];
-  blocks_removed: string[];
   summary: string;
+  blocks: Array<{
+    location: string;
+    action: string;
+    old_type: string | null;
+    new_type: string | null;
+  }>;
 }
 
 export interface EditRecord {
@@ -240,8 +243,10 @@ export interface EditRecord {
   target_selector: string | null;
   status: string;
   preview_url: string | null;
-  diff: EditDiff | null;
   devin_session_id: string | null;
+  devin_session_url: string | null;
+  edit_tier: string | null;
+  diff: EditDiff | null;
   created_at: string;
 }
 
