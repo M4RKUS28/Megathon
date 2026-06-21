@@ -35,13 +35,13 @@ export function QuizView({
   };
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-5">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-neu-sm)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold">Knowledge check</h3>
-          <p className="text-sm text-gray-500">You need {passing}% to unlock the next chapter.</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">You need {passing}% to unlock the next chapter.</p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-500">
+        <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))]">
           {answered}/{total} answered
         </div>
       </div>
@@ -61,12 +61,12 @@ export function QuizView({
                 isActive
                   ? "border-[var(--brand)] bg-[var(--brand)] text-white"
                   : isCorrect
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                     : isWrong
-                      ? "border-red-400 bg-red-50 text-red-700"
+                      ? "border-red-400 bg-red-400/10 text-red-400"
                       : hasAnswer
                         ? "border-[var(--brand)]/40 bg-[var(--brand)]/10 text-[var(--brand)]"
-                        : "border-black/10 bg-white text-gray-500"
+                        : "border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))]"
               }`}
               aria-label={`Question ${qi + 1}${hasAnswer ? ", answered" : ""}`}
             >
@@ -77,7 +77,7 @@ export function QuizView({
       </div>
 
       {current ? (
-        <div className="mt-5 rounded-xl border border-black/5 bg-gray-50 p-4">
+        <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">
               Question {active + 1} of {total}
@@ -87,10 +87,10 @@ export function QuizView({
           <div className="space-y-2">
             {current.options.map((opt, oi) => {
               const chosen = answers[active];
-              let cls = "border-black/10 bg-white";
+              let cls = "border-[hsl(var(--border))] bg-[hsl(var(--card))]";
               if (submitted) {
-                if (oi === current.answerIndex) cls = "border-emerald-500 bg-emerald-50";
-                else if (oi === chosen) cls = "border-red-400 bg-red-50";
+                if (oi === current.answerIndex) cls = "border-emerald-500 bg-emerald-500/10";
+                else if (oi === chosen) cls = "border-red-400 bg-red-400/10";
               } else if (chosen === oi) {
                 cls = "border-[var(--brand)] bg-[var(--brand)]/10";
               }
@@ -108,13 +108,13 @@ export function QuizView({
             })}
           </div>
           {submitted && current.explanation ? (
-            <p className="mt-3 rounded-lg bg-white p-2 text-xs text-gray-500">
+            <p className="mt-3 rounded-lg bg-[hsl(var(--card))] p-2 text-xs text-[hsl(var(--muted-foreground))]">
               {current.explanation}
             </p>
           ) : null}
         </div>
       ) : (
-        <div className="mt-5 rounded-xl border border-black/5 bg-gray-50 p-4 text-sm text-gray-500">
+        <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-4 text-sm text-[hsl(var(--muted-foreground))]">
           This quiz has no questions.
         </div>
       )}
@@ -124,7 +124,7 @@ export function QuizView({
           type="button"
           disabled={active === 0}
           onClick={() => setActive((i) => Math.max(0, i - 1))}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-40"
+          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] disabled:opacity-40"
         >
           Previous question
         </button>
@@ -132,7 +132,7 @@ export function QuizView({
           <button
             type="button"
             onClick={() => setActive((i) => Math.min(total - 1, i + 1))}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium"
+            className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))]"
           >
             Next question
           </button>
@@ -157,7 +157,7 @@ export function QuizView({
               <button
                 type="button"
                 onClick={retry}
-                className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium"
+                className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))]"
               >
                 Try again
               </button>
@@ -165,7 +165,7 @@ export function QuizView({
           </>
         )}
         {attempts > 0 ? (
-          <span className="text-xs text-gray-400">Attempts: {attempts}</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">Attempts: {attempts}</span>
         ) : null}
       </div>
     </div>

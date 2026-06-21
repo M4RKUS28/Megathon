@@ -7,6 +7,7 @@ import {
   GraduationCap,
   Layers,
   PlayCircle,
+  Sparkles,
   Target,
   Trophy,
   Users,
@@ -14,6 +15,7 @@ import {
 import { useMe } from "@/hooks/useMe";
 import { useBrand } from "@/theme/ThemeProvider";
 import { useMyLearning } from "@/hooks/useLearning";
+import { useCourses } from "@/hooks/useCourses";
 import type { LearningCourse } from "@/lib/api";
 
 function ProgressRing({ pct, size = 48 }: { pct: number; size?: number }) {
@@ -224,21 +226,32 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
   );
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function StaffDashboard({ firstName }: { firstName: string }) {
   const { companyName } = useBrand();
+  const navigate = useNavigate();
+  const { data: courses } = useCourses();
 
   const stats = [
-    { label: "Published courses", value: "—", icon: Layers },
-    { label: "Active learners", value: "—", icon: Users },
-    { label: "Avg. completion", value: "—", icon: GraduationCap },
+    { label: "Published courses", value: "—", icon: Layers, accent: "from-blue-500/20 to-blue-500/5" },
+    { label: "Active learners", value: "—", icon: Users, accent: "from-emerald-500/20 to-emerald-500/5" },
+    { label: "Avg. completion", value: "—", icon: GraduationCap, accent: "from-violet-500/20 to-violet-500/5" },
   ];
+
+  const recentCourses = courses?.slice(0, 4);
 
   return (
     <div className="space-y-8">
       <div>
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">{companyName}</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">
-          Welcome back, {firstName}.
+          {getGreeting()}, {firstName}.
         </h1>
         <p className="mt-1 text-muted-foreground">
           Generate, brand and assign training — then watch it land.
@@ -246,30 +259,91 @@ function StaffDashboard({ firstName }: { firstName: string }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {stats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5 shadow-neu-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <Icon className="h-4 w-4 text-primary" />
+        {stats.map(({ label, value, icon: Icon, accent }) => (
+          <div key={label} className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-neu-sm">
+            <div className={`absolute inset-0 bg-gradient-to-br ${accent} pointer-events-none`} />
+            <div className="relative">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">{label}</p>
+                <div className="rounded-lg bg-primary/10 p-1.5">
+                  <Icon className="h-4 w-4 text-primary" />
+                </div>
+              </div>
+              <p className="mt-3 text-3xl font-bold">{value}</p>
             </div>
-            <p className="mt-3 text-3xl font-bold">{value}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/15 to-transparent p-8 shadow-neu">
-        <h2 className="text-xl font-semibold">Spin up a course in minutes</h2>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          Describe what people need to know. Coursive drafts the concept, generates a branded
-          interactive course, and hosts it for you.
-        </p>
-        <Link
-          to="/courses?new=1"
-          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90"
-        >
-          Create a course
-          <ArrowUpRight className="h-4 w-4" />
-        </Link>
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-8 shadow-neu">
+        <div className="flex items-start gap-6">
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold">Spin up a course in minutes</h2>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+              Describe what people need to know. Coursive drafts the concept, generates a branded
+              interactive course, and hosts it for you.
+            </p>
+            <Link
+              to="/courses?new=1"
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90"
+            >
+              Create a course
+              <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="hidden shrink-0 grid-cols-2 gap-2 md:grid">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 shadow-neu-sm">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 shadow-neu-sm">
+              <BookOpen className="h-5 w-5 text-emerald-400" />
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 shadow-neu-sm">
+              <Target className="h-5 w-5 text-violet-400" />
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 shadow-neu-sm">
+              <GraduationCap className="h-5 w-5 text-amber-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent courses */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Recent courses</h2>
+          {courses && courses.length > 0 && (
+            <Link to="/courses" className="text-sm text-primary hover:underline">
+              View all
+            </Link>
+          )}
+        </div>
+        {recentCourses && recentCourses.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {recentCourses.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => navigate(`/courses/${c.id}`)}
+                className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left shadow-neu-sm transition hover:border-primary/50"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <BookOpen className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold">{c.title}</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground capitalize">{c.status}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-card/50 p-8 text-center">
+            <Layers className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              No courses yet. Create your first one above!
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
