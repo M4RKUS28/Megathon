@@ -64,6 +64,11 @@ class EditCreate(BaseModel):
     target_text: str | None = None
 
 
+class EditDiffResponse(BaseModel):
+    summary: str = ""
+    blocks: list[dict] = Field(default_factory=list)
+
+
 class EditResponse(BaseModel):
     id: uuid.UUID
     prompt: str
@@ -73,7 +78,7 @@ class EditResponse(BaseModel):
     devin_session_id: str | None = None
     devin_session_url: str | None = None
     edit_tier: str | None = None
-    diff: dict | None = None
+    diff: EditDiffResponse | None = None
     created_at: datetime
 
 

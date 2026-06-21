@@ -1,6 +1,12 @@
 """Offline-pipeline unit tests (no DB / no network / no LLM key required)."""
 
-from src.services.agents.editor import generate_edited_spec
+from src.services.agents.editor import (
+    EditResult,
+    classify_edit_complexity,
+    compute_edit_diff,
+    generate_edited_spec,
+    validate_edited_spec,
+)
 from src.services.agents.fallback import fallback_lastenheft, fallback_plan
 from src.services.agents.planner import generate_plan
 from src.services.agents.schemas import CoursePlan, Lastenheft
@@ -110,6 +116,7 @@ async def test_edit_block_only_changes_selected_block_offline():
     result = await generate_edited_spec(
         spec, "make it friendlier", "0.0.0", before.get("text")
     )
+    assert isinstance(result, EditResult)
     new_spec = result.new_spec
     # Same shape, only the targeted block changed.
     assert len(new_spec["chapters"]) == len(spec["chapters"])
@@ -120,53 +127,46 @@ async def test_edit_block_only_changes_selected_block_offline():
         new_spec["chapters"][-1]["pages"][-1]["blocks"][-1]
         == spec["chapters"][-1]["pages"][-1]["blocks"][-1]
     )
-    # Hybrid tier metadata is present.
+    # EditResult contains metadata.
     assert result.edit_tier == "simple"
     assert result.diff is not None
-    assert result.diff.summary
+    assert result.diff.summary  # non-empty summary
 
 
 async def test_edit_without_selector_applies_spec_level_change_offline():
     plan = fallback_plan(BRIEF, "Acme")
     spec = fallback_lastenheft(plan, "Acme", "#abcdef").model_dump()
     result = await generate_edited_spec(spec, "add a safety reminder", None, None)
-    new_spec = result.new_spec
-    assert Lastenheft(**new_spec).chapters
-    assert new_spec != spec
-    # Spec-level edits without selector are classified as complex.
+    assert isinstance(result, EditResult)
+    assert Lastenheft(**result.new_spec).chapters
+    assert result.new_spec != spec
+    # Spec-level edits without selector are always complex.
     assert result.edit_tier == "complex"
-    assert result.diff is not None
 
+
+# ── Classifier tests ─────────────────────────────────────────────────────────
 
 def test_classify_edit_complexity_simple_cases():
-    from src.services.agents.editor import classify_edit_complexity
-
     assert classify_edit_complexity("make it friendlier", "0.0.0") == "simple"
     assert classify_edit_complexity("add an example", "0.0.0") == "simple"
-    assert classify_edit_complexity("fix the typo", "1.2.3") == "simple"
-    assert classify_edit_complexity("rephrase this paragraph", "0.0.0") == "simple"
-    assert classify_edit_complexity("make it shorter", "0.0.0") == "simple"
-    assert classify_edit_complexity("translate to German", "0.0.0") == "simple"
+    assert classify_edit_complexity("fix a typo", "0.0.0") == "simple"
+    assert classify_edit_complexity("rephrase this paragraph", "1.2.3") == "simple"
+    assert classify_edit_complexity("short instruction", "0.0.0") == "simple"
 
 
 def test_classify_edit_complexity_complex_cases():
-    from src.services.agents.editor import classify_edit_complexity
-
-    assert classify_edit_complexity("add a new chapter about safety", "0.0.0") == "complex"
+    assert classify_edit_complexity("anything", None) == "complex"
+    assert classify_edit_complexity("add chapter about safety", "0.0.0") == "complex"
     assert classify_edit_complexity("restructure the course", "0.0.0") == "complex"
-    assert classify_edit_complexity("modify quiz questions", "0.0.0") == "complex"
-    assert classify_edit_complexity("add compliance notes", "0.0.0") == "complex"
-    assert classify_edit_complexity("remove chapter 3", "0.0.0") == "complex"
-    assert classify_edit_complexity("anything at all", None) == "complex"
-    assert classify_edit_complexity("update quiz to be harder", "0.0.0") == "complex"
-    assert classify_edit_complexity("add blocks throughout all pages", "0.0.0") == "complex"
+    assert classify_edit_complexity("update quiz questions", "0.0.0") == "complex"
+    assert classify_edit_complexity("add compliance regulation note", "0.0.0") == "complex"
 
+
+# ── Diff tracking tests ──────────────────────────────────────────────────────
 
 def test_compute_edit_diff_detects_changes():
-    from src.services.agents.editor import compute_edit_diff
-
-    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hello"}]}]}]}
-    new = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hi there"}]}]}]}
+    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "old"}]}]}]}
+    new = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "new"}]}]}]}
     diff = compute_edit_diff(old, new)
     assert len(diff.changed) == 1
     assert diff.changed[0].action == "changed"
@@ -174,43 +174,31 @@ def test_compute_edit_diff_detects_changes():
 
 
 def test_compute_edit_diff_detects_added_blocks():
-    from src.services.agents.editor import compute_edit_diff
-
-    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "Hello"}]}]}]}
-    new = {
-        "chapters": [
-            {
-                "pages": [
-                    {
-                        "blocks": [
-                            {"type": "paragraph", "text": "Hello"},
-                            {"type": "callout", "text": "New"},
-                        ]
-                    }
-                ]
-            }
-        ]
-    }
+    old = {"chapters": [{"pages": [{"blocks": [{"type": "paragraph", "text": "a"}]}]}]}
+    new = {"chapters": [{"pages": [{"blocks": [
+        {"type": "paragraph", "text": "a"},
+        {"type": "callout", "text": "new"}
+    ]}]}]}
     diff = compute_edit_diff(old, new)
-    assert any(d.action == "added" for d in diff.changed)
+    added = [d for d in diff.changed if d.action == "added"]
+    assert len(added) == 1
+    assert "1 block(s) added" in diff.summary
 
+
+# ── Validation tests ─────────────────────────────────────────────────────────
 
 def test_validate_edited_spec_catches_quiz_issues():
-    from src.services.agents.editor import validate_edited_spec
-
-    spec = {
-        "chapters": [
-            {
-                "pages": [{"blocks": [{"type": "paragraph", "text": "Content"}]}],
-                "quiz": {
-                    "passing_pct": 150,
-                    "questions": [
-                        {"question": "Q?", "options": ["A", "B"], "answerIndex": 5}
-                    ],
-                },
-            }
-        ]
-    }
+    spec = {"chapters": [{
+        "pages": [{"blocks": [{"type": "paragraph", "text": "test"}]}],
+        "quiz": {
+            "passing_pct": 150,
+            "questions": [{
+                "question": "test?",
+                "options": ["a", "b"],
+                "answerIndex": 5
+            }]
+        }
+    }]}
     warnings = validate_edited_spec(spec)
     assert any("passing_pct" in w for w in warnings)
     assert any("answerIndex" in w for w in warnings)

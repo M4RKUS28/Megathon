@@ -1,16 +1,16 @@
-"""Hybrid Tiered Edit Architecture — two-tier editing system.
+"""Hybrid Tiered Edit Architecture — "Edit with Devin".
 
-Simple/targeted block edits route through an enhanced Gemini path (fast, <5s).
-Complex/structural edits route through a real Devin API session (powerful,
-minutes). Both paths include validation, context injection, and diff tracking.
+Simple/targeted block edits route through an enhanced Gemini path (fast).
+Complex/structural edits route through a real Devin API session (powerful).
+Both paths include context injection, post-edit validation, and diff tracking.
 
-The result is a new spec dict (+ metadata) the builder re-renders into a
-preview the creator can accept or reject.
+Fallback chain: Devin → Gemini → deterministic local edit.
 """
 
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -27,7 +27,7 @@ TIER_COMPLEX = "complex"
 
 # ── Complexity classifier ────────────────────────────────────────────────────
 
-_COMPLEX_SELECTOR_KEYWORDS = re.compile(
+_COMPLEX_KEYWORDS = re.compile(
     r"\b(add\s+chapter|remove\s+chapter|delete\s+chapter|new\s+chapter"
     r"|add\s+page|remove\s+page|delete\s+page|new\s+page"
     r"|restructure|reorganize|reorder|merge\s+chapter|split\s+chapter"
@@ -48,22 +48,16 @@ _SIMPLE_KEYWORDS = re.compile(
 
 
 def classify_edit_complexity(instruction: str, selector: str | None) -> str:
-    """Classify an edit as 'simple' or 'complex' using keyword heuristics.
-
-    - Returns 'simple' for targeted block edits with straightforward instructions.
-    - Returns 'complex' for spec-level edits, structural changes, quiz mods,
-      multi-block changes, or compliance/policy references.
-    """
+    """Classify an edit as 'simple' or 'complex' using keyword heuristics."""
     if not selector:
         return TIER_COMPLEX
 
-    if _COMPLEX_SELECTOR_KEYWORDS.search(instruction):
+    if _COMPLEX_KEYWORDS.search(instruction):
         return TIER_COMPLEX
 
     if _SIMPLE_KEYWORDS.search(instruction):
         return TIER_SIMPLE
 
-    # Short targeted instructions default to simple
     if len(instruction.split()) <= 20:
         return TIER_SIMPLE
 
@@ -90,7 +84,7 @@ class EditDiff:
 
 
 def compute_edit_diff(old_spec: dict, new_spec: dict) -> EditDiff:
-    """Compare two specs and return a structured diff of changed/added/removed blocks."""
+    """Compare two specs and return a structured diff."""
     diffs: list[BlockDiff] = []
     old_chapters = old_spec.get("chapters", [])
     new_chapters = new_spec.get("chapters", [])
@@ -150,26 +144,13 @@ def compute_edit_diff(old_spec: dict, new_spec: dict) -> EditDiff:
 
 # ── Post-edit validation ─────────────────────────────────────────────────────
 
-VALID_BLOCK_TYPES = {
-    "heading", "paragraph", "list", "callout", "image", "video", "audio",
-    "conversation", "dialogue", "chart", "flashcards", "dragdrop", "hotspot",
-    "timeline", "accordion", "scenario", "minigame",
-}
-
 
 def validate_edited_spec(
     new_spec: dict,
     old_spec: dict | None = None,
     block_level: bool = False,
 ) -> list[str]:
-    """Validate an edited spec and return a list of warning strings (empty = valid).
-
-    Checks:
-    - Block type validity, non-empty content
-    - Quiz structural integrity (answerIndex bounds, passing_pct range)
-    - Asset template links preserved
-    - Chapter/page count preserved for block-level edits
-    """
+    """Validate an edited spec for structural integrity. Returns warnings."""
     warnings: list[str] = []
     chapters = new_spec.get("chapters", [])
 
@@ -208,7 +189,7 @@ def validate_edited_spec(
         quiz = ch.get("quiz", {})
         if quiz:
             pct = quiz.get("passing_pct", 80)
-            if not (0 <= pct <= 100):
+            if not isinstance(pct, (int, float)) or not (0 <= pct <= 100):
                 warnings.append(f"Chapter {ci} quiz passing_pct={pct} out of range [0,100]")
             questions = quiz.get("questions", [])
             if not questions:
@@ -218,7 +199,7 @@ def validate_edited_spec(
                 idx = q.get("answerIndex", 0)
                 if not opts:
                     warnings.append(f"Chapter {ci} quiz Q{qi} has no options")
-                elif idx < 0 or idx >= len(opts):
+                elif not isinstance(idx, int) or idx < 0 or idx >= len(opts):
                     warnings.append(
                         f"Chapter {ci} quiz Q{qi} answerIndex={idx} "
                         f"out of bounds (options count={len(opts)})"
@@ -256,27 +237,88 @@ def validate_edited_spec(
 
 # ── System prompts ───────────────────────────────────────────────────────────
 
-BLOCK_EDIT_SYSTEM = """You are editing ONE block of an interactive course. Rewrite the block to
-satisfy the creator's request while keeping it implementation-ready for the same renderer.
+BLOCK_EDIT_SYSTEM = """You are editing ONE block of an interactive course.{context_section}
+
 Rules:
 - Keep the same `type` unless the request clearly requires a different block type.
 - Preserve the `asset` link and the `data` structure unless the request asks to change them.
 - Keep it concise and on-topic. Return ONLY the single updated block as structured output.
 - Maintain the same language/locale as the existing content.
-- Do not add/remove chapters or pages — you are editing a single block only."""
+- Do not add/remove chapters or pages — you are editing a single block only.
+{compliance_section}{history_section}"""
 
-SPEC_EDIT_SYSTEM = """You are editing an interactive course specification (the Lastenheft). Apply
-the creator's requested change while preserving everything not affected by the request.
+SPEC_EDIT_SYSTEM = """You are editing an interactive course specification \
+(the Lastenheft).{context_section}
+
+Apply the creator's requested change while preserving everything not affected by the request.
 Keep the same structure: chapters -> pages -> blocks, plus each chapter's end-of-chapter quiz
-(passing_pct=80, retryable). Keep all `asset` template links intact. Return the FULL updated
-specification as structured output."""
+(passing_pct=80, retryable). Keep all `asset` template links intact.
+- Do NOT remove chapters unless explicitly asked.
+- Do NOT remove quizzes from chapters.
+- Ensure all asset template_links from the original spec are preserved.
+Return the FULL updated specification as structured output.
+{compliance_section}{history_section}"""
+
+
+def _build_context_section(
+    company_name: str | None = None,
+    audience: str | None = None,
+    plan_summary: str | None = None,
+) -> str:
+    parts: list[str] = []
+    if company_name or audience:
+        ctx = ""
+        if company_name:
+            ctx += f" for {company_name}"
+        if audience:
+            ctx += f", targeting {audience}"
+        parts.append(f"\nYou are editing a course{ctx}.")
+    if plan_summary:
+        parts.append(f"\nCourse plan: {plan_summary}")
+    return "".join(parts)
+
+
+def _build_compliance_section(compliance_requirements: list[str] | None = None) -> str:
+    if not compliance_requirements:
+        return ""
+    reqs = "\n".join(f"- {r}" for r in compliance_requirements)
+    return f"\nCompliance requirements (must NOT be violated):\n{reqs}\n"
+
+
+def _build_history_section(edit_history: list[dict] | None = None) -> str:
+    if not edit_history:
+        return ""
+    entries: list[str] = []
+    for h in edit_history[:5]:
+        prompt = h.get("prompt", "")
+        status = h.get("status", "")
+        entries.append(f'- "{prompt}" (status: {status})')
+    history_str = "\n".join(entries)
+    return f"\nPrevious edits on this target (for continuity):\n{history_str}\n"
+
+
+def _format_system_prompt(
+    template: str,
+    company_name: str | None = None,
+    audience: str | None = None,
+    plan_summary: str | None = None,
+    compliance_requirements: list[str] | None = None,
+    edit_history: list[dict] | None = None,
+) -> str:
+    return template.format(
+        context_section=_build_context_section(company_name, audience, plan_summary),
+        compliance_section=_build_compliance_section(compliance_requirements),
+        history_section=_build_history_section(edit_history),
+    )
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
 def _parse_selector(selector: str | None) -> tuple[int, int, int] | None:
-    """Parse a "chapter.page.block" index selector emitted by the renderer."""
     if not selector:
         return None
     parts = selector.split(".")
@@ -296,76 +338,7 @@ def _get_block(spec: dict, idx: tuple[int, int, int]) -> dict | None:
         return None
 
 
-# ── Context builder ──────────────────────────────────────────────────────────
-
-
-def _build_context_string(
-    company_name: str | None = None,
-    audience: str | None = None,
-    plan_summary: str | None = None,
-    compliance_requirements: list[str] | None = None,
-) -> str:
-    """Build a context string for injecting into Gemini prompts."""
-    parts: list[str] = []
-    if company_name:
-        parts.append(f"Company: {company_name}")
-    if audience:
-        parts.append(f"Target audience: {audience}")
-    if plan_summary:
-        parts.append(f"Course plan: {plan_summary}")
-    if compliance_requirements:
-        parts.append(f"Compliance requirements: {', '.join(compliance_requirements)}")
-    return "\n".join(parts) if parts else "No additional context provided."
-
-
-# ── Fast Gemini path (simple edits) ──────────────────────────────────────────
-
-
-async def _gemini_edit_block(
-    block: dict,
-    instruction: str,
-    target_text: str | None,
-    context: str = "",
-) -> dict | None:
-    """Enhanced Gemini block edit with context injection + validation retry."""
-    model = get_chat_model(temperature=0.4).with_structured_output(Block)
-
-    system = BLOCK_EDIT_SYSTEM
-    if context:
-        system += f"\n\nCourse context:\n{context}"
-
-    prompt = (
-        f"Current block (JSON): {block}\n"
-        f"Selected text: {target_text or 'N/A'}\n"
-        f"Requested change: {instruction}\n"
-        "Return the full updated block."
-    )
-    out = await model.ainvoke([("system", system), ("user", prompt)])
-    if not isinstance(out, Block):
-        return None
-
-    result = out.model_dump(exclude_none=True)
-
-    # Post-edit validation on the single block
-    block_warnings = _validate_single_block(result)
-    if block_warnings:
-        logger.info("Block validation warnings, retrying: %s", block_warnings)
-        retry_prompt = (
-            f"The previous edit had validation issues: {'; '.join(block_warnings)}.\n"
-            f"Original block: {block}\n"
-            f"Your previous output: {result}\n"
-            f"Requested change: {instruction}\n"
-            "Fix the issues and return the corrected block."
-        )
-        retry_out = await model.ainvoke([("system", system), ("user", retry_prompt)])
-        if isinstance(retry_out, Block):
-            result = retry_out.model_dump(exclude_none=True)
-
-    return result
-
-
 def _validate_single_block(block: dict) -> list[str]:
-    """Quick validation for a single edited block."""
     warnings: list[str] = []
     if not block.get("type"):
         warnings.append("Block has no type")
@@ -377,17 +350,62 @@ def _validate_single_block(block: dict) -> list[str]:
     return warnings
 
 
+# ── Fast Gemini path (simple edits) ──────────────────────────────────────────
+
+
+async def _gemini_edit_block(
+    block: dict,
+    instruction: str,
+    target_text: str | None,
+    system_prompt: str,
+) -> dict | None:
+    """Enhanced Gemini block edit with validation retry."""
+    model = get_chat_model(temperature=0.4).with_structured_output(Block)
+
+    system = BLOCK_EDIT_SYSTEM
+    if context:
+        system += f"\n\nCourse context:\n{context}"
+
+    prompt = (
+        f"Current block (JSON): {json.dumps(block)}\n"
+        f"Selected text: {target_text or 'N/A'}\n"
+        f"Requested change: {instruction}\n"
+        "Return the full updated block."
+    )
+    out = await model.ainvoke([("system", system_prompt), ("user", prompt)])
+    if not isinstance(out, Block):
+        return None
+
+    result = out.model_dump(exclude_none=True)
+
+    block_warnings = _validate_single_block(result)
+    if block_warnings:
+        logger.info("Block validation warnings, retrying: %s", block_warnings)
+        retry_prompt = (
+            f"The previous edit had validation issues: {'; '.join(block_warnings)}.\n"
+            f"Original block: {json.dumps(block)}\n"
+            f"Your previous output: {json.dumps(result)}\n"
+            f"Requested change: {instruction}\n"
+            "Fix the issues and return the corrected block."
+        )
+        retry_out = await model.ainvoke([("system", system_prompt), ("user", retry_prompt)])
+        if isinstance(retry_out, Block):
+            result = retry_out.model_dump(exclude_none=True)
+
+    return result
+
+
 async def _gemini_edit_spec(
-    spec: dict, instruction: str, target_text: str | None
+    spec: dict, instruction: str, target_text: str | None, system_prompt: str
 ) -> dict | None:
     model = get_chat_model(temperature=0.4).with_structured_output(Lastenheft)
     prompt = (
-        f"Current specification (JSON): {spec}\n"
+        f"Current specification (JSON): {json.dumps(spec)}\n"
         f"Context / selected text: {target_text or 'N/A'}\n"
         f"Requested change: {instruction}\n"
         "Return the full updated specification."
     )
-    out = await model.ainvoke([("system", SPEC_EDIT_SYSTEM), ("user", prompt)])
+    out = await model.ainvoke([("system", system_prompt), ("user", prompt)])
     if isinstance(out, Lastenheft) and out.chapters:
         return out.model_dump(exclude_none=True)
     return None
@@ -397,7 +415,6 @@ async def _gemini_edit_spec(
 
 
 def _local_edit_block(block: dict, instruction: str) -> dict:
-    """Deterministic offline edit: visibly fold the instruction into the block."""
     edited = copy.deepcopy(block)
     note = instruction.strip()
     if edited.get("text"):
@@ -410,7 +427,6 @@ def _local_edit_block(block: dict, instruction: str) -> dict:
 
 
 def _local_edit_spec(spec: dict, instruction: str) -> dict:
-    """Deterministic offline edit: add a callout reflecting the request."""
     edited = copy.deepcopy(spec)
     chapters = edited.get("chapters") or []
     if chapters and chapters[0].get("pages"):
@@ -454,13 +470,26 @@ async def _devin_edit_spec(
         context_parts.append(f"Compliance requirements: {', '.join(compliance_requirements)}")
     context_block = "\n".join(context_parts) if context_parts else "No additional context."
 
+    spec_json = json.dumps(spec)
+    if len(spec_json) > 120_000:
+        # Truncate at a structural boundary: keep only the first N chapters
+        # that fit within the limit, rather than cutting mid-JSON.
+        truncated = copy.deepcopy(spec)
+        chapters = truncated.get("chapters", [])
+        while json.dumps(truncated).__len__() > 120_000 and chapters:
+            chapters.pop()
+        omitted = len(spec.get("chapters", [])) - len(chapters)
+        if omitted > 0:
+            truncated["_note"] = f"{omitted} chapter(s) omitted for length"
+        spec_json = json.dumps(truncated)
+
     prompt = f"""You are editing an interactive e-learning course specification (Lastenheft).
 
 ## Course Context
 {context_block}
 
 ## Current Specification (JSON)
-{spec}
+{spec_json}
 
 ## Edit Request
 {instruction}
@@ -481,7 +510,7 @@ Apply the requested change and return the complete updated Lastenheft."""
             prompt,
             structured_output_schema=schema,
             title=f"Course edit: {instruction[:80]}",
-            tags=["course-edit", "hybrid-tier"],
+            tags=["coursive", "edit"],
         )
         if isinstance(output, dict) and output.get("chapters"):
             return output, session_id
@@ -517,12 +546,15 @@ async def generate_edited_spec(
     plan_summary: str | None = None,
     compliance_requirements: list[str] | None = None,
     audience: str | None = None,
+    edit_history: list[dict] | None = None,
 ) -> EditResult:
     """Return an EditResult with the new spec and metadata.
 
     Routes edits through the appropriate tier:
-    - 'simple' -> enhanced Gemini (fast, <5s)
+    - 'simple' -> enhanced Gemini (fast)
     - 'complex' -> Devin session (powerful) -> Gemini fallback -> local fallback
+
+    Includes context injection, conversation history, validation, and diff tracking.
     """
     old_spec = copy.deepcopy(spec)
     new_spec = copy.deepcopy(spec)
@@ -530,19 +562,31 @@ async def generate_edited_spec(
     idx = _parse_selector(selector)
     block = _get_block(new_spec, idx) if idx is not None else None
     devin_session_id: str | None = None
-    context = _build_context_string(
+
+    is_block_edit = idx is not None and block is not None
+    block_prompt = _format_system_prompt(
+        BLOCK_EDIT_SYSTEM,
         company_name=company_name,
         audience=audience,
         plan_summary=plan_summary,
         compliance_requirements=compliance_requirements,
+        edit_history=edit_history,
+    )
+    spec_prompt = _format_system_prompt(
+        SPEC_EDIT_SYSTEM,
+        company_name=company_name,
+        audience=audience,
+        plan_summary=plan_summary,
+        compliance_requirements=compliance_requirements,
+        edit_history=edit_history,
     )
 
-    if tier == TIER_SIMPLE and idx is not None and block is not None:
+    if tier == TIER_SIMPLE and is_block_edit:
         # Fast Gemini path for targeted block edits
         updated: dict | None = None
         if gemini_available():
             try:
-                updated = await _gemini_edit_block(block, instruction, target_text, context)
+                updated = await _gemini_edit_block(block, instruction, target_text, block_prompt)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Gemini block edit failed (%s); using local fallback", exc)
         if updated is None:
@@ -554,7 +598,6 @@ async def generate_edited_spec(
         # Complex path: try Devin -> Gemini fallback -> local fallback
         edited: dict | None = None
 
-        # Try Devin first
         edited, devin_session_id = await _devin_edit_spec(
             new_spec,
             instruction,
@@ -564,25 +607,25 @@ async def generate_edited_spec(
             compliance_requirements=compliance_requirements,
         )
 
-        # Gemini fallback
         if edited is None and gemini_available():
             try:
-                if idx is not None and block is not None:
+                if is_block_edit:
                     updated_block = await _gemini_edit_block(
-                        block, instruction, target_text, context,
+                        block, instruction, target_text, block_prompt,
                     )
                     if updated_block is not None:
                         c, p, b = idx
                         new_spec["chapters"][c]["pages"][p]["blocks"][b] = updated_block
                         edited = new_spec
                 else:
-                    edited = await _gemini_edit_spec(new_spec, instruction, target_text)
+                    edited = await _gemini_edit_spec(
+                        new_spec, instruction, target_text, spec_prompt,
+                    )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Gemini fallback edit failed (%s); using local fallback", exc)
 
-        # Local fallback
         if edited is None:
-            if idx is not None and block is not None:
+            if is_block_edit:
                 c, p, b = idx
                 new_spec["chapters"][c]["pages"][p]["blocks"][b] = _local_edit_block(
                     block, instruction,
@@ -594,10 +637,12 @@ async def generate_edited_spec(
         new_spec = edited
 
     else:
-        # Simple edit without a valid block selector — treat as targeted Gemini
+        # Simple edit without a valid block selector
         if gemini_available():
             try:
-                edited_spec = await _gemini_edit_spec(new_spec, instruction, target_text)
+                edited_spec = await _gemini_edit_spec(
+                    new_spec, instruction, target_text, system_prompt,
+                )
                 if edited_spec is not None:
                     new_spec = edited_spec
                 else:
@@ -608,11 +653,8 @@ async def generate_edited_spec(
         else:
             new_spec = _local_edit_spec(new_spec, instruction)
 
-    # Post-edit validation
     is_block_edit = idx is not None and block is not None
     validation_warnings = validate_edited_spec(new_spec, old_spec, block_level=is_block_edit)
-
-    # Compute diff
     diff = compute_edit_diff(old_spec, new_spec)
 
     return EditResult(

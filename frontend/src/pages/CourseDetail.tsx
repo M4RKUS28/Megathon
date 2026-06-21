@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   Check,
   ChevronDown,
   ChevronUp,
@@ -15,7 +16,6 @@ import {
   Trash2,
   X,
   Zap,
-  Bot,
 } from "lucide-react";
 import {
   useAcceptEdit,
@@ -29,6 +29,7 @@ import {
 import { useFullscreen } from "@/hooks/useFullscreen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CourseAssignPanel } from "@/components/CourseAssignPanel";
+import { PipelineMonitor } from "@/components/PipelineMonitor";
 import type { CoursePlan, PlanChapter } from "@/lib/api";
 
 let _cid = 0;
@@ -417,6 +418,8 @@ export function CourseDetailPage() {
       </div>
 
       {isBusy ? (
+        <>
+        <PipelineMonitor courseId={course.id} />
         <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -444,6 +447,7 @@ export function CourseDetailPage() {
             </p>
           ) : null}
         </div>
+        </>
       ) : null}
 
       {course.status === "failed" ? (
@@ -456,6 +460,9 @@ export function CourseDetailPage() {
       {course.status === "plan_review" && course.plan ? (
         <PlanReview plan={course.plan} courseId={course.id} />
       ) : null}
+
+      {/* Pipeline completed summary */}
+      {isReady ? <PipelineMonitor courseId={course.id} /> : null}
 
       {/* Built course preview + edit-loop */}
       {isReady && course.host_url ? (
@@ -602,7 +609,7 @@ export function CourseDetailPage() {
                       rel="noreferrer"
                       className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline"
                     >
-                      Devin session
+                      Watch Devin work
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : null}

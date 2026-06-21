@@ -227,16 +227,14 @@ export interface CourseBriefInput {
   topics: string[];
 }
 
-export interface EditDiffBlock {
-  location: string;
-  action: "changed" | "added" | "removed";
-  old_type: string | null;
-  new_type: string | null;
-}
-
 export interface EditDiff {
   summary: string;
-  blocks: EditDiffBlock[];
+  blocks: Array<{
+    location: string;
+    action: string;
+    old_type: string | null;
+    new_type: string | null;
+  }>;
 }
 
 export interface EditRecord {
