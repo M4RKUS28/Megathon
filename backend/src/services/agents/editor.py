@@ -428,7 +428,76 @@ def _local_edit_spec(spec: dict, instruction: str) -> dict:
     return edited
 
 
-# ── Devin session path (complex edits) ───────────────────────────────────────
+# ── Devin session paths ──────────────────────────────────────────────────────
+
+
+async def _devin_edit_block(
+    block: dict,
+    instruction: str,
+    target_text: str | None,
+    *,
+    company_name: str | None = None,
+    audience: str | None = None,
+    plan_summary: str | None = None,
+    compliance_requirements: list[str] | None = None,
+) -> tuple[dict | None, str | None]:
+    """Create a Devin API session for a single block edit.
+
+    Returns (edited_block_dict, devin_session_id).
+    """
+    from src.services.devin.client import DevinClient
+
+    client = DevinClient()
+    if not client.enabled:
+        return None, None
+
+    context_parts: list[str] = []
+    if company_name:
+        context_parts.append(f"Company: {company_name}")
+    if audience:
+        context_parts.append(f"Target audience: {audience}")
+    if plan_summary:
+        context_parts.append(f"Course plan summary: {plan_summary}")
+    if compliance_requirements:
+        context_parts.append(
+            f"Compliance requirements: {', '.join(compliance_requirements)}"
+        )
+    context_block = (
+        "\n".join(context_parts) if context_parts else "No additional context."
+    )
+
+    prompt = (
+        "You are editing ONE block of an interactive e-learning course.\n\n"
+        f"## Course Context\n{context_block}\n\n"
+        f"## Current Block (JSON)\n{json.dumps(block)}\n\n"
+        f"## Selected Text\n{target_text or 'N/A'}\n\n"
+        f"## Edit Request\n{instruction}\n\n"
+        "## Constraints\n"
+        "- Keep the same `type` unless the request clearly requires a change.\n"
+        "- Preserve `asset` links and `data` structure unless asked otherwise.\n"
+        "- Keep content concise and on-topic.\n\n"
+        "Return the updated block as structured output."
+    )
+
+    schema = Block.model_json_schema()
+
+    try:
+        session_id, output = await client.run(
+            prompt,
+            structured_output_schema=schema,
+            title=f"Block edit: {instruction[:80]}",
+            tags=["coursive", "edit", "block"],
+        )
+        if isinstance(output, dict):
+            edited = Block(**output)
+            return edited.model_dump(exclude_none=True), session_id
+        logger.warning(
+            "Devin session %s returned invalid block output", session_id
+        )
+        return None, session_id
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Devin block edit session failed: %s", exc)
+        return None, None
 
 
 async def _devin_edit_spec(
@@ -574,13 +643,32 @@ async def generate_edited_spec(
     )
 
     if tier == TIER_SIMPLE and is_block_edit:
-        # Fast Gemini path for targeted block edits
+        # Fast path: try Devin block edit -> Gemini -> local fallback
         updated: dict | None = None
-        if gemini_available():
+
+        # Try Devin for targeted block edit first.
+        devin_block, devin_session_id = await _devin_edit_block(
+            block,
+            instruction,
+            target_text,
+            company_name=company_name,
+            audience=audience,
+            plan_summary=plan_summary,
+            compliance_requirements=compliance_requirements,
+        )
+        if devin_block is not None:
+            updated = devin_block
+
+        if updated is None and gemini_available():
             try:
-                updated = await _gemini_edit_block(block, instruction, target_text, block_prompt)
+                updated = await _gemini_edit_block(
+                    block, instruction, target_text, block_prompt,
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Gemini block edit failed (%s); using local fallback", exc)
+                logger.warning(
+                    "Gemini block edit failed (%s); using local fallback",
+                    exc,
+                )
         if updated is None:
             updated = _local_edit_block(block, instruction)
         c, p, b = idx
@@ -633,7 +721,7 @@ async def generate_edited_spec(
         if gemini_available():
             try:
                 edited_spec = await _gemini_edit_spec(
-                    new_spec, instruction, target_text, system_prompt,
+                    new_spec, instruction, target_text, spec_prompt,
                 )
                 if edited_spec is not None:
                     new_spec = edited_spec

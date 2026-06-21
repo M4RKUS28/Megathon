@@ -601,10 +601,13 @@ export function CourseDetailPage() {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">Status: {ed.status}</p>
 
-                  {/* Devin session link for complex edits */}
-                  {ed.devin_session_id && ed.devin_session_url ? (
+                  {/* Devin session link */}
+                  {ed.devin_session_url || ed.devin_session_id ? (
                     <a
-                      href={ed.devin_session_url}
+                      href={
+                        ed.devin_session_url ||
+                        `https://app.devin.ai/sessions/${ed.devin_session_id}`
+                      }
                       target="_blank"
                       rel="noreferrer"
                       className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline"
@@ -612,6 +615,25 @@ export function CourseDetailPage() {
                       Watch Devin work
                       <ExternalLink className="h-3 w-3" />
                     </a>
+                  ) : null}
+
+                  {/* Running banner */}
+                  {ed.status === "running" &&
+                  (ed.devin_session_url || ed.devin_session_id) ? (
+                    <div className="mt-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-700">
+                      Devin is working on this edit.{" "}
+                      <a
+                        href={
+                          ed.devin_session_url ||
+                          `https://app.devin.ai/sessions/${ed.devin_session_id}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium underline"
+                      >
+                        Watch live
+                      </a>
+                    </div>
                   ) : null}
 
                   {/* Diff summary */}
