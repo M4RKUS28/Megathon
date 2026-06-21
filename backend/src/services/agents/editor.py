@@ -362,10 +362,6 @@ async def _gemini_edit_block(
     """Enhanced Gemini block edit with validation retry."""
     model = get_chat_model(temperature=0.4).with_structured_output(Block)
 
-    system = BLOCK_EDIT_SYSTEM
-    if context:
-        system += f"\n\nCourse context:\n{context}"
-
     prompt = (
         f"Current block (JSON): {json.dumps(block)}\n"
         f"Selected text: {target_text or 'N/A'}\n"
@@ -641,7 +637,7 @@ async def generate_edited_spec(
         if gemini_available():
             try:
                 edited_spec = await _gemini_edit_spec(
-                    new_spec, instruction, target_text, system_prompt,
+                    new_spec, instruction, target_text, spec_prompt,
                 )
                 if edited_spec is not None:
                     new_spec = edited_spec
