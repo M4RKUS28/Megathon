@@ -6,11 +6,15 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
+  Code2,
   ExternalLink,
+  FileCode,
   Loader2,
   Maximize,
   Minimize,
   MousePointerClick,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -420,32 +424,70 @@ export function CourseDetailPage() {
       {isBusy ? (
         <>
         <PipelineMonitor courseId={course.id} />
-        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {BUSY_MESSAGES[course.status] ?? "Working…"}
+        <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-6 shadow-neu">
+          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/5 blur-2xl" />
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
+                {BUSY_MESSAGES[course.status] ?? "Working…"}
+              </p>
+            </div>
+
+            {/* Pipeline steps */}
+            <div className="mt-4 flex items-center gap-3">
+              {[
+                { label: "Planning", key: "planning", icon: ClipboardList },
+                { label: "Authoring", key: "authoring", icon: Pencil },
+                { label: "Building", key: "building", icon: Code2 },
+              ].map(({ label, key, icon: Icon }, idx) => {
+                const steps = ["draft", "planning", "authoring", "spec_ready", "building"];
+                const currentIdx = steps.indexOf(course.status);
+                const stepIdx = steps.indexOf(key);
+                const isActive = key === course.status || (key === "building" && course.status === "spec_ready");
+                const isDone = stepIdx < currentIdx && !isActive;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      isActive
+                        ? "bg-primary/20 text-primary"
+                        : isDone
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "bg-secondary text-muted-foreground"
+                    }`}>
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </div>
+                    {idx < 2 && <div className="h-px w-4 bg-border" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {devinSessionUrl ? (
+              <a
+                href={devinSessionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Watch Devin build live
+                {devinSessionId ? (
+                  <span className="ml-1 rounded bg-primary-foreground/10 px-1.5 py-0.5 font-mono text-xs">
+                    {devinSessionId.slice(0, 8)}…
+                  </span>
+                ) : null}
+              </a>
+            ) : course.status === "building" ? (
+              <p className="mt-4 text-xs text-muted-foreground">
+                If this build uses Devin, the live session link will appear here as soon as Devin
+                starts.
+              </p>
+            ) : null}
           </div>
-          {devinSessionUrl ? (
-            <a
-              href={devinSessionUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
-            >
-              Open live Devin session
-              <ExternalLink className="h-3.5 w-3.5" />
-              {devinSessionId ? (
-                <span className="ml-1 font-mono text-xs text-muted-foreground">
-                  {devinSessionId}
-                </span>
-              ) : null}
-            </a>
-          ) : course.status === "building" ? (
-            <p className="mt-2 text-xs">
-              If this build uses Devin, the live session link will appear here as soon as Devin
-              starts.
-            </p>
-          ) : null}
         </div>
         </>
       ) : null}
@@ -518,11 +560,17 @@ export function CourseDetailPage() {
           </div>
 
           <div className="space-y-5">
-            <div className="rounded-xl border border-border bg-card shadow-neu-sm p-5">
-              <h3 className="font-semibold">Edit with Devin</h3>
+            <div className="rounded-xl border border-border bg-gradient-to-b from-card to-background shadow-neu p-5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <h3 className="font-semibold">Edit with Devin</h3>
+              </div>
               {selected ? (
-                <div className="mt-3 rounded-lg bg-secondary p-3 text-xs">
-                  <span className="font-medium">Selected:</span> {selected.text.slice(0, 120)}
+                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+                  <span className="font-medium text-primary">Selected:</span>{" "}
+                  <span className="text-muted-foreground">{selected.text.slice(0, 120)}</span>
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -544,7 +592,11 @@ export function CourseDetailPage() {
                     key={chip}
                     type="button"
                     onClick={() => setPrompt(chip)}
-                    className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:border-primary hover:text-primary hover:shadow-neu-sm"
+                    className={`rounded-full border px-2.5 py-1 text-xs transition-all ${
+                      prompt === chip
+                        ? "border-primary bg-primary/10 text-primary shadow-neu-sm"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5"
+                    }`}
                   >
                     {chip}
                   </button>
@@ -581,25 +633,31 @@ export function CourseDetailPage() {
               {edits?.map((ed) => (
                 <div key={ed.id} className="rounded-lg border border-border bg-card shadow-neu-sm p-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium">{ed.prompt}</p>
+                    <div className="flex items-start gap-2">
+                      <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                        ed.edit_tier === "simple" ? "bg-emerald-500/10" : "bg-violet-500/10"
+                      }`}>
+                        {ed.edit_tier === "simple" ? (
+                          <Zap className="h-3 w-3 text-emerald-400" />
+                        ) : (
+                          <Bot className="h-3 w-3 text-violet-400" />
+                        )}
+                      </div>
+                      <p className="font-medium">{ed.prompt}</p>
+                    </div>
                     {ed.edit_tier ? (
                       <span
                         className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                           ed.edit_tier === "simple"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-violet-50 text-violet-700 border border-violet-200"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-violet-500/10 text-violet-400 border border-violet-500/20"
                         }`}
                       >
-                        {ed.edit_tier === "simple" ? (
-                          <Zap className="h-3 w-3" />
-                        ) : (
-                          <Bot className="h-3 w-3" />
-                        )}
-                        {ed.edit_tier === "simple" ? "Quick edit" : "Deep edit with Devin"}
+                        {ed.edit_tier === "simple" ? "Quick" : "Deep"}
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Status: {ed.status}</p>
+                  <p className="mt-1 ml-7 text-xs text-muted-foreground">Status: {ed.status}</p>
 
                   {/* Devin session link for complex edits */}
                   {ed.devin_session_id && ed.devin_session_url ? (
@@ -607,8 +665,9 @@ export function CourseDetailPage() {
                       href={ed.devin_session_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline"
+                      className="mt-1.5 ml-7 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
+                      <FileCode className="h-3 w-3" />
                       Watch Devin work
                       <ExternalLink className="h-3 w-3" />
                     </a>
@@ -616,13 +675,13 @@ export function CourseDetailPage() {
 
                   {/* Diff summary */}
                   {ed.diff ? (
-                    <p className="mt-1.5 rounded-md bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                    <p className="mt-1.5 ml-7 rounded-md bg-secondary px-2 py-1 text-xs text-muted-foreground">
                       {ed.diff.summary}
                     </p>
                   ) : null}
 
                   {ed.status === "preview_ready" ? (
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2 ml-7 flex items-center gap-2">
                       {ed.preview_url ? (
                         <a
                           href={ed.preview_url}
