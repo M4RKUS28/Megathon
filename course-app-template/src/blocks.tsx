@@ -55,7 +55,7 @@ function MediaImage({ src, alt }: { src?: string; alt?: string }) {
       animate={{ opacity: 1, y: 0 }}
       src={src}
       alt={alt ?? ""}
-      className="w-full rounded-xl border border-black/5 shadow-sm"
+      className="w-full rounded-xl border border-[hsl(var(--border))] shadow-[var(--shadow-neu-sm)]"
     />
   );
 }
@@ -134,7 +134,7 @@ function Avatar({ seed, size = 56 }: { seed: string; size?: number }) {
         </clipPath>
       </defs>
       <g clipPath={`url(#${clip})`}>
-        <rect width="100" height="100" fill="#eef2f7" />
+        <rect width="100" height="100" fill="hsl(232, 25%, 12%)" />
         <path d="M12,100 Q14,68 50,68 Q86,68 88,100 Z" fill={shirt} />
         <rect x="44" y="56" width="12" height="14" rx="5" fill={skin} />
         <circle cx="50" cy="40" r="22" fill={skin} />
@@ -200,7 +200,7 @@ function PersonaStage({
         <PersonaAvatar persona={persona} size={64} resolve={resolve} />
       </motion.div>
       <div className="mt-1.5 text-xs font-semibold">{persona?.name}</div>
-      {persona?.role ? <div className="text-[10px] text-gray-400">{persona.role}</div> : null}
+      {persona?.role ? <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{persona.role}</div> : null}
     </div>
   );
 }
@@ -299,17 +299,17 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
 
   if (!nodes.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No dialogue available.
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white" role="region" aria-label="Interactive dialogue">
-      <div className="border-b border-black/5 px-4 py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Dialogue</span>
-        <div className="text-sm font-semibold text-gray-700">{speakerName}</div>
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive dialogue">
+      <div className="border-b border-[hsl(var(--border))] px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Dialogue</span>
+        <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{speakerName}</div>
       </div>
 
       <div className="max-h-[400px] overflow-y-auto p-4">
@@ -327,7 +327,7 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
                   className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
                     isLearner
                       ? "bg-[var(--brand)] text-white"
-                      : "border border-black/5 bg-white"
+                      : "border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
                   }`}
                 >
                   <div className={`mb-0.5 text-[11px] font-semibold ${isLearner ? "text-white/85" : "opacity-70"}`}>
@@ -359,14 +359,14 @@ function DialogueGraph({ data }: { data: Record<string, unknown> }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex items-center justify-between border-t border-black/5 px-4 py-3">
-        <span className="text-xs text-gray-400">
+      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-4 py-3">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           {isTerminal && transcript.length > 0 ? "Conversation complete" : `${transcript.length} messages`}
         </span>
         <button
           type="button"
           onClick={restart}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           Restart
         </button>
@@ -419,7 +419,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
   const advance = () => setShown((s) => Math.min(s + 1, turns.length));
 
   return (
-    <div className="rounded-2xl border border-black/5 bg-gradient-to-b from-gray-50 to-white p-4" role="region" aria-label="Conversation">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" role="region" aria-label="Conversation">
       <audio
         ref={audioRef}
         className="hidden"
@@ -433,7 +433,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
       />
       <div className="mb-4 flex items-end justify-between gap-2">
         <PersonaStage persona={left} active={left === active} resolve={resolve} />
-        <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        <span className="pb-7 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           Conversation
         </span>
         <PersonaStage persona={right} active={right === active} resolve={resolve} />
@@ -454,7 +454,7 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
               <PersonaAvatar persona={p} size={30} resolve={resolve} />
               <div
                 className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
-                  mine ? "bg-[var(--brand)] text-white" : "border border-black/5 bg-white"
+                  mine ? "bg-[var(--brand)] text-white" : "border border-[hsl(var(--border))] bg-[hsl(var(--card))]"
                 } ${isLast ? "ring-2 ring-[var(--brand)]/30" : ""}`}
               >
                 <div
@@ -487,14 +487,14 @@ function Conversation({ data, resolve }: { data?: Record<string, unknown>; resol
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           {Math.min(shown, turns.length)} / {turns.length}
         </span>
         {done ? (
           <button
             type="button"
             onClick={() => setShown(1)}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           >
             Replay conversation
           </button>
@@ -537,18 +537,18 @@ function GameShell({
 }) {
   const pct = total ? Math.round((score / total) * 100) : 0;
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-      <div className="border-b border-black/5 bg-[var(--brand)]/5 p-4">
+    <div className="overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-neu-sm)]">
+      <div className="border-b border-[hsl(var(--border))] bg-[var(--brand)]/5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">
               Minigame
             </div>
-            <h4 className="mt-0.5 text-base font-bold text-gray-900">{title}</h4>
-            {prompt ? <p className="mt-1 text-sm text-gray-600">{prompt}</p> : null}
+            <h4 className="mt-0.5 text-base font-bold text-[hsl(var(--foreground))]">{title}</h4>
+            {prompt ? <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
           </div>
-          <div className="rounded-xl border border-black/5 bg-white px-3 py-2 text-right shadow-sm">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-right shadow-[var(--shadow-neu-sm)]">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
               Score
             </div>
             <div className="text-lg font-bold text-[var(--brand)]">
@@ -556,7 +556,7 @@ function GameShell({
             </div>
           </div>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10">
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[hsl(var(--secondary))]">
           <motion.div
             animate={{ width: `${pct}%` }}
             className="h-full rounded-full bg-[var(--brand)]"
@@ -564,11 +564,11 @@ function GameShell({
         </div>
       </div>
       <div className="p-4">{children}</div>
-      <div className="flex justify-end border-t border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex justify-end border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <button
           type="button"
           onClick={onReset}
-          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium"
+          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))]"
         >
           Replay
         </button>
@@ -598,8 +598,8 @@ function QuizMinigame({ data }: { data: MinigameData }) {
           const picked = answers[qi];
           const answered = picked !== undefined;
           return (
-            <div key={qi} className="rounded-xl border border-black/5 bg-gray-50 p-3">
-              <div className="text-sm font-semibold text-gray-900">{q.question}</div>
+            <div key={qi} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{q.question}</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {q.options.map((option, oi) => {
                   const correct = oi === q.answerIndex;
@@ -611,10 +611,10 @@ function QuizMinigame({ data }: { data: MinigameData }) {
                       onClick={() => setAnswers((s) => ({ ...s, [qi]: oi }))}
                       className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
                         answered && correct
-                          ? "border-emerald-500 bg-emerald-50"
+                          ? "border-emerald-500 bg-emerald-500/10"
                           : active
-                            ? "border-red-400 bg-red-50"
-                            : "border-black/10 bg-white hover:border-[var(--brand)]"
+                            ? "border-red-400 bg-red-400/10"
+                            : "border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[var(--brand)]"
                       }`}
                     >
                       <span className="mr-2 font-bold">
@@ -629,7 +629,7 @@ function QuizMinigame({ data }: { data: MinigameData }) {
                 <motion.div
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 rounded-lg bg-white p-2 text-xs text-gray-600"
+                  className="mt-3 rounded-lg bg-[hsl(var(--card))] p-2 text-xs text-[hsl(var(--muted-foreground))]"
                 >
                   {q.explanation}
                 </motion.div>
@@ -673,24 +673,24 @@ function OrderMinigame({ data }: { data: MinigameData }) {
               layout
               key={step}
               className={`flex items-center gap-2 rounded-xl border p-2 ${
-                correct ? "border-emerald-500 bg-emerald-50" : "border-black/10 bg-gray-50"
+                correct ? "border-emerald-500 bg-emerald-500/10" : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--card))] text-sm font-bold">
                 {i + 1}
               </div>
               <div className="flex-1 text-sm">{step}</div>
               <button
                 type="button"
                 onClick={() => move(i, i - 1)}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))]"
               >
                 Up
               </button>
               <button
                 type="button"
                 onClick={() => move(i, i + 1)}
-                className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs"
+                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))]"
               >
                 Down
               </button>
@@ -729,16 +729,16 @@ function SortMinigame({ data }: { data: MinigameData }) {
               className={`rounded-xl border p-3 ${
                 picked
                   ? correct
-                    ? "border-emerald-500 bg-emerald-50"
-                    : "border-red-400 bg-red-50"
-                  : "border-black/10 bg-gray-50"
+                    ? "border-emerald-500 bg-emerald-500/10"
+                    : "border-red-400 bg-red-400/10"
+                  : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
               <div className="text-sm font-medium">{item.text}</div>
               <select
                 value={picked ?? ""}
                 onChange={(e) => setPicks((s) => ({ ...s, [i]: e.target.value }))}
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-sm"
+                className="mt-2 w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1.5 text-sm text-[hsl(var(--foreground))]"
               >
                 <option value="">Choose category</option>
                 {categories.map((category) => (
@@ -821,10 +821,10 @@ function MemoryMinigame({ data }: { data: MinigameData }) {
               onClick={() => flip(card)}
               className={`min-h-[82px] rounded-xl border p-3 text-sm font-medium transition ${
                 matched[card.pair]
-                  ? "border-emerald-500 bg-emerald-50"
+                  ? "border-emerald-500 bg-emerald-500/10"
                   : visible
                     ? "border-[var(--brand)] bg-[var(--brand)]/5"
-                    : "border-black/10 bg-gray-100"
+                    : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
               }`}
             >
               {visible ? card.text : "?"}
@@ -856,7 +856,7 @@ function Minigame({ data }: { data?: Record<string, unknown> }) {
           total={0}
           onReset={() => {}}
         >
-          <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+          <div className="rounded-xl bg-[hsl(var(--muted))] p-3 text-sm text-[hsl(var(--muted-foreground))]">
             Custom game: {game.game || "unknown"}
           </div>
         </GameShell>
@@ -873,7 +873,7 @@ function Flashcards({ data }: { data?: Record<string, unknown> }) {
         <button
           key={i}
           onClick={() => setFlipped((f) => ({ ...f, [i]: !f[i] }))}
-          className="min-h-[96px] rounded-xl border border-black/5 bg-white p-4 text-left shadow-sm transition hover:shadow-md"
+          className="min-h-[96px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-neu-sm)] transition hover:shadow-[var(--shadow-neu)]"
         >
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--brand)]">
             {flipped[i] ? "Answer" : "Card"}
@@ -1022,22 +1022,22 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
 
   if (!items.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No items to sort.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Drag and drop sorting activity">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Drag and drop sorting activity">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Sort Items</div>
-          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+          {prompt ? <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
         </div>
         {checked ? (
-          <div className="rounded-lg border border-black/5 bg-white px-3 py-1.5 text-sm font-bold text-[var(--brand)]">
+          <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-sm font-bold text-[var(--brand)]">
             {score}/{items.length}
           </div>
         ) : null}
@@ -1047,7 +1047,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
         {/* Item pool */}
         {unplaced.length > 0 ? (
           <div className="mb-4">
-            <div className="mb-2 text-xs font-medium text-gray-500">Items to sort:</div>
+            <div className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">Items to sort:</div>
             <div className="flex flex-wrap gap-2" role="list" aria-label="Items to place">
               {unplaced.map((item) => (
                 <motion.button
@@ -1061,7 +1061,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                   className={`cursor-grab rounded-lg border px-3 py-1.5 text-sm font-medium transition active:cursor-grabbing ${
                     selectedItem === item.id
                       ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
-                      : "border-black/10 bg-white hover:border-[var(--brand)]/50"
+                      : "border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[var(--brand)]/50"
                   } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
                   role="listitem"
                   aria-label={`${item.text}${selectedItem === item.id ? " (selected)" : ""}`}
@@ -1096,10 +1096,10 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                     ? "border-[var(--brand)] bg-[var(--brand)]/5"
                     : selectedItem
                       ? "border-[var(--brand)]/30 bg-[var(--brand)]/5 cursor-pointer"
-                      : "border-black/10 bg-gray-50"
+                      : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
                 } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
               >
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                   {bin.title}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -1111,10 +1111,10 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                         key={item.id}
                         className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${
                           isCorrect
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            ? "border-emerald-300 bg-emerald-500/10 text-emerald-400"
                             : isWrong
-                              ? "border-red-300 bg-red-50 text-red-700"
-                              : "border-black/10 bg-white"
+                              ? "border-red-300 bg-red-400/10 text-red-400"
+                              : "border-[hsl(var(--border))] bg-[hsl(var(--card))]"
                         }`}
                       >
                         {item.text}
@@ -1122,7 +1122,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
-                            className="ml-0.5 text-gray-400 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
+                            className="ml-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--brand)]"
                             aria-label={`Remove ${item.text}`}
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
@@ -1151,11 +1151,11 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <button
           type="button"
           onClick={reset}
-          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           Reset
         </button>
@@ -1173,7 +1173,7 @@ function DragDrop({ data }: { data?: Record<string, unknown> }) {
             {score === items.length ? (
               <span className="text-emerald-600">All correct!</span>
             ) : (
-              <span className="text-gray-600">{score} of {items.length} correct</span>
+              <span className="text-[hsl(var(--muted-foreground))]">{score} of {items.length} correct</span>
             )}
           </span>
         ) : null}
@@ -1289,7 +1289,7 @@ function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: R
 
   if (!spots.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No hotspots available.
       </div>
     );
@@ -1298,10 +1298,10 @@ function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: R
   const activeSpot = spots.find((s) => s.id === activeId);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Interactive hotspot image">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive hotspot image">
       {/* Progress */}
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-2">
-        <span className="text-xs font-medium text-gray-500" role="status" aria-live="polite">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-2">
+        <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
           Discovered {found}/{total}
         </span>
         {found > 0 ? (
@@ -1315,7 +1315,7 @@ function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: R
         ) : null}
       </div>
 
-      <div className="h-1 bg-gray-100">
+      <div className="h-1 bg-[hsl(var(--secondary))]">
         <motion.div
           className="h-full bg-[var(--brand)]"
           animate={{ width: `${total ? (found / total) * 100 : 0}%` }}
@@ -1333,7 +1333,7 @@ function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: R
         {imageUrl ? (
           <img src={imageUrl} alt="" className="block w-full" draggable={false} />
         ) : (
-          <div className="flex h-48 items-center justify-center bg-gray-100 text-sm text-gray-400">
+          <div className="flex h-48 items-center justify-center bg-[hsl(var(--muted))] text-sm text-[hsl(var(--muted-foreground))]">
             No image provided
           </div>
         )}
@@ -1395,12 +1395,12 @@ function Hotspot({ data, resolve }: { data?: Record<string, unknown>; resolve: R
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: reduced ? 0 : 0.25 }}
-            className="overflow-hidden border-t border-black/5"
+            className="overflow-hidden border-t border-[hsl(var(--border))]"
           >
-            <div className="bg-gray-50 p-4">
-              <div className="text-sm font-semibold text-gray-900">{activeSpot.title}</div>
+            <div className="bg-[hsl(var(--muted))] p-4">
+              <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{activeSpot.title}</div>
               {activeSpot.description ? (
-                <div className="mt-1 text-sm text-gray-600">{activeSpot.description}</div>
+                <div className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{activeSpot.description}</div>
               ) : null}
             </div>
           </motion.div>
@@ -1491,7 +1491,7 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
 
   if (!authoredSteps.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No timeline data available.
       </div>
     );
@@ -1500,13 +1500,13 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
   if (interactive) {
     const allCorrect = userOrder.every((s, i) => s.id === authoredSteps[i].id);
     return (
-      <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Interactive timeline reorder">
-        <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+      <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Interactive timeline reorder">
+        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Reorder the steps</span>
           <button
             type="button"
             onClick={exitInteractive}
-            className="text-xs font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+            className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
           >
             Back to timeline
           </button>
@@ -1522,26 +1522,26 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
                 key={step.id}
                 className={`flex items-center gap-2 rounded-xl border p-3 ${
                   isCorrect
-                    ? "border-emerald-300 bg-emerald-50"
+                    ? "border-emerald-300 bg-emerald-500/10"
                     : isWrong
-                      ? "border-red-300 bg-red-50"
-                      : "border-black/10 bg-gray-50"
+                      ? "border-red-300 bg-red-400/10"
+                      : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]"
                 }`}
                 role="listitem"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-700 shadow-sm">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--card))] text-xs font-bold text-[hsl(var(--foreground))] shadow-[var(--shadow-neu-sm)]">
                   {i + 1}
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-medium">{step.title}</div>
-                  {step.description ? <div className="text-xs text-gray-500">{step.description}</div> : null}
+                  {step.description ? <div className="text-xs text-[hsl(var(--muted-foreground))]">{step.description}</div> : null}
                 </div>
                 <div className="flex gap-1">
                   <button
                     type="button"
                     onClick={() => moveStep(i, -1)}
                     disabled={i === 0}
-                    className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))] disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                     aria-label={`Move ${step.title} up`}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1552,7 +1552,7 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
                     type="button"
                     onClick={() => moveStep(i, 1)}
                     disabled={i === userOrder.length - 1}
-                    className="rounded-md border border-black/10 bg-white px-2 py-1 text-xs disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))] disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
                     aria-label={`Move ${step.title} down`}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1565,8 +1565,8 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
-          <span className="text-xs text-gray-500" role="status" aria-live="polite">
+        <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
+          <span className="text-xs text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
             {validated ? (allCorrect ? "Correct order!" : "Some steps are out of order") : `${userOrder.length} steps`}
           </span>
           {!validated ? (
@@ -1581,7 +1581,7 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
             <button
               type="button"
               onClick={() => setValidated(false)}
-              className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             >
               Try Again
             </button>
@@ -1593,8 +1593,8 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
 
   // Default: vertical animated timeline
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Timeline">
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Timeline">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Timeline</span>
         {authoredSteps.length > 1 ? (
           <button
@@ -1617,12 +1617,12 @@ function Timeline({ data }: { data?: Record<string, unknown> }) {
             transition={{ delay: i * 0.1, duration: 0.3 }}
             className="relative pb-6 last:pb-0"
           >
-            <span className="absolute -left-[33px] top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-bold text-white shadow-sm">
+            <span className="absolute -left-[33px] top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-bold text-white shadow-[var(--shadow-neu-sm)]">
               {i + 1}
             </span>
-            <div className="text-sm font-semibold text-gray-900">{step.title}</div>
+            <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{step.title}</div>
             {step.description ? (
-              <div className="mt-0.5 text-sm text-gray-600">{step.description}</div>
+              <div className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{step.description}</div>
             ) : null}
           </motion.li>
         ))}
@@ -1689,17 +1689,17 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
 
   if (!sections.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No sections available.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Accordion">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Accordion">
       {/* Progress header */}
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-2">
-        <span className="text-xs font-medium text-gray-500" role="status" aria-live="polite">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-2">
+        <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]" role="status" aria-live="polite">
           {allExplored ? (
             <span className="text-emerald-600">All sections explored!</span>
           ) : (
@@ -1711,7 +1711,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
             <button
               type="button"
               onClick={collapseAll}
-              className="text-xs font-medium text-gray-500 hover:text-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+              className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
             >
               Collapse all
             </button>
@@ -1729,7 +1729,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-gray-100">
+      <div className="h-1 bg-[hsl(var(--secondary))]">
         <motion.div
           className="h-full bg-[var(--brand)]"
           animate={{ width: `${total ? (exploredCount / total) * 100 : 0}%` }}
@@ -1738,7 +1738,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
       </div>
 
       {/* Sections */}
-      <div className="divide-y divide-black/5" role="list">
+      <div className="divide-y divide-[hsl(var(--border))]" role="list">
         {sections.map((section, i) => {
           const isOpen = openIndex === i;
           const wasExplored = explored.has(i);
@@ -1747,7 +1747,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
               <button
                 type="button"
                 onClick={() => toggle(i)}
-                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-medium text-gray-900 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
+                className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-medium text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--brand)]"
                 aria-expanded={isOpen}
               >
                 <span className="flex items-center gap-2">
@@ -1758,7 +1758,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
                       </svg>
                     </span>
                   ) : (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full border border-black/10" aria-hidden="true" />
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[hsl(var(--border))]" aria-hidden="true" />
                   )}
                   {section.title}
                 </span>
@@ -1781,7 +1781,7 @@ function Accordion({ data }: { data?: Record<string, unknown> }) {
                     transition={{ duration: reduced ? 0 : 0.25 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-gray-600">{renderInlineMarkdown(section.content)}</div>
+                    <div className="px-4 pb-4 pl-10 text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">{renderInlineMarkdown(section.content)}</div>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
@@ -1889,7 +1889,7 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
 
   if (!steps.length) {
     return (
-      <div className="rounded-xl border border-black/5 bg-gray-50 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
         No scenario data available.
       </div>
     );
@@ -1901,20 +1901,20 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
   const hasCorrectness = history.some((h) => h.option.correct !== undefined);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-black/5 bg-white" role="region" aria-label="Decision scenario">
+    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" role="region" aria-label="Decision scenario">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-[var(--brand)]">Scenario</div>
-          {prompt ? <p className="mt-0.5 text-sm text-gray-600">{prompt}</p> : null}
+          {prompt ? <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{prompt}</p> : null}
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">
           Step {Math.min(completedSteps + 1, totalSteps)}/{totalSteps}
         </span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-gray-100">
+      <div className="h-1 bg-[hsl(var(--secondary))]">
         <motion.div
           className="h-full bg-[var(--brand)]"
           animate={{ width: `${totalSteps ? ((complete ? totalSteps : completedSteps) / totalSteps) * 100 : 0}%` }}
@@ -1935,10 +1935,10 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
                   key={i}
                   initial={reduced ? { opacity: 1 } : { opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="rounded-lg bg-gray-50 p-3"
+                  className="rounded-lg bg-[hsl(var(--muted))] p-3"
                 >
-                  <div className="text-xs font-medium text-gray-500">{step?.question}</div>
-                  <div className={`mt-1 text-sm font-medium ${isCorrect ? "text-emerald-700" : isWrong ? "text-red-600" : "text-gray-900"}`}>
+                  <div className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{step?.question}</div>
+                  <div className={`mt-1 text-sm font-medium ${isCorrect ? "text-emerald-400" : isWrong ? "text-red-400" : "text-[hsl(var(--foreground))]"}`}>
                     {isCorrect ? (
                       <svg className="mr-1 inline h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
                     ) : isWrong ? (
@@ -1947,7 +1947,7 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
                     {h.option.text}
                   </div>
                   {h.option.feedback ? (
-                    <div className="mt-1 text-xs text-gray-500">{h.option.feedback}</div>
+                    <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{h.option.feedback}</div>
                   ) : null}
                 </motion.div>
               );
@@ -1977,7 +1977,7 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
           </motion.div>
         ) : currentStep ? (
           <div>
-            <div className="mb-3 text-sm font-semibold text-gray-900">{currentStep.question}</div>
+            <div className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">{currentStep.question}</div>
             <div className="space-y-2">
               {currentStep.options.map((option, oi) => {
                 const isChosen = chosenOption === option;
@@ -1992,12 +1992,12 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
                       disabled={chosenOption !== null && chosenOption !== option}
                       className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${
                         isCorrect
-                          ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                          ? "border-emerald-400 bg-emerald-500/10 text-emerald-400"
                           : isWrong
-                            ? "border-red-300 bg-red-50 text-red-700"
+                            ? "border-red-300 bg-red-400/10 text-red-400"
                             : isChosen
                               ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
-                              : "border-black/10 hover:border-[var(--brand)]/50"
+                              : "border-[hsl(var(--border))] hover:border-[var(--brand)]/50"
                       } disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]`}
                       aria-pressed={isChosen}
                     >
@@ -2012,7 +2012,7 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
                           transition={{ duration: reduced ? 0 : 0.2 }}
                           className="overflow-hidden"
                         >
-                          <div className="mt-1.5 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600" role="alert">
+                          <div className="mt-1.5 rounded-lg bg-[hsl(var(--muted))] p-2.5 text-xs text-[hsl(var(--muted-foreground))]" role="alert">
                             {option.feedback}
                           </div>
                         </motion.div>
@@ -2027,11 +2027,11 @@ function Scenario({ data }: { data?: Record<string, unknown> }) {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-black/5 bg-gray-50 px-4 py-3">
+      <div className="flex items-center justify-between border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-4 py-3">
         <button
           type="button"
           onClick={reset}
-          className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+          className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--foreground))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         >
           Restart
         </button>
@@ -2061,7 +2061,7 @@ function ChartBlock({ data }: { data?: Record<string, unknown> }) {
   const chartData = { labels, datasets };
   const opts = { responsive: true, plugins: { legend: { position: "bottom" as const } } };
   return (
-    <div className="rounded-xl border border-black/5 bg-white p-4">
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
       {data?.title ? <h4 className="mb-2 text-sm font-semibold">{String(data.title)}</h4> : null}
       {chartType === "line" ? (
         <Line data={chartData} options={opts} />
@@ -2081,7 +2081,7 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
   if (!src && !block.text) return null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white p-4">
+    <div className="flex flex-col gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-[var(--brand)]">
           <span aria-hidden="true">AUDIO</span>
@@ -2091,7 +2091,7 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-black/10 bg-gray-50 text-xs font-bold text-gray-700"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-xs font-bold text-[hsl(var(--foreground))]"
             aria-label="Show spoken text"
             title="Show spoken text"
           >
@@ -2134,22 +2134,22 @@ function AudioBlock({ block, resolve }: { block: Block; resolve: Resolve }) {
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-5 shadow-xl"
+            className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-2xl bg-[hsl(var(--card))] p-5 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-label="Spoken text"
           >
             <div className="flex items-start justify-between gap-3">
-              <h4 className="text-base font-bold text-gray-900">Spoken text</h4>
+              <h4 className="text-base font-bold text-[hsl(var(--foreground))]">Spoken text</h4>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-black/10 px-2 py-1 text-xs font-medium"
+                className="rounded-lg border border-[hsl(var(--border))] px-2 py-1 text-xs font-medium text-[hsl(var(--foreground))]"
               >
                 Close
               </button>
             </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[hsl(var(--foreground))]">
               {block.text}
             </p>
           </motion.div>
@@ -2187,7 +2187,7 @@ function StructuredValue({ value }: { value: unknown }) {
       <div className="space-y-2">
         {Object.entries(value as Record<string, unknown>).map(([key, item]) => (
           <div key={key}>
-            <span className="font-semibold text-gray-800">{labelize(key)}: </span>
+            <span className="font-semibold text-[hsl(var(--foreground))]">{labelize(key)}: </span>
             <StructuredValue value={item} />
           </div>
         ))}
@@ -2200,7 +2200,7 @@ function StructuredValue({ value }: { value: unknown }) {
 function StructuredData({ data }: { data?: Record<string, unknown> }) {
   if (!data || !Object.keys(data).length) return null;
   return (
-    <div className="rounded-xl border border-black/5 bg-gray-50 p-3 text-sm leading-relaxed text-gray-700">
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-sm leading-relaxed text-[hsl(var(--foreground))]">
       <StructuredValue value={data} />
     </div>
   );
@@ -2211,10 +2211,10 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     case "heading":
       return <h3 className="mt-2 text-xl font-bold">{block.text ? renderInlineMarkdown(block.text) : null}</h3>;
     case "paragraph":
-      return <p className="text-[15px] leading-relaxed text-gray-700">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
+      return <p className="text-[15px] leading-relaxed text-[hsl(var(--foreground))]">{block.text ? renderInlineMarkdown(block.text) : null}</p>;
     case "list":
       return (
-        <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
+        <ul className="list-disc space-y-1 pl-5 text-[15px] text-[hsl(var(--foreground))]">
           {(block.items ?? []).map((it, i) => (
             <li key={i}>{renderInlineMarkdown(it)}</li>
           ))}
@@ -2231,7 +2231,7 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
     case "video": {
       const src = resolve(block.asset);
       return src ? (
-        <video controls className="w-full rounded-xl border border-black/5">
+        <video controls className="w-full rounded-xl border border-[hsl(var(--border))]">
           <source src={src} />
         </video>
       ) : null;
@@ -2268,10 +2268,10 @@ export function BlockView({ block, resolve }: { block: Block; resolve: Resolve }
       return (
         <div className="space-y-2">
           {block.text ? (
-            <p className="text-[15px] leading-relaxed text-gray-700">{renderInlineMarkdown(block.text)}</p>
+            <p className="text-[15px] leading-relaxed text-[hsl(var(--foreground))]">{renderInlineMarkdown(block.text)}</p>
           ) : null}
           {block.items && block.items.length ? (
-            <ul className="list-disc space-y-1 pl-5 text-[15px] text-gray-700">
+            <ul className="list-disc space-y-1 pl-5 text-[15px] text-[hsl(var(--foreground))]">
               {block.items.map((it, i) => (
                 <li key={i}>{renderInlineMarkdown(it)}</li>
               ))}
