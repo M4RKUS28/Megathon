@@ -62,7 +62,7 @@ function ContinueLearningCard({ course }: { course: LearningCourse }) {
   return (
     <button
       onClick={() => navigate(`/learn/${course.id}`)}
-      className="flex w-full items-center gap-5 rounded-2xl border border-border bg-card p-5 text-left transition hover:border-primary/50 hover:shadow-sm"
+      className="flex w-full items-center gap-5 rounded-2xl border border-border bg-card p-5 text-left shadow-neu transition hover:border-primary/50 hover:shadow-sm"
     >
       <ProgressRing pct={pct} size={56} />
       <div className="min-w-0 flex-1">
@@ -82,7 +82,7 @@ function CourseCard({ course }: { course: LearningCourse }) {
   return (
     <button
       onClick={() => navigate(`/learn/${course.id}`)}
-      className="flex flex-col rounded-xl border border-border bg-card p-5 text-left transition hover:border-primary/50 hover:shadow-sm"
+      className="flex flex-col rounded-xl border border-border bg-card p-5 text-left shadow-neu-sm transition hover:border-primary/50 hover:shadow-sm"
     >
       <h3 className="font-semibold">{course.title}</h3>
       <p className="mt-1 line-clamp-2 flex-1 text-sm text-muted-foreground">
@@ -163,7 +163,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
       {/* Stats row */}
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5">
+          <div key={label} className="rounded-xl border border-border bg-card p-5 shadow-neu-sm">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">{label}</p>
               <Icon className="h-4 w-4 text-primary" />
@@ -178,7 +178,7 @@ function EmployeeDashboard({ firstName }: { firstName: string }) {
 
       {/* Empty state */}
       {total === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-primary/5 to-transparent p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-border bg-card/50 bg-gradient-to-br from-primary/10 to-transparent p-10 text-center shadow-neu-sm">
           <Target className="mx-auto h-10 w-10 text-muted-foreground" />
           <h2 className="mt-4 text-xl font-semibold">No courses assigned yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -247,7 +247,7 @@ function StaffDashboard({ firstName }: { firstName: string }) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5">
+          <div key={label} className="rounded-xl border border-border bg-card p-5 shadow-neu-sm">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">{label}</p>
               <Icon className="h-4 w-4 text-primary" />
@@ -257,7 +257,7 @@ function StaffDashboard({ firstName }: { firstName: string }) {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 to-transparent p-8">
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/15 to-transparent p-8 shadow-neu">
         <h2 className="text-xl font-semibold">Spin up a course in minutes</h2>
         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
           Describe what people need to know. Coursive drafts the concept, generates a branded
@@ -265,7 +265,7 @@ function StaffDashboard({ firstName }: { firstName: string }) {
         </p>
         <Link
           to="/courses?new=1"
-          className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90"
         >
           Create a course
           <ArrowUpRight className="h-4 w-4" />

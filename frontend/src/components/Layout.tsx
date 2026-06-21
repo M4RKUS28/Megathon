@@ -27,7 +27,6 @@ interface NavItem {
 const ALL: AppRole[] = ["admin", "course_creator", "user"];
 const STAFF: AppRole[] = ["admin", "course_creator"];
 
-// Nav grows as each phase lands its pages.
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ALL },
   { to: "/learn", label: "My Learning", icon: BookOpen, roles: ALL },
@@ -44,14 +43,14 @@ function Brandmark() {
   return (
     <div className="flex items-center gap-2.5">
       {logoUrl ? (
-        <img src={logoUrl} alt="" className="h-8 w-8 rounded-md object-cover" />
+        <img src={logoUrl} alt="" className="h-8 w-8 rounded-lg object-cover shadow-neu-sm" />
       ) : (
-        <span className="grid h-8 w-8 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-neu-sm">
           {companyName.charAt(0)}
         </span>
       )}
       <div className="leading-tight">
-        <p className="text-sm font-semibold">{companyName}</p>
+        <p className="text-sm font-semibold text-foreground">{companyName}</p>
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           on Coursive
         </p>
@@ -69,7 +68,7 @@ function Shell() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card px-4 py-5 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar px-4 py-5 shadow-neu md:flex">
         <Brandmark />
         <nav className="mt-8 flex flex-1 flex-col gap-1">
           {items.map(({ to, label, icon: Icon }) => (
@@ -77,9 +76,9 @@ function Shell() {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
                   isActive
-                    ? "bg-primary/10 font-medium text-primary"
+                    ? "bg-primary/15 font-medium text-primary shadow-neu-sm"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 }`
               }
@@ -89,14 +88,14 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto rounded-lg border border-border p-3">
-          <p className="truncate text-sm font-medium">{me?.display_name || user?.username}</p>
+        <div className="mt-auto rounded-lg border border-border bg-card/50 p-3 shadow-neu-sm">
+          <p className="truncate text-sm font-medium text-foreground">{me?.display_name || user?.username}</p>
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             {role}
           </p>
           <button
             onClick={() => logout()}
-            className="mt-3 w-full rounded-md bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition hover:bg-secondary/80"
+            className="mt-3 w-full rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition hover:bg-secondary/80"
           >
             Sign out
           </button>
@@ -108,7 +107,7 @@ function Shell() {
           <Brandmark />
           <button
             onClick={() => logout()}
-            className="rounded-md bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+            className="rounded-lg bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
           >
             Sign out
           </button>

@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { apiErrorMessage } from "@/lib/api";
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  "w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary";
 
 export function CoursesPage() {
   const { data: courses } = useCourses();
@@ -53,14 +53,14 @@ export function CoursesPage() {
         </div>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-lg shadow-neu-sm bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
           <Plus className="h-4 w-4" /> New course
         </button>
       </div>
 
       {open ? (
-        <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <form onSubmit={submit} className="space-y-4 rounded-2xl border border-border bg-card shadow-neu p-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium">Title</span>
@@ -99,11 +99,11 @@ export function CoursesPage() {
               onChange={(e) => setTopics(e.target.value)}
             />
           </label>
-          {createError ? <p className="text-sm text-red-600">{createError}</p> : null}
+          {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
           <button
             type="submit"
             disabled={create.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg shadow-neu-sm bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
             {create.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -120,7 +120,7 @@ export function CoursesPage() {
           <button
             key={c.id}
             onClick={() => navigate(`/courses/${c.id}`)}
-            className="rounded-xl border border-border bg-card p-5 text-left transition hover:border-primary/50 hover:shadow-sm"
+            className="rounded-xl border border-border bg-card shadow-neu-sm p-5 text-left transition hover:border-primary/50"
           >
             <div className="flex items-center justify-between">
               <StatusBadge status={c.status} />

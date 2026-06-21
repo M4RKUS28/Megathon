@@ -24,7 +24,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+  "w-full rounded-lg border border-border bg-muted shadow-neu-inset px-3 py-2 text-sm outline-none focus:border-primary";
 
 export function BrandingPage() {
   const { data, isLoading } = useMyBranding();
@@ -100,7 +100,7 @@ export function BrandingPage() {
                 type="color"
                 value={primary}
                 onChange={(e) => setPrimary(e.target.value)}
-                className="h-10 w-14 cursor-pointer rounded-lg border border-border bg-background"
+                className="h-10 w-14 cursor-pointer rounded-lg border border-border bg-muted shadow-neu-inset"
               />
               <input
                 className={inputCls}
@@ -144,7 +144,7 @@ export function BrandingPage() {
             <button
               type="submit"
               disabled={save.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90 disabled:opacity-60"
             >
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Save branding
@@ -161,7 +161,7 @@ export function BrandingPage() {
         </form>
 
         {/* Live preview */}
-        <div style={previewVars} className="h-fit rounded-2xl border border-border bg-card p-5">
+        <div style={previewVars} className="h-fit rounded-2xl border border-border bg-card p-5 shadow-neu">
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             Live preview
           </p>
@@ -189,7 +189,7 @@ export function BrandingPage() {
               .map((c) => (
                 <span
                   key={c}
-                  className="h-7 w-7 rounded-full border border-border"
+                  className="h-7 w-7 rounded-full border border-border shadow-neu-sm"
                   style={{ background: c }}
                   title={c}
                 />
