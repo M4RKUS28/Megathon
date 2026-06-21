@@ -23,6 +23,14 @@ export interface SpecProgress {
   chapters_completed: number;
 }
 
+export interface PipelineTask {
+  id: string;
+  name: string;
+  service: string;
+  status: string;
+  session_url?: string;
+}
+
 export interface PipelinePhase {
   id: string;
   label: string;
@@ -42,6 +50,7 @@ export interface PipelineState {
   phases: PipelinePhase[];
   overallStatus: PhaseStatus;
   jobs: GenerationJobRecord[];
+  tasks: PipelineTask[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -199,10 +208,24 @@ export function usePipelineStatus(courseId: string | undefined, enabled = true):
   return useMemo(() => {
     const list = jobs ?? [];
     const phases = derivePhases(list);
+    const tasks = deriveTasks(list);
     return {
       phases,
       overallStatus: overallFromPhases(phases),
       jobs: list,
+      tasks,
     };
   }, [jobs]);
+}
+
+function deriveTasks(jobs: GenerationJobRecord[]): PipelineTask[] {
+  const allTasks: PipelineTask[] = [];
+  for (const job of jobs) {
+    const result = parseResult(job);
+    const tasks = result.tasks as PipelineTask[] | undefined;
+    if (tasks && Array.isArray(tasks)) {
+      allTasks.push(...tasks);
+    }
+  }
+  return allTasks;
 }

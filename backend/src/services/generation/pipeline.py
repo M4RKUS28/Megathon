@@ -146,6 +146,9 @@ async def process_plan_job(job_id: str) -> None:
 
         job.status = JOB_RUNNING
         job.attempts += 1
+        job.result = {
+            "tasks": [{"id": "plan-generate", "name": "Generate course plan", "service": "gemini", "status": "running"}],
+        }
         await db.commit()
 
         try:
@@ -157,7 +160,10 @@ async def process_plan_job(job_id: str) -> None:
             course.plan = plan.model_dump()
             course.status = COURSE_PLAN_REVIEW  # approval gate
             job.status = JOB_SUCCEEDED
-            job.result = {"chapters": len(plan.chapters)}
+            job.result = {
+                "chapters": len(plan.chapters),
+                "tasks": [{"id": "plan-generate", "name": "Generate course plan", "service": "gemini", "status": "done"}],
+            }
             await db.commit()
             logger.info("plan ready for course %s (awaiting approval)", course.id)
         except Exception as exc:  # noqa: BLE001
@@ -195,6 +201,15 @@ async def process_spec_job(job_id: str) -> None:
         try:
             company_name, primary, _style = await _branding(db, course.company_id)
             plan = CoursePlan(**course.plan)
+
+            # Build per-chapter task entries for spec phase
+            spec_tasks = [
+                {"id": f"spec-ch-{i+1}", "name": f"Write script: {ch.title}", "service": "gemini", "status": "running"}
+                for i, ch in enumerate(plan.chapters)
+            ]
+            job.result = {"tasks": spec_tasks}
+            await db.commit()
+
             lastenheft = await generate_lastenheft(plan, company_name, primary)
 
             spec = lastenheft.model_dump()
@@ -202,9 +217,13 @@ async def process_spec_job(job_id: str) -> None:
             course.asset_manifest = {"assets": spec.get("asset_manifest", [])}
             course.status = COURSE_SPEC_READY
             job.status = JOB_SUCCEEDED
+            # Mark all spec tasks as done
+            for t in spec_tasks:
+                t["status"] = "done"
             job.result = {
                 "chapters": len(lastenheft.chapters),
                 "assets": len(lastenheft.asset_manifest),
+                "tasks": spec_tasks,
             }
 
             build_job = await _create_followup_job(db, course, JOB_BUILD)
@@ -277,7 +296,34 @@ async def process_build_job(job_id: str) -> None:
                 },
                 "codegen": {"status": "running", "sessions": []},
             }
-            job.result = {**(job.result or {}), "parallel_status": parallel_status}
+
+            # ── Build per-asset task entries for the expandable list ──────────
+            def _service_for_asset_type(atype: str) -> str:
+                if atype in ("audio", "narration"):
+                    return "gemini-tts"
+                if atype == "video":
+                    return "pixverse"
+                return "gemini-imagen"
+
+            build_tasks: list[dict[str, str]] = []
+            for i, a in enumerate(manifest):
+                atype = (a or {}).get("type", "unknown")
+                purpose = (a or {}).get("purpose", atype)[:40]
+                build_tasks.append({
+                    "id": f"asset-{i}",
+                    "name": f"Generate {atype}: {purpose}",
+                    "service": _service_for_asset_type(atype),
+                    "status": "running",
+                })
+            # Codegen task placeholder
+            build_tasks.append({
+                "id": "codegen-main",
+                "name": "Build course application",
+                "service": "devin",
+                "status": "running",
+            })
+
+            job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
             await db.commit()
 
             # ── Phase 2.5 process A — asset generation (may be reused) ───────
@@ -294,10 +340,16 @@ async def process_build_job(job_id: str) -> None:
 
                 def _on_asset_progress(progress: AssetProgress) -> None:
                     parallel_status["assets"]["progress"] = progress.to_dict()
+                    # Mark completed asset tasks
+                    done_count = progress.completed + progress.failed
+                    for i, t in enumerate(build_tasks):
+                        if t["id"].startswith("asset-") and i < done_count:
+                            t["status"] = "done"
                     job.result = {
                         **(job.result or {}),
                         "asset_progress": progress.to_dict(),
                         "parallel_status": parallel_status,
+                        "tasks": build_tasks,
                     }
 
                 # Use the new async fetch_assets with bounded concurrency
@@ -337,12 +389,21 @@ async def process_build_job(job_id: str) -> None:
 
             async def _on_chapter_session(index: int, title: str, created: dict) -> None:
                 session_id = created.get("session_id")
+                session_url = f"https://app.devin.ai/sessions/{session_id}" if session_id else None
                 parallel_status["codegen"]["sessions"].append({
                     "chapter": title,
                     "session_id": session_id,
                     "status": "running",
                 })
-                job.result = {**(job.result or {}), "parallel_status": parallel_status}
+                # Add per-chapter task entry with Devin session link
+                build_tasks.append({
+                    "id": f"codegen-ch-{index+1}",
+                    "name": f"Build chapter: {title}",
+                    "service": "devin",
+                    "status": "running",
+                    "session_url": session_url,
+                })
+                job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
                 await db.commit()
                 logger.info(
                     "chapter %d (%s) devin session %s started for course %s",
@@ -420,7 +481,11 @@ async def process_build_job(job_id: str) -> None:
             for s in parallel_status["codegen"]["sessions"]:
                 if s.get("status") == "running":
                     s["status"] = "done"
-            job.result = {**(job.result or {}), "parallel_status": parallel_status}
+            # Mark all build tasks as done
+            for t in build_tasks:
+                if t["status"] == "running":
+                    t["status"] = "done"
+            job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
             await db.commit()
 
             # Publish the final asset_map now that assets are ready
@@ -445,6 +510,13 @@ async def process_build_job(job_id: str) -> None:
             course.iframe_url = hosting["iframe_url"]
             course.status = COURSE_READY
             job.status = JOB_SUCCEEDED
+            # Add final hosting task
+            build_tasks.append({
+                "id": "hosting",
+                "name": "Deploy course app",
+                "service": "internal",
+                "status": "done",
+            })
             job.result = {
                 "assets": len(asset_map),
                 "built": hosting["built"],
@@ -454,6 +526,7 @@ async def process_build_job(job_id: str) -> None:
                 "devin_session_url": (job.result or {}).get("devin_session_url"),
                 "asset_progress": (job.result or {}).get("asset_progress"),
                 "parallel_status": parallel_status,
+                "tasks": build_tasks,
             }
             await db.commit()
             logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])
