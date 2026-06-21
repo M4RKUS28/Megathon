@@ -6,15 +6,12 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  ClipboardList,
-  Code2,
   ExternalLink,
   FileCode,
   Loader2,
   Maximize,
   Minimize,
   MousePointerClick,
-  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -315,18 +312,6 @@ const BUSY_STATUSES = new Set([
   "building",
 ]);
 
-const BUSY_MESSAGES: Record<string, string> = {
-  draft: "Preparing the course…",
-  planning: "The planner agent is analyzing the brief and company knowledge…",
-  authoring: "The script writer is producing the Lastenheft…",
-  spec_ready: "Spec ready — fetching assets and building the course app…",
-  building: "Building the per-course application and publishing it…",
-};
-
-function devinUrlFromId(sessionId?: string | null) {
-  return sessionId ? `https://app.devin.ai/sessions/${sessionId}` : null;
-}
-
 export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -395,15 +380,6 @@ export function CourseDetailPage() {
 
   const isReady = course.status === "ready" || course.status === "published";
   const isBusy = BUSY_STATUSES.has(course.status);
-  const activeBuildJob = jobs?.find((j) => j.type === "build" && j.status === "running");
-  const latestDevinJob = jobs?.find((j) => j.devin_session_id || j.devin_session_url);
-  const devinJob = activeBuildJob ?? latestDevinJob;
-  const devinSessionId = course.devin_session_id ?? devinJob?.devin_session_id ?? null;
-  const devinSessionUrl =
-    course.devin_session_url ??
-    devinJob?.devin_session_url ??
-    devinUrlFromId(devinSessionId);
-
   return (
     <div className="space-y-8">
       <div>
@@ -422,74 +398,7 @@ export function CourseDetailPage() {
       </div>
 
       {isBusy ? (
-        <>
         <PipelineMonitor courseId={course.id} />
-        <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-6 shadow-neu">
-          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/5 blur-2xl" />
-          <div className="relative">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              </div>
-              <p className="text-sm font-semibold text-foreground">
-                {BUSY_MESSAGES[course.status] ?? "Working…"}
-              </p>
-            </div>
-
-            {/* Pipeline steps */}
-            <div className="mt-4 flex items-center gap-3">
-              {[
-                { label: "Planning", key: "planning", icon: ClipboardList },
-                { label: "Authoring", key: "authoring", icon: Pencil },
-                { label: "Building", key: "building", icon: Code2 },
-              ].map(({ label, key, icon: Icon }, idx) => {
-                const steps = ["draft", "planning", "authoring", "spec_ready", "building"];
-                const currentIdx = steps.indexOf(course.status);
-                const stepIdx = steps.indexOf(key);
-                const isActive = key === course.status || (key === "building" && course.status === "spec_ready");
-                const isDone = stepIdx < currentIdx && !isActive;
-                return (
-                  <div key={key} className="flex items-center gap-3">
-                    <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      isActive
-                        ? "bg-primary/20 text-primary"
-                        : isDone
-                        ? "bg-emerald-500/10 text-emerald-400"
-                        : "bg-secondary text-muted-foreground"
-                    }`}>
-                      <Icon className="h-3 w-3" />
-                      {label}
-                    </div>
-                    {idx < 2 && <div className="h-px w-4 bg-border" />}
-                  </div>
-                );
-              })}
-            </div>
-
-            {devinSessionUrl ? (
-              <a
-                href={devinSessionUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-neu-sm transition hover:opacity-90"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Watch Devin build live
-                {devinSessionId ? (
-                  <span className="ml-1 rounded bg-primary-foreground/10 px-1.5 py-0.5 font-mono text-xs">
-                    {devinSessionId.slice(0, 8)}…
-                  </span>
-                ) : null}
-              </a>
-            ) : course.status === "building" ? (
-              <p className="mt-4 text-xs text-muted-foreground">
-                If this build uses Devin, the live session link will appear here as soon as Devin
-                starts.
-              </p>
-            ) : null}
-          </div>
-        </div>
-        </>
       ) : null}
 
       {course.status === "failed" ? (
@@ -724,35 +633,37 @@ export function CourseDetailPage() {
         </div>
       ) : null}
 
-      {/* Job log */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
-        <div className="mt-3 space-y-1.5">
-          {jobs?.map((j) => (
-            <div
-              key={j.id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
-            >
-              <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
-              <StatusBadge status={j.status} />
-              {j.devin_session_url ? (
-                <a
-                  href={j.devin_session_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-xs text-primary underline"
-                >
-                  {j.devin_session_id ?? "Devin session"}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              ) : j.devin_session_id ? (
-                <span className="font-mono text-xs text-muted-foreground">{j.devin_session_id}</span>
-              ) : null}
-              {j.error ? <span className="text-xs text-destructive">{j.error}</span> : null}
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Job log — only shown when course is not actively generating (historical view) */}
+      {!isBusy && jobs && jobs.length > 0 ? (
+        <section>
+          <h2 className="text-sm font-semibold text-muted-foreground">Generation log</h2>
+          <div className="mt-3 space-y-1.5">
+            {jobs.map((j) => (
+              <div
+                key={j.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              >
+                <span className="font-mono text-xs uppercase text-muted-foreground">{j.type}</span>
+                <StatusBadge status={j.status} />
+                {j.devin_session_url ? (
+                  <a
+                    href={j.devin_session_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-primary underline"
+                  >
+                    {j.devin_session_id ?? "Devin session"}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : j.devin_session_id ? (
+                  <span className="font-mono text-xs text-muted-foreground">{j.devin_session_id}</span>
+                ) : null}
+                {j.error ? <span className="text-xs text-destructive">{j.error}</span> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
