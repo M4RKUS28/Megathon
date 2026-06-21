@@ -4,10 +4,12 @@ Each entrypoint opens its own DB session (worker process), advances job/course
 state, and persists results.
 """
 
+import asyncio
 import logging
 import re
 import uuid
 from collections import Counter
+from typing import Any
 
 from sqlalchemy import select
 
@@ -182,6 +184,9 @@ async def process_plan_job(job_id: str) -> None:
 
         job.status = JOB_RUNNING
         job.attempts += 1
+        job.result = {
+            "tasks": [{"id": "plan-generate", "name": "Generate course plan", "service": "gemini", "status": "running"}],
+        }
         await db.commit()
 
         try:
@@ -193,7 +198,10 @@ async def process_plan_job(job_id: str) -> None:
             course.plan = plan.model_dump()
             course.status = COURSE_PLAN_REVIEW  # approval gate
             job.status = JOB_SUCCEEDED
-            job.result = {"chapters": len(plan.chapters)}
+            job.result = {
+                "chapters": len(plan.chapters),
+                "tasks": [{"id": "plan-generate", "name": "Generate course plan", "service": "gemini", "status": "done"}],
+            }
             await db.commit()
             logger.info("plan ready for course %s (awaiting approval)", course.id)
         except Exception as exc:  # noqa: BLE001
@@ -231,6 +239,15 @@ async def process_spec_job(job_id: str) -> None:
         try:
             company_name, primary, _style = await _branding(db, course.company_id)
             plan = CoursePlan(**course.plan)
+
+            # Build per-chapter task entries for spec phase
+            spec_tasks = [
+                {"id": f"spec-ch-{i+1}", "name": f"Write script: {ch.title}", "service": "gemini", "status": "running"}
+                for i, ch in enumerate(plan.chapters)
+            ]
+            job.result = {"tasks": spec_tasks}
+            await db.commit()
+
             lastenheft = await generate_lastenheft(plan, company_name, primary)
 
             spec = lastenheft.model_dump()
@@ -238,9 +255,13 @@ async def process_spec_job(job_id: str) -> None:
             course.asset_manifest = {"assets": spec.get("asset_manifest", [])}
             course.status = COURSE_SPEC_READY
             job.status = JOB_SUCCEEDED
+            # Mark all spec tasks as done
+            for t in spec_tasks:
+                t["status"] = "done"
             job.result = {
                 "chapters": len(lastenheft.chapters),
                 "assets": len(lastenheft.asset_manifest),
+                "tasks": spec_tasks,
             }
 
             build_job = await _create_followup_job(db, course, JOB_BUILD)
@@ -258,8 +279,16 @@ async def process_spec_job(job_id: str) -> None:
 
 
 async def process_build_job(job_id: str) -> None:
-    """Phase 2.5 (assets) + Phase 3 (implementation) + Phase 4 (hosting)."""
-    from src.services.generation.assets import fetch_assets, publish_asset_map
+    """Phase 2.5 (assets) + Phase 3 (implementation) + Phase 4 (hosting).
+
+    Asset generation and Devin codegen run IN PARALLEL. The Devin session starts
+    immediately with an empty asset_map (it uses template_link references during
+    development). The real asset_map is only needed at the final publish step.
+
+    If `COURSE_BUILD_PARALLEL_CHAPTERS` is enabled, multiple Devin sessions are
+    spawned (one per chapter) instead of a single monolithic session.
+    """
+    from src.services.generation.assets import AssetProgress, fetch_assets, publish_asset_map
 
     async with AsyncSessionLocal() as db:
         job = await get_job(db, uuid.UUID(job_id))
@@ -297,36 +326,78 @@ async def process_build_job(job_id: str) -> None:
                 dict(sorted(manifest_by_type.items())),
             )
 
-            # Phase 2.5 process A — resource fetch -> asset_map.json. After an
-            # accepted edit we reuse the already-fetched assets (no re-generation).
+            # ── Initialize parallel_status tracking ──────────────────────────
+            parallel_status: dict[str, Any] = {
+                "assets": {
+                    "status": "running",
+                    "progress": {"total": len(manifest), "completed": 0},
+                },
+                "codegen": {"status": "running", "sessions": []},
+            }
+
+            # ── Build per-asset task entries for the expandable list ──────────
+            def _service_for_asset_type(atype: str) -> str:
+                if atype in ("audio", "narration"):
+                    return "gemini-tts"
+                if atype == "video":
+                    return "pixverse"
+                return "gemini-imagen"
+
+            build_tasks: list[dict[str, str]] = []
+            for i, a in enumerate(manifest):
+                atype = (a or {}).get("type", "unknown")
+                purpose = (a or {}).get("purpose", atype)[:40]
+                build_tasks.append({
+                    "id": f"asset-{i}",
+                    "name": f"Generate {atype}: {purpose}",
+                    "service": _service_for_asset_type(atype),
+                    "status": "running",
+                })
+            # Codegen task placeholder
+            build_tasks.append({
+                "id": "codegen-main",
+                "name": "Build course application",
+                "service": "devin",
+                "status": "running",
+            })
+
+            job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
+            await db.commit()
+
+            # ── Phase 2.5 process A — asset generation (may be reused) ───────
             reuse = bool((job.payload or {}).get("reuse_assets")) and bool(course.asset_map)
-            if reuse:
-                asset_map = course.asset_map or {}
-                logger.info(
-                    "build job %s reusing existing asset_map: mapped=%d",
-                    job_id,
-                    len(asset_map),
+
+            async def _fetch_assets_async() -> dict[str, str]:
+                if reuse:
+                    logger.info(
+                        "build job %s reusing existing asset_map: mapped=%d",
+                        job_id,
+                        len(course.asset_map or {}),
+                    )
+                    return course.asset_map or {}
+
+                def _on_asset_progress(progress: AssetProgress) -> None:
+                    parallel_status["assets"]["progress"] = progress.to_dict()
+                    # Mark completed asset tasks
+                    done_count = progress.completed + progress.failed
+                    for i, t in enumerate(build_tasks):
+                        if t["id"].startswith("asset-") and i < done_count:
+                            t["status"] = "done"
+                    job.result = {
+                        **(job.result or {}),
+                        "asset_progress": progress.to_dict(),
+                        "parallel_status": parallel_status,
+                        "tasks": build_tasks,
+                    }
+
+                # Use the new async fetch_assets with bounded concurrency
+                result = await fetch_assets(
+                    manifest, prefix, primary, on_progress=_on_asset_progress
                 )
-            else:
-                asset_map = fetch_assets(manifest, prefix, primary)
-            mapped_audio = sum(1 for key in asset_map if "/audio/" in key)
-            expected_audio = manifest_by_type.get("audio", 0)
-            logger.info(
-                "build job %s asset_map ready: mapped=%d audio=%d/%d",
-                job_id,
-                len(asset_map),
-                mapped_audio,
-                expected_audio,
-            )
-            publish_asset_map(prefix, asset_map)
+                return result
 
-            # Phase 2.5 process B / Phase 3 — Devin authors the per-course app
-            # (optional; falls back to the template build inside the builder).
-            from src.services.generation.devin_codegen import generate_course_app
-
+            # ── Phase 3 — Devin codegen (parallel with assets) ───────────────
             async def _on_devin_session(created: dict) -> None:
-                # Persist + commit the moment the session exists so the UI can
-                # show a live link to it while Devin is still building.
                 session_id = created.get("session_id")
                 if not session_id:
                     logger.warning("Devin create-session response missing session_id: %s", created)
@@ -334,11 +405,17 @@ async def process_build_job(job_id: str) -> None:
                 session_url = created.get("url")
                 course.devin_session_id = session_id
                 job.devin_session_id = session_id
+                parallel_status["codegen"]["sessions"].append({
+                    "chapter": "__main__",
+                    "session_id": session_id,
+                    "status": "running",
+                })
                 job.result = {
                     **(job.result or {}),
                     "devin_session_id": session_id,
                     "devin_session_url": session_url,
                     "devin_status": created.get("status"),
+                    "parallel_status": parallel_status,
                 }
                 await db.commit()
                 logger.info(
@@ -348,9 +425,109 @@ async def process_build_job(job_id: str) -> None:
                     session_url,
                 )
 
-            devin_session_id, source_files = await generate_course_app(
-                course.spec, asset_map, on_session=_on_devin_session
+            async def _on_chapter_session(index: int, title: str, created: dict) -> None:
+                session_id = created.get("session_id")
+                session_url = f"https://app.devin.ai/sessions/{session_id}" if session_id else None
+                parallel_status["codegen"]["sessions"].append({
+                    "chapter": title,
+                    "session_id": session_id,
+                    "status": "running",
+                })
+                # Add per-chapter task entry with Devin session link
+                build_tasks.append({
+                    "id": f"codegen-ch-{index+1}",
+                    "name": f"Build chapter: {title}",
+                    "service": "devin",
+                    "status": "running",
+                    "session_url": session_url,
+                })
+                job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
+                await db.commit()
+                logger.info(
+                    "chapter %d (%s) devin session %s started for course %s",
+                    index + 1,
+                    title,
+                    session_id,
+                    course.id,
+                )
+
+            async def _run_codegen() -> tuple[str | None, dict[str, str] | None]:
+                from src.config.settings import settings
+                from src.services.generation.devin_codegen import (
+                    generate_course_app,
+                    generate_course_app_parallel,
+                )
+
+                # Try parallel chapter approach first
+
+                if settings.course_build_parallel_chapters:
+                    session_id, files, chapter_sessions = await generate_course_app_parallel(
+                        course.spec,
+                        {},  # empty asset_map — Devin uses template_links
+                        on_session=_on_devin_session,
+                        on_chapter_session=_on_chapter_session,
+                    )
+                    if files:
+                        # Update chapter session statuses in parallel_status
+                        if chapter_sessions:
+                            parallel_status["codegen"]["sessions"] = [
+                                {
+                                    "chapter": s.get("chapter", ""),
+                                    "session_id": s.get("session_id"),
+                                    "status": s.get("status", "unknown"),
+                                }
+                                for s in chapter_sessions
+                            ]
+                        return session_id, files
+                    logger.info("Parallel chapter approach failed; trying single session")
+
+                # Fall back to single-session approach
+                parallel_status["codegen"]["sessions"] = []
+                return await generate_course_app(
+                    course.spec,
+                    {},  # empty asset_map — Devin uses template_links
+                    on_session=_on_devin_session,
+                )
+
+            # ── Run assets + codegen IN PARALLEL ─────────────────────────────
+            logger.info("build job %s: launching assets + codegen in parallel", job_id)
+            asset_task = asyncio.create_task(_fetch_assets_async())
+            codegen_task = asyncio.create_task(_run_codegen())
+
+            # Wait for both to complete
+            asset_map, (devin_session_id, source_files) = await asyncio.gather(
+                asset_task, codegen_task
             )
+
+            # ── Update parallel_status after both complete ───────────────────
+            mapped_audio = sum(1 for key in asset_map if "/audio/" in key)
+            expected_audio = manifest_by_type.get("audio", 0)
+            logger.info(
+                "build job %s asset_map ready: mapped=%d audio=%d/%d",
+                job_id,
+                len(asset_map),
+                mapped_audio,
+                expected_audio,
+            )
+
+            parallel_status["assets"] = {
+                "status": "done",
+                "progress": {"total": len(manifest), "completed": len(asset_map)},
+            }
+            parallel_status["codegen"]["status"] = "done"
+            # Update individual session statuses
+            for s in parallel_status["codegen"]["sessions"]:
+                if s.get("status") == "running":
+                    s["status"] = "done"
+            # Mark all build tasks as done
+            for t in build_tasks:
+                if t["status"] == "running":
+                    t["status"] = "done"
+            job.result = {**(job.result or {}), "parallel_status": parallel_status, "tasks": build_tasks}
+            await db.commit()
+
+            # Publish the final asset_map now that assets are ready
+            await publish_asset_map(prefix, asset_map)
 
             # Phase 3 + 4 — build per-course app and host it
             hosting = publish_built_course(
@@ -371,6 +548,13 @@ async def process_build_job(job_id: str) -> None:
             course.iframe_url = hosting["iframe_url"]
             course.status = COURSE_READY
             job.status = JOB_SUCCEEDED
+            # Add final hosting task
+            build_tasks.append({
+                "id": "hosting",
+                "name": "Deploy course app",
+                "service": "internal",
+                "status": "done",
+            })
             job.result = {
                 "assets": len(asset_map),
                 "built": hosting["built"],
@@ -378,6 +562,9 @@ async def process_build_job(job_id: str) -> None:
                 "iframe_url": hosting["iframe_url"],
                 "devin_session_id": devin_session_id,
                 "devin_session_url": (job.result or {}).get("devin_session_url"),
+                "asset_progress": (job.result or {}).get("asset_progress"),
+                "parallel_status": parallel_status,
+                "tasks": build_tasks,
             }
             await db.commit()
             logger.info("course %s built & hosted at %s", course.id, hosting["prefix"])
